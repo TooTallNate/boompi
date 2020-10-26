@@ -1,3 +1,5 @@
+import styles from '../styles/index.module.css';
+
 export default function Index() {
-	return <div>Hi from Pi</div>;
+	return <main className={styles.main}>Hi from Pi</main>;
 }
