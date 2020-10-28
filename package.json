@@ -13,7 +13,7 @@
   "license": "MIT",
   "dependencies": {
     "dbus-next": "^0.9.1",
-    "next": "^9.5.5",
+    "next": "^10.0.0",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
     "reconnecting-websocket": "^4.4.0",
