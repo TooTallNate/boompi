@@ -21,6 +21,7 @@
     "jsx": "preserve",
     "paths": {
       "@components/*": ["components/*"],
+      "@lib/*": ["lib/*"],
       "@styles/*": ["styles/*"]
     },
     "typeRoots": ["./@types", "./node_modules/@types"]
