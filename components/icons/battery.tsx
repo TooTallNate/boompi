@@ -51,7 +51,11 @@ export default function Battery(_props: BatteryParams) {
 		);
 	}
 	return (
-		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			viewBox="0 0 100 100"
+			{...props}
+		>
 			<path d="M93 37.1h-2.8v-.9c0-7.3-6-13.3-13.3-13.3H15.8c-7.3 0-13.3 6-13.3 13.3v27.6c0 7.3 6 13.3 13.3 13.3h61.1c7.3 0 13.3-6 13.3-13.3v-.9H93c2.5 0 4.5-2 4.5-4.5V41.7c0-2.5-2-4.6-4.5-4.6zm-8.7 26.7c0 4.1-3.3 7.4-7.4 7.4H15.8c-4.1 0-7.4-3.3-7.4-7.4V36.2c0-4.1 3.3-7.4 7.4-7.4h61.1c4.1 0 7.4 3.3 7.4 7.4v27.6z" />
 			{fill}
 			{charge}
