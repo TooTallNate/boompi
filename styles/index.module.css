@@ -1,5 +1,7 @@
 .main {
-	width: 100vw;
-	height: 58.59375vw;
+	width: 1024px;
+	height: 600px;
 	background: gold;
+
+	font-size: 5em;
 }
