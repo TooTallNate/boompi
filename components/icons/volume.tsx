@@ -4,7 +4,7 @@ interface VolumeParams extends React.ComponentPropsWithoutRef<'svg'> {
 }
 
 export default function Volume(_props: VolumeParams) {
-	const { mute, level, ...props } = _props;
+	const { mute = false, level = 0, ...props } = _props;
 	let muted;
 	let level1;
 	let level2;
