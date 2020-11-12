@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 export default function useNow() {
 	const [now, setNow] = useState(new Date());
 	useEffect(() => {
-		function resetTimeout(now) {
+		function resetTimeout(now: number) {
 			const ms = 1000 - (now % 1000);
 			return setTimeout(tick, ms);
 		}

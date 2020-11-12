@@ -13,7 +13,7 @@ interface HeaderProps {
 	now: Date;
 }
 
-export default function Header({ now }) {
+export default function Header({ now }: HeaderProps) {
 	return (
 		<section className={styles.header}>
 			<div className={styles.right}>
