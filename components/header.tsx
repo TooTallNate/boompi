@@ -18,7 +18,7 @@ export default function Header({ now }: HeaderProps) {
 		<section className={styles.header}>
 			<div className={styles.right}>
 				<Volume level={3} />
-				<Bluetooth />
+				<Bluetooth className={styles.bluetooth} />
 				<Battery percentage={0.2} charging />
 			</div>
 			<div className={styles.left}>
