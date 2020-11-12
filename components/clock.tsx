@@ -1,14 +1,21 @@
 import format from 'dateformat';
-import useNow from '@lib/use-now';
+import styles from '@styles/clock.module.css';
 
 interface ClockProps {
 	date: Date;
 }
 
 export default function Clock({ date }) {
-	let formatted = format(date, 'HH:MM:ss');
-	if (date.getSeconds() % 2 === 0) {
-		formatted = formatted.replace(/\:/g, ' ');
-	}
-	return <span style={{ fontFamily: 'monospace' }}>{formatted}</span>;
+	const hours = format(date, 'HH');
+	const minutes = format(date, 'MM');
+	const opacity = date.getSeconds() % 2 ? 1 : 0.2;
+	return (
+		<span className={styles.clock}>
+			<span className={styles.hours}>{hours}</span>
+			<span className={styles.divider} style={{ opacity }}>
+				:
+			</span>
+			<span className={styles.minutes}>{minutes}</span>
+		</span>
+	);
 }

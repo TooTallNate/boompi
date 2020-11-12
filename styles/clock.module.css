@@ -1,0 +1,11 @@
+.hours,
+.minutes {
+	text-transform: full-width;
+	letter-spacing: -0.2em;
+}
+
+.divider {
+	transition-property: opacity;
+	transition-duration: 0.2s;
+	padding-left: 0.24em;
+}

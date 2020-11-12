@@ -14,6 +14,7 @@
   "dependencies": {
     "dateformat": "^3.0.3",
     "dbus-next": "^0.9.1",
+    "debug": "^4.2.0",
     "next": "^10.0.0",
     "react": "^17.0.1",
     "react-dom": "^17.0.1",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@types/dateformat": "^3.0.1",
+    "@types/debug": "^4.1.5",
     "@types/node": "^14.14.3",
     "@types/react": "^16.9.53",
     "typescript": "^4.0.3"

@@ -1,0 +1,36 @@
+.nowPlaying {
+	line-height: 5em;
+}
+
+.artist {
+	font-size: 2.8em;
+}
+
+.track {
+	font-size: 3.5em;
+}
+
+.album {
+	font-size: 2.5em;
+}
+
+.position {
+	font-size: 2.7em;
+}
+
+.position hr {
+	display: inline-block;
+	width: 2em;
+	margin: 0 1em;
+	border: solid 1px white;
+	vertical-align: middle;
+}
+
+.controls {
+	font-size: 5em;
+	padding-top: 0.3em;
+}
+
+.controls svg {
+	padding: 0 0.4em;
+}
