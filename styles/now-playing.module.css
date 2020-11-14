@@ -1,5 +1,6 @@
 .nowPlaying {
 	line-height: 5em;
+	width: 100%;
 }
 
 .artist {
@@ -27,10 +28,66 @@
 }
 
 .controls {
-	font-size: 5em;
-	padding-top: 0.3em;
+	font-size: 4.3em;
 }
 
 .controls svg {
-	padding: 0 0.4em;
+	margin: 0 0.4em;
+}
+
+.volume svg {
+	font-size: 3.5em;
+	vertical-align: middle;
+}
+
+.nowPlaying input[type=range] {
+	-webkit-appearance: none;
+	width: 70%;
+	background: transparent;
+}
+
+.nowPlaying input[type=range]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+}
+
+.nowPlaying input[type=range]:focus {
+	outline: none;
+}
+
+.nowPlaying input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  border: 1px solid #000000;
+  height: 2em;
+  width: 2em;;
+  border-radius: 1em;
+  background: #ffffff;
+  cursor: pointer;
+  margin-top: -0.95em; /* You need to specify a margin in Chrome, but in Firefox and IE it is automatic */
+}
+
+.nowPlaying input[type=range]::-moz-range-thumb {
+  border: 1px solid #000000;
+  height: 2em;
+  width: 2em;;
+  border-radius: 1em;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.nowPlaying input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 0.3em;
+  cursor: pointer;
+  background: white;
+  border-radius: 1em;
+  border: 0.2px solid #010101;
+}
+
+.nowPlaying input[type=range]::-moz-range-track {
+  width: 100%;
+  height: 0.3em;
+  cursor: pointer;
+  background: white;
+  border-radius: 1em;
+  border: 0.2px solid #010101;
 }

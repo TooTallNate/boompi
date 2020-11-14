@@ -40,6 +40,7 @@
 
 .main svg {
 	fill: white;
+	cursor: pointer;
 }
 
 .content {
