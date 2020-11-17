@@ -1,0 +1,23 @@
+{
+  "name": "@tootallnate/boompi-backend",
+  "version": "0.0.0",
+  "description": "Boompi backend WebSocket server",
+  "bin": {
+    "boompi-backend": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "Nathan Rajlich <n@n8.io>",
+  "license": "MIT",
+  "dependencies": {
+    "dbus-next": "^0.9.1",
+    "debug": "^4.2.0",
+    "ws": "^7.3.1"
+  },
+  "devDependencies": {
+    "@types/ws": "^7.4.0",
+    "typescript": "^4.0.5"
+  }
+}

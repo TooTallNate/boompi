@@ -11,13 +11,15 @@ import Volume from '@components/icons/volume';
 
 interface HeaderProps {
 	now: Date;
+	volume: number;
 }
 
-export default function Header({ now }: HeaderProps) {
+export default function Header({ now, volume }: HeaderProps) {
+	const volumeLevel = volume === 0 ? 0 : Math.floor(volume * 3) + 1;
 	return (
 		<section className={styles.header}>
 			<div className={styles.right}>
-				<Volume level={3} />
+				<Volume level={volumeLevel} />
 				<Bluetooth className={styles.bluetooth} />
 				<Battery percentage={0.2} charging />
 			</div>
