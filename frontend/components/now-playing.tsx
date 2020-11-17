@@ -5,6 +5,7 @@ import styles from '@styles/now-playing.module.css';
 
 // Icons
 import Play from '@components/icons/play';
+import Pause from '@components/icons/pause';
 import Rewind from '@components/icons/rewind';
 import Volume from '@components/icons/volume';
 import FastForward from '@components/icons/fast-forward';
@@ -16,6 +17,7 @@ interface NowPlayingProps {
 	position: number;
 	duration: number;
 	volume: number;
+	isPlaying: boolean;
 	onPlay: () => void;
 	onPause: () => void;
 	onRewind: () => void;
@@ -24,11 +26,20 @@ interface NowPlayingProps {
 	onPositionChange: (value: number) => void;
 }
 
+function formatSeconds(ms: number) {
+	const minutes = Math.floor(ms / (1000 * 60));
+	const seconds = Math.floor((ms - minutes * (1000 * 60)) / 1000);
+	return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 export default function NowPlaying({
 	artist,
 	track,
 	album,
+	position,
+	duration,
 	volume,
+	isPlaying,
 	onPlay,
 	onPause,
 	onRewind,
@@ -54,19 +65,36 @@ export default function NowPlaying({
 		},
 		[onVolumeChange]
 	);
+	const onPosition = useCallback(
+		(event) => {
+			const { value } = event.currentTarget;
+			onPositionChange(parseInt(value, 10));
+		},
+		[onPositionChange, duration]
+	);
 	return (
 		<div className={styles.nowPlaying}>
 			<div className={styles.artist}>{artist}</div>
 			<div className={styles.track}>{track}</div>
 			<div className={styles.album}>{album}</div>
 			<div className={styles.position}>
-				1:36
-				<input type="range" min="0" max="100" />
-				-2:14
+				{formatSeconds(position)}
+				<input
+					type="range"
+					min="0"
+					max={duration}
+					onChange={onPosition}
+					value={position}
+				/>
+				-{formatSeconds(duration - position)}
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
-				<Play onClick={onPlay} />
+				{isPlaying ? (
+					<Pause onClick={onPause} />
+				) : (
+					<Play onClick={onPlay} />
+				)}
 				<FastForward onClick={onFastForward} />
 			</div>
 			<div className={styles.volume}>
@@ -75,7 +103,7 @@ export default function NowPlaying({
 					type="range"
 					min="0"
 					max="100"
-					onInput={onVolume}
+					onChange={onVolume}
 					value={volume * 100}
 				/>
 				<Volume level={3} onClick={onVolumeMax} />

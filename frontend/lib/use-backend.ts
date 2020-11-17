@@ -9,25 +9,19 @@ interface UseBackendOptions {
 }
 
 export default function useBackend({ url }: UseBackendOptions) {
-	const [ws, setWs] = useState(null);
-	const [volume, setVolumeState] = useState(0);
-
-	const setVolume = useCallback(
-		(value: number, backend = true) => {
-			debug('Setting volume: %o', value);
-			if (backend) {
-				ws?.send(JSON.stringify({ volume: value }));
-			}
-			setVolumeState(value);
-		},
-		[ws]
-	);
+	const [ws, setWs] = useState<ReconnectingWebSocket | null>(null);
+	const [volume, setVolume] = useState(0);
+	const [artist, setArtist] = useState('Pink Floyd');
+	const [track, setTrack] = useState('Comfortably Numb');
+	const [album, setAlbum] = useState('The Wall');
+	const [position, setPosition] = useState(0);
+	const [duration, setDuration] = useState(143 * 1000);
+	const [isPlaying, setIsPlaying] = useState(true);
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
-		console.log({ body });
 		if (typeof body.volume === 'number') {
-			setVolume(body.volume, false);
+			setVolume(body.volume);
 		}
 	}, []);
 
@@ -45,6 +39,41 @@ export default function useBackend({ url }: UseBackendOptions) {
 
 	return {
 		volume,
-		setVolume,
+		artist,
+		album,
+		track,
+		position,
+		duration,
+		isPlaying,
+		setVolume: useCallback(
+			(value: number) => {
+				debug('Setting volume: %o', value);
+				ws?.send(JSON.stringify({ volume: value }));
+				setVolume(value);
+			},
+			[ws]
+		),
+		setPosition: useCallback(
+			(value: number) => {
+				debug('Setting track position: %o', value);
+				ws?.send(JSON.stringify({ position: value }));
+				setPosition(value);
+			},
+			[ws]
+		),
+		setPlay: useCallback(() => {
+			debug('play');
+			setIsPlaying(true);
+		}, [ws]),
+		setPause: useCallback(() => {
+			debug('pause');
+			setIsPlaying(false);
+		}, [ws]),
+		setRewind: useCallback(() => {
+			debug('rewind');
+		}, [ws]),
+		setFastForward: useCallback(() => {
+			debug('fast forward');
+		}, [ws]),
 	};
 }

@@ -11,13 +11,43 @@ import useBackend from '@lib/use-backend';
 
 export default function Index() {
 	const { now } = useNow();
-	const { volume, setVolume } = useBackend({ url: 'ws://localhost:3001' });
+	const {
+		artist,
+		track,
+		album,
+		position,
+		duration,
+		volume,
+		isPlaying,
+		setVolume,
+		setPosition,
+		setPlay,
+		setPause,
+		setRewind,
+		setFastForward,
+	} = useBackend({
+		url: 'ws://localhost:3001',
+	});
 
 	return (
 		<main className={styles.main}>
 			<Header now={now} volume={volume} />
 			<section className={styles.content}>
-				<NowPlaying volume={volume} onVolumeChange={setVolume} />
+				<NowPlaying
+					artist={artist}
+					track={track}
+					album={album}
+					volume={volume}
+					position={position}
+					duration={duration}
+					isPlaying={isPlaying}
+					onVolumeChange={setVolume}
+					onPositionChange={setPosition}
+					onPlay={setPlay}
+					onPause={setPause}
+					onRewind={setRewind}
+					onFastForward={setFastForward}
+				/>
 			</section>
 		</main>
 	);
