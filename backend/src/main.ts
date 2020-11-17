@@ -42,6 +42,10 @@ async function main() {
 				setVolume(data.volume);
 			}
 		});
+
+		ws.on('close', () => {
+			debug('WebSocket connection closed');
+		});
 	});
 }
 
