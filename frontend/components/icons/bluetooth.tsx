@@ -1,5 +1,15 @@
 // https://thenounproject.com/hrsaxa/collection/aim-microphone-store-sex-bluetooth-wifi-chain-hear/?i=2091716
-export default function Bluetooth(props: any) {
+interface BluetoothProps {
+	isConnected?: boolean;
+	className?: string;
+	['data-connected']?: string;
+}
+
+export default function Bluetooth(_props: BluetoothProps) {
+	const { isConnected = false, ...props } = _props;
+	if (isConnected) {
+		props['data-connected'] = 'true';
+	}
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

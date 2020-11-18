@@ -14,6 +14,7 @@ export default function Index() {
 	const {
 		battery,
 		volume,
+		bluetoothName,
 		artist,
 		track,
 		album,
@@ -35,6 +36,7 @@ export default function Index() {
 		<main className={styles.main}>
 			<Header
 				now={now}
+				bluetoothName={bluetoothName}
 				isCharging={isCharging}
 				battery={battery}
 				volume={volume}

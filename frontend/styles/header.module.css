@@ -3,15 +3,23 @@
 	background-color: rgba(255, 255, 255, 0.1);
 	border-bottom: solid 1px rgba(255, 255, 255, 0.3);
 	height: 11.6%;
+	text-align: center;
+	text-overflow: no-wrap;
 }
 
-.left {
-	margin-left: 0.4em;
+.header > div {
+	display: inline-block;
+	height: 100%;
 }
 
+.left,
 .right {
-	float: right;
-	margin-right: 0.5em;
+	width: 23%;
+}
+
+.center {
+	width: 54%;
+	font-size: 0.6em;
 }
 
 .right > svg {
@@ -23,7 +31,7 @@
 	font-size: 0.85em;
 }
 
-.bluetooth path {
+.bluetooth[data-connected] path {
 	fill: #66a9ff;
 	filter: drop-shadow(0 0 0.2em #b26cf7);
 }
@@ -55,7 +63,7 @@
 	filter: drop-shadow(0 0 0.2em orange);
 	opacity: 1;
 	animation: flickerAnimation 3s infinite;
-	stroke: orange;
+	stroke: black;
 	stroke-width: 1px;
 	stroke-linejoin: round;
 }

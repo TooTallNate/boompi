@@ -10,14 +10,17 @@ interface UseBackendOptions {
 
 export default function useBackend({ url }: UseBackendOptions) {
 	const wsRef = useRef<ReconnectingWebSocket>();
-	const [battery, setBattery] = useState(0.95);
+	const [battery, setBattery] = useState(0.25);
 	const [volume, setVolume] = useState(0);
+	const [bluetoothName, setBluetoothName] = useState<string | null>(
+		"Nathan's iPhone"
+	);
 	const [artist, setArtist] = useState('Pink Floyd');
 	const [track, setTrack] = useState('Comfortably Numb');
 	const [album, setAlbum] = useState('The Wall');
 	const [position, setPosition] = useState(0);
 	const [duration, setDuration] = useState(143 * 1000);
-	const [isCharging, setIsCharging] = useState(false);
+	const [isCharging, setIsCharging] = useState(true);
 	const [isPlaying, setIsPlaying] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
@@ -42,6 +45,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	return {
 		battery,
 		volume,
+		bluetoothName,
 		artist,
 		album,
 		track,
