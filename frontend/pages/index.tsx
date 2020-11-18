@@ -12,12 +12,14 @@ import useBackend from '@lib/use-backend';
 export default function Index() {
 	const { now } = useNow();
 	const {
+		battery,
+		volume,
 		artist,
 		track,
 		album,
 		position,
 		duration,
-		volume,
+		isCharging,
 		isPlaying,
 		setVolume,
 		setPosition,
@@ -31,7 +33,12 @@ export default function Index() {
 
 	return (
 		<main className={styles.main}>
-			<Header now={now} volume={volume} />
+			<Header
+				now={now}
+				isCharging={isCharging}
+				battery={battery}
+				volume={volume}
+			/>
 			<section className={styles.content}>
 				<NowPlaying
 					artist={artist}

@@ -70,7 +70,7 @@ export default function NowPlaying({
 			const { value } = event.currentTarget;
 			onPositionChange(parseInt(value, 10));
 		},
-		[onPositionChange, duration]
+		[onPositionChange]
 	);
 	return (
 		<div className={styles.nowPlaying}>
