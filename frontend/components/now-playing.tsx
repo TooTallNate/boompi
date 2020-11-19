@@ -1,5 +1,5 @@
 import createDebug from 'debug';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 const debug = createDebug('boompi:components:now-playing');
 
@@ -50,6 +50,7 @@ export default function NowPlaying({
 	onVolumeChange,
 	onPositionChange,
 }: NowPlayingProps) {
+	const prevPositionChange = useRef(0);
 	const onVolume = useCallback(
 		(event) => {
 			onVolumeChange(event.currentTarget.value / 100);
@@ -70,28 +71,33 @@ export default function NowPlaying({
 	);
 	const onPosition = useCallback(
 		(event) => {
+			const now = Date.now();
+			const delta = now - prevPositionChange.current;
+			prevPositionChange.current = now;
+			if (delta < 500) {
+				// Ignore "mouseup" event
+				return;
+			}
 			const { value } = event.currentTarget;
 			onPositionChange(parseInt(value, 10));
 		},
-		[onPositionChange]
+		[onPositionChange, prevPositionChange]
 	);
 	useEffect(() => {
-		if (!playingStart) return;
+		if (!playingStart || position >= duration) return;
 		const start = Date.now();
 		function step() {
 			const delta = Math.max(Date.now() - start, 1);
-			onPositionChange(position + delta, true);
+			const pos = Math.min(position + delta, duration);
+			if (pos <= duration) {
+				onPositionChange(pos, true);
+			}
 		}
-		//const ms = 100 - (position % 100);
-		//debug({playingStart, position, ms});
-		//const timeout = setTimeout(step, ms);
 		const raf = window.requestAnimationFrame(step);
 		return () => {
-			//debug('Clearing timeout: %o', timeout);
-			//clearTimeout(timeout);
 			window.cancelAnimationFrame(raf);
 		};
-	}, [playingStart, position]);
+	}, [playingStart, position, duration]);
 	return (
 		<div className={styles.nowPlaying}>
 			<div className={styles.artist}>{artist}</div>
@@ -103,7 +109,7 @@ export default function NowPlaying({
 					type="range"
 					min="0"
 					max={duration}
-					onChange={onPosition}
+					onInput={onPosition}
 					value={position}
 				/>
 				-{formatSeconds(duration - position)}
@@ -123,7 +129,7 @@ export default function NowPlaying({
 					type="range"
 					min="0"
 					max="100"
-					onChange={onVolume}
+					onInput={onVolume}
 					value={volume * 100}
 				/>
 				<Volume level={3} onClick={onVolumeMax} />

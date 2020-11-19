@@ -20,7 +20,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [track, setTrack] = useState('Comfortably Numb');
 	const [album, setAlbum] = useState('The Wall');
 	const [position, setPosition] = useState(0);
-	const [duration, setDuration] = useState(3 * 1000);
+	const [duration, setDuration] = useState(360 * 1000);
 	const [isCharging, setIsCharging] = useState(true);
 	const [playingStart, setPlayingStart] = useState<Date | null>(null);
 
