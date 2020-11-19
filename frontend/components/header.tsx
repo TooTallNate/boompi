@@ -39,14 +39,13 @@ export default function Header({
 			<div className={styles.right}>
 				<Volume level={volumeLevel} />
 				<Bluetooth
-					isConnected={isConnected}
 					className={styles.bluetooth}
+					isConnected={isConnected}
 				/>
 				<Battery
+					className={styles.battery}
 					percentage={battery}
-					charging={isCharging}
-					chargeClassName={styles.battCharge}
-					fillClassName={styles.battFill}
+					isCharging={isCharging}
 				/>
 			</div>
 		</section>

@@ -1,4 +1,7 @@
-import { useCallback } from 'react';
+import createDebug from 'debug';
+import { useCallback, useEffect } from 'react';
+
+const debug = createDebug('boompi:components:now-playing');
 
 // CSS
 import styles from '@styles/now-playing.module.css';
@@ -17,7 +20,7 @@ interface NowPlayingProps {
 	position: number;
 	duration: number;
 	volume: number;
-	isPlaying: boolean;
+	playingStart: Date | null;
 	onPlay: () => void;
 	onPause: () => void;
 	onRewind: () => void;
@@ -39,7 +42,7 @@ export default function NowPlaying({
 	position,
 	duration,
 	volume,
-	isPlaying,
+	playingStart,
 	onPlay,
 	onPause,
 	onRewind,
@@ -72,6 +75,23 @@ export default function NowPlaying({
 		},
 		[onPositionChange]
 	);
+	useEffect(() => {
+		if (!playingStart) return;
+		const start = Date.now();
+		function step() {
+			const delta = Math.max(Date.now() - start, 1);
+			onPositionChange(position + delta, true);
+		}
+		//const ms = 100 - (position % 100);
+		//debug({playingStart, position, ms});
+		//const timeout = setTimeout(step, ms);
+		const raf = window.requestAnimationFrame(step);
+		return () => {
+			//debug('Clearing timeout: %o', timeout);
+			//clearTimeout(timeout);
+			window.cancelAnimationFrame(raf);
+		};
+	}, [playingStart, position]);
 	return (
 		<div className={styles.nowPlaying}>
 			<div className={styles.artist}>{artist}</div>
@@ -90,7 +110,7 @@ export default function NowPlaying({
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
-				{isPlaying ? (
+				{playingStart ? (
 					<Pause onClick={onPause} />
 				) : (
 					<Play onClick={onPlay} />

@@ -29,6 +29,7 @@
 
 .bluetooth {
 	font-size: 0.85em;
+	transition: fill 0.5s, filter 0.5s;
 }
 
 .bluetooth[data-connected] path {
@@ -54,11 +55,23 @@
 	}
 }
 
-.battFill {
-	fill: red;
+.battery [data-fill='1'] {
+	fill: #d95b10;
 }
 
-.battCharge {
+.battery [data-fill='2'] {
+	fill: #48ee19;
+}
+
+.battery [data-fill='3'] {
+	fill: #32d910;
+}
+
+.battery [data-fill='4'] {
+	fill: green;
+}
+
+.battery [data-charge] {
 	fill: yellow;
 	filter: drop-shadow(0 0 0.2em orange);
 	opacity: 1;

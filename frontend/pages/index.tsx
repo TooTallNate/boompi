@@ -1,3 +1,5 @@
+import Head from 'next/head';
+
 // CSS
 import styles from '@styles/index.module.css';
 
@@ -21,7 +23,7 @@ export default function Index() {
 		position,
 		duration,
 		isCharging,
-		isPlaying,
+		playingStart,
 		setVolume,
 		setPosition,
 		setPlay,
@@ -33,31 +35,40 @@ export default function Index() {
 	});
 
 	return (
-		<main className={styles.main}>
-			<Header
-				now={now}
-				bluetoothName={bluetoothName}
-				isCharging={isCharging}
-				battery={battery}
-				volume={volume}
-			/>
-			<section className={styles.content}>
-				<NowPlaying
-					artist={artist}
-					track={track}
-					album={album}
-					volume={volume}
-					position={position}
-					duration={duration}
-					isPlaying={isPlaying}
-					onVolumeChange={setVolume}
-					onPositionChange={setPosition}
-					onPlay={setPlay}
-					onPause={setPause}
-					onRewind={setRewind}
-					onFastForward={setFastForward}
+		<>
+			<Head>
+				<title>Boompi</title>
+				<meta
+					name="viewport"
+					content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
 				/>
-			</section>
-		</main>
+			</Head>
+			<main className={styles.main}>
+				<Header
+					now={now}
+					bluetoothName={bluetoothName}
+					isCharging={isCharging}
+					battery={battery}
+					volume={volume}
+				/>
+				<section className={styles.content}>
+					<NowPlaying
+						artist={artist}
+						track={track}
+						album={album}
+						volume={volume}
+						position={position}
+						duration={duration}
+						playingStart={playingStart}
+						onVolumeChange={setVolume}
+						onPositionChange={setPosition}
+						onPlay={setPlay}
+						onPause={setPause}
+						onRewind={setRewind}
+						onFastForward={setFastForward}
+					/>
+				</section>
+			</main>
+		</>
 	);
 }

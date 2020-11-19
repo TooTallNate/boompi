@@ -10,18 +10,19 @@ interface UseBackendOptions {
 
 export default function useBackend({ url }: UseBackendOptions) {
 	const wsRef = useRef<ReconnectingWebSocket>();
-	const [battery, setBattery] = useState(0.25);
+	const [battery, setBattery] = useState(0.8);
 	const [volume, setVolume] = useState(0);
 	const [bluetoothName, setBluetoothName] = useState<string | null>(
 		"Nathan's iPhone"
+		//null
 	);
 	const [artist, setArtist] = useState('Pink Floyd');
 	const [track, setTrack] = useState('Comfortably Numb');
 	const [album, setAlbum] = useState('The Wall');
 	const [position, setPosition] = useState(0);
-	const [duration, setDuration] = useState(143 * 1000);
+	const [duration, setDuration] = useState(3 * 1000);
 	const [isCharging, setIsCharging] = useState(true);
-	const [isPlaying, setIsPlaying] = useState(false);
+	const [playingStart, setPlayingStart] = useState<Date | null>(null);
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
@@ -52,26 +53,28 @@ export default function useBackend({ url }: UseBackendOptions) {
 		position,
 		duration,
 		isCharging,
-		isPlaying,
+		playingStart,
 		setVolume: useCallback((value: number) => {
 			debug('Setting volume: %o', value);
 			wsRef.current?.send(JSON.stringify({ volume: value }));
 			setVolume(value);
 		}, []),
-		setPosition: useCallback((value: number) => {
+		setPosition: useCallback((value: number, clientSide = false) => {
 			debug('Setting track position: %o', value);
-			wsRef.current?.send(JSON.stringify({ position: value }));
+			if (!clientSide) {
+				wsRef.current?.send(JSON.stringify({ position: value }));
+			}
 			setPosition(value);
 		}, []),
 		setPlay: useCallback(() => {
 			debug('Playing');
 			wsRef.current?.send(JSON.stringify({ play: true }));
-			setIsPlaying(true);
+			setPlayingStart(new Date());
 		}, []),
 		setPause: useCallback(() => {
 			debug('Pausing');
 			wsRef.current?.send(JSON.stringify({ pause: true }));
-			setIsPlaying(false);
+			setPlayingStart(null);
 		}, []),
 		setRewind: useCallback(() => {
 			debug('Rewinding');
