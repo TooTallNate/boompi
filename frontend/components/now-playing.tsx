@@ -26,7 +26,7 @@ interface NowPlayingProps {
 	onRewind: () => void;
 	onFastForward: () => void;
 	onVolumeChange: (value: number) => void;
-	onPositionChange: (value: number) => void;
+	onPositionChange: (value: number, clientSide?: boolean) => void;
 }
 
 function formatSeconds(ms: number) {
@@ -53,7 +53,8 @@ export default function NowPlaying({
 	const prevPositionChange = useRef(0);
 	const onVolume = useCallback(
 		(event) => {
-			onVolumeChange(event.currentTarget.value / 100);
+			const { value } = event.currentTarget;
+			onVolumeChange(parseInt(value, 10) / 100);
 		},
 		[onVolumeChange]
 	);
@@ -73,11 +74,11 @@ export default function NowPlaying({
 		(event) => {
 			const now = Date.now();
 			const delta = now - prevPositionChange.current;
-			prevPositionChange.current = now;
 			if (delta < 500) {
 				// Ignore "mouseup" event
 				return;
 			}
+			prevPositionChange.current = now;
 			const { value } = event.currentTarget;
 			onPositionChange(parseInt(value, 10));
 		},
