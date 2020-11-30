@@ -1,7 +1,6 @@
 import WebSocket from 'ws';
 import dbus from 'dbus-next';
 import createDebug from 'debug';
-import execa, { ExecaChildProcess } from 'execa';
 
 import * as system from './system';
 import { getBluetoothPlayer, Player } from './bluetooth';
@@ -10,50 +9,31 @@ const debug = createDebug('boompi:backend:main');
 
 async function main() {
 	const bus = dbus.systemBus();
-
-	let setVolumeChildProcess: ExecaChildProcess | null = null;
 	const wss = new WebSocket.Server({ port: 3001 });
 
-	/*
-	function setVolume(value: number) {
-		if (setVolumeChildProcess) {
-			setVolumeChildProcess.cancel();
-		}
-		const volume = Math.floor(value * 100);
-		debug('Setting volume to: %o', value);
-		setVolumeChildProcess = execa('osascript', [
-			'-e',
-			`set volume output volume ${volume}`,
-		]);
-	}
-
-	async function getVolume() {
-		debug('Getting current volume');
-		const { stdout } = await execa('osascript', [
-			'-e',
-			'output volume of (get volume settings)',
-		]);
-		return parseInt(stdout.trim(), 10) / 100;
-	}
-*/
-
 	wss.on('connection', (ws: WebSocket) => {
+		let player: Player | null = null;
 		debug('Got WebSocket connection');
 
 		/*
 		getVolume().then((volume) => {
 			ws.send(JSON.stringify({ volume }));
 		});
-*/
-		let player: Player | null = null;
+		*/
 
-		getBluetoothPlayer(bus).then((_player) => {
+		getBluetoothPlayer(bus).then(async (_player) => {
 			if (!_player) return;
 			player = _player;
 			player.on('volume', (volume: number) => {
 				ws.send(JSON.stringify({ volume }));
 				system.setVolume(volume);
 			});
+			player.on('state', (state: any) => {
+				ws.send(JSON.stringify(state));
+			});
+			const state = await player.getState();
+			console.log(state);
+			ws.send(JSON.stringify(state));
 		});
 
 		ws.on('message', (message: string) => {
@@ -62,6 +42,18 @@ async function main() {
 			if (typeof data.volume === 'number') {
 				system.setVolume(data.volume);
 				player?.setVolume(data.volume);
+			}
+			if (data.play) {
+				player?.play();
+			}
+			if (data.pause) {
+				player?.pause();
+			}
+			if (data.rewind) {
+				player?.previous();
+			}
+			if (data.fastForward) {
+				player?.next();
 			}
 		});
 

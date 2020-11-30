@@ -13,6 +13,7 @@
   "author": "Nathan Rajlich <n@n8.io>",
   "license": "MIT",
   "dependencies": {
+    "camel-case": "^4.1.1",
     "dbus-next": "^0.9.1",
     "debug": "^4.2.0",
     "execa": "^4.1.0",

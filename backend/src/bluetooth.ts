@@ -1,6 +1,7 @@
-import { basename, join } from 'path';
 import createDebug from 'debug';
 import { EventEmitter } from 'events';
+import { basename, join } from 'path';
+import { camelCase } from 'camel-case';
 import { MessageBus, ProxyObject, Variant } from 'dbus-next';
 
 const debug = createDebug('boompi:backend:bluetooth');
@@ -19,7 +20,6 @@ async function getPlayer(bus: MessageBus, node: string) {
 	const obj = await bus.getProxyObject('org.bluez', node);
 	const properties = obj.getInterface('org.freedesktop.DBus.Properties');
 	const props = await properties.GetAll('org.bluez.MediaControl1');
-	console.log({ props });
 	const [name, connected] = (
 		await Promise.all([
 			properties.Get('org.bluez.Device1', 'Alias'),
@@ -52,7 +52,7 @@ export class Player extends EventEmitter {
 		this.name = name;
 
 		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
-		properties.on('PropertiesChanged', this.onPropertyChange.bind(this));
+		properties.on('PropertiesChanged', this.onPropertyChange);
 
 		const fdNode = obj.nodes.find((node) => /^fd\d+$/.test(basename(node)));
 		if (!fdNode) {
@@ -75,7 +75,7 @@ export class Player extends EventEmitter {
 	async initFd() {
 		const fd = await this.fdPromise;
 		const properties = fd.getInterface('org.freedesktop.DBus.Properties');
-		properties.on('PropertiesChanged', this.onFdPropertyChange.bind(this));
+		properties.on('PropertiesChanged', this.onFdPropertyChange);
 	}
 
 	async initPlayer() {
@@ -83,33 +83,43 @@ export class Player extends EventEmitter {
 		const properties = player.getInterface(
 			'org.freedesktop.DBus.Properties'
 		);
-
-		const props = await properties.GetAll('org.bluez.MediaPlayer1');
-		console.log({ props });
-
-		properties.on(
-			'PropertiesChanged',
-			this.onPlayerPropertyChange.bind(this)
-		);
+		properties.on('PropertiesChanged', this.onPlayerPropertyChange);
 	}
 
-	onFdPropertyChange(iface: string, changed: VariantMap, invalidated: any[]) {
+	onFdPropertyChange = (iface: string, changed: VariantMap) => {
 		for (const prop of Object.keys(changed)) {
 			if (prop === 'Volume') {
 				this.emit('volume', changed[prop].value / 127);
 			}
 		}
-	}
+	};
 
-	onPlayerPropertyChange(
-		iface: string,
-		changed: VariantMap,
-		invalidated: any[]
-	) {
+	onPlayerPropertyChange = (iface: string, changed: VariantMap) => {
 		console.log('onPlayerPropertyChanged', iface, changed);
-	}
+		const state: { [name: string]: any } = {};
+		for (const prop of Object.keys(changed)) {
+			const { value } = changed[prop];
+			if (prop === 'Track') {
+				if (value.Title) {
+					state.track = value.Title.value;
+				}
+				if (value.Album) {
+					state.album = value.Album.value;
+				}
+				if (value.Artist) {
+					state.artist = value.Artist.value;
+				}
+				if (value.Duration) {
+					state.duration = value.Duration.value;
+				}
+			} else {
+				state[camelCase(prop)] = value;
+			}
+		}
+		this.emit('state', state);
+	};
 
-	onPropertyChange(iface: string, changed: VariantMap, invalidated: any[]) {
+	onPropertyChange = (iface: string, changed: VariantMap) => {
 		console.log('onPropertyChanged', iface, changed);
 		for (const prop of Object.keys(changed)) {
 			if (prop === 'Player') {
@@ -122,7 +132,7 @@ export class Player extends EventEmitter {
 				this.initPlayer();
 			}
 		}
-	}
+	};
 
 	async getVolume(): Promise<number> {
 		const fd = await this.fdPromise;
@@ -141,9 +151,63 @@ export class Player extends EventEmitter {
 		await properties.Set('org.bluez.MediaTransport1', 'Volume', v);
 	}
 
+	async getState() {
+		const player = await this.playerPromise;
+		const properties = player.getInterface(
+			'org.freedesktop.DBus.Properties'
+		);
+
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		console.log(mediaPlayer);
+
+		const props = await properties.GetAll('org.bluez.MediaPlayer1');
+		const track = await properties.Get('org.bluez.MediaPlayer1', 'Track');
+		return {
+			status: props.Status.value,
+			position: props.Position.value,
+			duration: props.Track.value.Duration.value,
+		};
+	}
+
+	async play() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Play();
+	}
+
+	async pause() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Pause();
+	}
+
 	async stop() {
 		const player = await this.playerPromise;
 		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
 		await mediaPlayer.Stop();
+	}
+
+	async next() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Next();
+	}
+
+	async previous() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Previous();
+	}
+
+	async fastForward() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.FastForward();
+	}
+
+	async rewind() {
+		const player = await this.playerPromise;
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Rewind();
 	}
 }
