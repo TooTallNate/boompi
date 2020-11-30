@@ -3,6 +3,7 @@ import dbus from 'dbus-next';
 import createDebug from 'debug';
 import execa, { ExecaChildProcess } from 'execa';
 
+import * as system from './system';
 import { getBluetoothPlayer, Player } from './bluetooth';
 
 const debug = createDebug('boompi:backend:main');
@@ -51,6 +52,7 @@ async function main() {
 			player = _player;
 			player.on('volume', (volume: number) => {
 				ws.send(JSON.stringify({ volume }));
+				system.setVolume(volume);
 			});
 		});
 
@@ -58,6 +60,7 @@ async function main() {
 			const data = JSON.parse(message);
 			debug('Message: %o', data);
 			if (typeof data.volume === 'number') {
+				system.setVolume(data.volume);
 				player?.setVolume(data.volume);
 			}
 		});
