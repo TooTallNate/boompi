@@ -1,19 +1,40 @@
-//require('util').inspect.defaultOptions.depth = 10;
-const dbus = require('dbus-next');
-const bus = dbus.systemBus();
+import dbus from 'dbus-next';
+import { getBluetoothPlayer } from './bluetooth';
 
 async function main() {
-	let obj;
+	const bus = dbus.systemBus();
+	const player = await getBluetoothPlayer(bus);
+	//console.log(player);
+	if (player) {
+		player.on('volume', (volume: number) => {
+			console.log({ volume });
+		});
+		console.log(await player.getVolume());
+		await player.setVolume(100);
+	}
+}
 
-	obj = await bus.getProxyObject(
+async function main2() {
+	const bus = dbus.systemBus();
+	let obj = await bus.getProxyObject(
 		'org.freedesktop.DBus',
 		'/org/freedesktop/DBus'
 	);
 	let iface = obj.getInterface('org.freedesktop.DBus');
-	//console.log(await iface.GetId());
-	//return;
+
 	//let names = await iface.ListNames();
-	//console.log(names);
+	//console.log({names});
+	//return;
+
+	obj = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
+	console.log({ obj });
+
+	let properties = obj.getInterface('org.freedesktop.DBus.Properties');
+	console.log({ properties });
+
+	let props = await properties.GetAll('org.bluez.Media1');
+	console.log({ props });
+	return;
 
 	obj = await bus.getProxyObject(
 		'org.bluez',
@@ -21,9 +42,9 @@ async function main() {
 	);
 	console.log({ obj });
 
-	let properties = obj.getInterface('org.freedesktop.DBus.Properties');
+	properties = obj.getInterface('org.freedesktop.DBus.Properties');
 	//console.log({ properties });
-	let props = await properties.GetAll('org.bluez.Device1');
+	props = await properties.GetAll('org.bluez.Device1');
 	console.log({ props });
 
 	props = await properties.GetAll('org.bluez.Network1');
@@ -34,7 +55,7 @@ async function main() {
 
 	obj = await bus.getProxyObject(
 		'org.bluez',
-		'/org/bluez/hci0/dev_AC_88_FD_22_2F_ED/fd0'
+		'/org/bluez/hci0/dev_AC_88_FD_22_2F_ED/fd2'
 	);
 	console.log({ obj });
 
@@ -43,12 +64,15 @@ async function main() {
 	props = await properties.GetAll('org.bluez.MediaTransport1');
 	console.log({ props });
 
-	properties.on('PropertiesChanged', (iface, changed, invalidated) => {
-		console.log({ iface, changed, invalidated });
-		for (let prop of Object.keys(changed)) {
-			console.log(`property changed: ${prop}`);
+	properties.on(
+		'PropertiesChanged',
+		(iface: any, changed: any, invalidated: any) => {
+			console.log({ iface, changed, invalidated });
+			for (let prop of Object.keys(changed)) {
+				console.log(`property changed: ${prop}`);
+			}
 		}
-	});
+	);
 
 	obj = await bus.getProxyObject(
 		'org.bluez',
@@ -64,12 +88,15 @@ async function main() {
 	const track = await properties.Get('org.bluez.MediaPlayer1', 'Track');
 	console.log({ track });
 
-	properties.on('PropertiesChanged', (iface, changed, invalidated) => {
-		console.log({ iface, changed, invalidated });
-		for (let prop of Object.keys(changed)) {
-			console.log(`property changed: ${prop}`);
+	properties.on(
+		'PropertiesChanged',
+		(iface: any, changed: any, invalidated: any) => {
+			console.log({ iface, changed, invalidated });
+			for (let prop of Object.keys(changed)) {
+				console.log(`property changed: ${prop}`);
+			}
 		}
-	});
+	);
 
 	const mp = obj.getInterface('org.bluez.MediaPlayer1');
 	console.log(mp);
