@@ -23,7 +23,7 @@ export default function Index() {
 		position,
 		duration,
 		isCharging,
-		playingStart,
+		isPlaying,
 		setVolume,
 		setPosition,
 		setPlay,
@@ -31,7 +31,7 @@ export default function Index() {
 		setRewind,
 		setFastForward,
 	} = useBackend({
-		url: 'ws://localhost:3001',
+		url: 'ws://boompi.local:3001',
 	});
 
 	return (
@@ -59,7 +59,7 @@ export default function Index() {
 						volume={volume}
 						position={position}
 						duration={duration}
-						playingStart={playingStart}
+						isPlaying={isPlaying}
 						onVolumeChange={setVolume}
 						onPositionChange={setPosition}
 						onPlay={setPlay}

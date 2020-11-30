@@ -20,7 +20,7 @@ interface NowPlayingProps {
 	position: number;
 	duration: number;
 	volume: number;
-	playingStart: Date | null;
+	isPlaying: boolean;
 	onPlay: () => void;
 	onPause: () => void;
 	onRewind: () => void;
@@ -42,7 +42,7 @@ export default function NowPlaying({
 	position,
 	duration,
 	volume,
-	playingStart,
+	isPlaying,
 	onPlay,
 	onPause,
 	onRewind,
@@ -85,7 +85,7 @@ export default function NowPlaying({
 		[onPositionChange, prevPositionChange]
 	);
 	useEffect(() => {
-		if (!playingStart || position >= duration) return;
+		if (!isPlaying || position >= duration) return;
 		const start = Date.now();
 		function step() {
 			const delta = Math.max(Date.now() - start, 1);
@@ -98,7 +98,7 @@ export default function NowPlaying({
 		return () => {
 			window.cancelAnimationFrame(raf);
 		};
-	}, [playingStart, position, duration]);
+	}, [isPlaying, position, duration]);
 	return (
 		<div className={styles.nowPlaying}>
 			<div className={styles.artist}>{artist}</div>
@@ -117,7 +117,7 @@ export default function NowPlaying({
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
-				{playingStart ? (
+				{isPlaying ? (
 					<Pause onClick={onPause} />
 				) : (
 					<Play onClick={onPlay} />

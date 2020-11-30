@@ -21,13 +21,36 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [album, setAlbum] = useState('The Wall');
 	const [position, setPosition] = useState(0);
 	const [duration, setDuration] = useState(360 * 1000);
-	const [isCharging, setIsCharging] = useState(true);
-	const [playingStart, setPlayingStart] = useState<Date | null>(null);
+	const [isCharging, setIsCharging] = useState(false);
+	const [isPlaying, setIsPlaying] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
 		if (typeof body.volume === 'number') {
 			setVolume(body.volume);
+		}
+		if (typeof body.artist === 'string') {
+			setArtist(body.artist);
+		}
+		if (typeof body.track === 'string') {
+			setTrack(body.track);
+		}
+		if (typeof body.album === 'string') {
+			setAlbum(body.album);
+		}
+		if (typeof body.position === 'number') {
+			setPosition(body.position);
+		}
+		if (typeof body.duration === 'number') {
+			setDuration(body.duration);
+		}
+		if (typeof body.status === 'string') {
+			if (body.status === 'playing') {
+				setIsPlaying(true);
+			} else {
+				// paused / stopped
+				setIsPlaying(false);
+			}
 		}
 	}, []);
 
@@ -53,7 +76,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		position,
 		duration,
 		isCharging,
-		playingStart,
+		isPlaying,
 		setVolume: useCallback((value: number) => {
 			debug('Setting volume: %o', value);
 			wsRef.current?.send(JSON.stringify({ volume: value }));
@@ -69,12 +92,12 @@ export default function useBackend({ url }: UseBackendOptions) {
 		setPlay: useCallback(() => {
 			debug('Playing');
 			wsRef.current?.send(JSON.stringify({ play: true }));
-			setPlayingStart(new Date());
+			setIsPlaying(true);
 		}, []),
 		setPause: useCallback(() => {
 			debug('Pausing');
 			wsRef.current?.send(JSON.stringify({ pause: true }));
-			setPlayingStart(null);
+			setIsPlaying(false);
 		}, []),
 		setRewind: useCallback(() => {
 			debug('Rewinding');
