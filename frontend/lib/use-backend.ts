@@ -13,19 +13,21 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [battery, setBattery] = useState(0.8);
 	const [volume, setVolume] = useState(0);
 	const [bluetoothName, setBluetoothName] = useState<string | null>(
-		"Nathan's iPhone"
-		//null
+		null
 	);
-	const [artist, setArtist] = useState('Pink Floyd');
-	const [track, setTrack] = useState('Comfortably Numb');
-	const [album, setAlbum] = useState('The Wall');
+	const [artist, setArtist] = useState('');
+	const [track, setTrack] = useState('');
+	const [album, setAlbum] = useState('');
 	const [position, setPosition] = useState(0);
-	const [duration, setDuration] = useState(360 * 1000);
+	const [duration, setDuration] = useState(0);
 	const [isCharging, setIsCharging] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
+		if ('bluetoothName' in body) {
+			setBluetoothName(body.bluetoothName);
+		}
 		if (typeof body.volume === 'number') {
 			setVolume(body.volume);
 		}
