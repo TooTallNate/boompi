@@ -3,64 +3,73 @@ import dbus from 'dbus-next';
 import createDebug from 'debug';
 
 import * as system from './system';
-import { getBluetoothPlayer, Player } from './bluetooth';
+import { getBluetoothPlayerEvents, Player } from './bluetooth';
 
 const debug = createDebug('boompi:backend:main');
 
 async function main() {
 	const bus = dbus.systemBus();
 	const wss = new WebSocket.Server({ port: 3001 });
+	let player: Player | null = null;
+
+	function onMessage (message: string) {
+		const data = JSON.parse(message);
+		debug('Received WebSocket Message: %O', data);
+		if (typeof data.volume === 'number') {
+			system.setVolume(data.volume);
+			player?.setVolume(data.volume);
+		}
+		if (data.play) {
+			player?.play();
+		}
+		if (data.pause) {
+			player?.pause();
+		}
+		if (data.rewind) {
+			player?.previous();
+		}
+		if (data.fastForward) {
+			player?.next();
+		}
+	}
+
+	function onClose() {
+		debug('WebSocket disconnected');
+	}
 
 	wss.on('connection', (ws: WebSocket) => {
-		let player: Player | null = null;
-		debug('Got WebSocket connection');
-
-		/*
-		getVolume().then((volume) => {
-			ws.send(JSON.stringify({ volume }));
-		});
-		*/
-
-		getBluetoothPlayer(bus).then(async (_player) => {
-			if (!_player) return;
-			player = _player;
-			player.on('volume', (volume: number) => {
-				ws.send(JSON.stringify({ volume }));
-				system.setVolume(volume);
-			});
-			player.on('state', (state: any) => {
-				ws.send(JSON.stringify(state));
-			});
-			const state = await player.getState();
-			console.log(state);
-			ws.send(JSON.stringify(state));
-		});
-
-		ws.on('message', (message: string) => {
-			const data = JSON.parse(message);
-			debug('Message: %o', data);
-			if (typeof data.volume === 'number') {
-				system.setVolume(data.volume);
-				player?.setVolume(data.volume);
-			}
-			if (data.play) {
-				player?.play();
-			}
-			if (data.pause) {
-				player?.pause();
-			}
-			if (data.rewind) {
-				player?.previous();
-			}
-			if (data.fastForward) {
-				player?.next();
-			}
-		});
-
-		ws.on('close', () => {
-			debug('WebSocket connection closed');
-		});
+		debug('WebSocket connected');
+		ws.on('message', onMessage);
+		ws.on('close', onClose);
 	});
+
+	function broadcast(obj: any) {
+		debug('Broadcasting WebSocket message: %O', obj);
+		const data = JSON.stringify(obj);
+		for (const client of wss.clients) {
+			if (client.readyState === WebSocket.OPEN) {
+				client.send(data);
+			}
+		}
+	}
+
+	for await (const event of getBluetoothPlayerEvents({ bus })) {
+		if (event.connect) {
+			const { name: bluetoothName } = event.player
+			debug('Bluetooth device connected %o', bluetoothName);
+			player = event.player;
+			broadcast({ bluetoothName });
+		} else if (event.disconnect) {
+			debug('Bluetooth device disconnected %o', event.player.name);
+			player = null;
+			broadcast({ bluetoothName: null });
+		} else {
+			if (typeof event.volume === 'number') {
+				system.setVolume(event.volume);
+			}
+			broadcast(event);
+		}
+	}
 }
 
 main().catch((err) => {
