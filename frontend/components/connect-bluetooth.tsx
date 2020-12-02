@@ -8,10 +8,10 @@ interface ConnectBluetoothProps {
 export default function ConnectBluetooth({ name }: ConnectBluetoothProps) {
 	return (
 		<div className={styles.bt}>
-			<h3 name="instructions">
+			<h3>
 				To play music, connect your bluetooth device to:
 			</h3>
-			<h1 name="name">{name}</h1>
+			<h1>{name}</h1>
 		</div>
 	);
 }
