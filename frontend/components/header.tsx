@@ -33,8 +33,8 @@ export default function Header({
 				<Clock date={now} />
 			</div>
 			<div className={styles.center}>
-				<Mobile />
-				{bluetoothName}
+				{ typeof bluetoothName === 'string' && <Mobile /> }
+				{bluetoothName || '\u00A0'}
 			</div>
 			<div className={styles.right}>
 				<Volume level={volumeLevel} />
