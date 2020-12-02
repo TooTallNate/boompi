@@ -1,10 +1,28 @@
 import createDebug from 'debug';
-import { EventEmitter } from 'events';
 import { basename, join } from 'path';
 import { camelCase } from 'camel-case';
+import { EventEmitter, once } from 'events';
 import { MessageBus, ProxyObject, Variant } from 'dbus-next';
 
 const debug = createDebug('boompi:backend:bluetooth');
+
+export async function *getBluetoothPlayerEvents(bus: MessageBus) {
+	const hci = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
+
+	// TODO: update `players` when new devices (nodes) are connected
+	const players = hci.nodes.map(node => new BluetoothPlayer2(bus, node));
+	//console.log(players);
+
+	while (true) {
+		const player = await Promise.race(players.map(p => p.waitForConnect()));
+		console.log('player connected', player.name);
+		yield { connect: true, player };
+
+		await once(player, 'disconnect');
+		console.log('player disconnected', player.name);
+		yield { disconnect: true, player };
+	}
+}
 
 export async function getBluetoothPlayer(bus: MessageBus) {
 	const obj = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
@@ -33,14 +51,76 @@ async function getPlayer(bus: MessageBus, node: string) {
 	if (!connected || !isPlayer) {
 		return null;
 	}
-	return new Player(obj, name);
+
+	properties.on('PropertiesChanged', (iface: string, changed: any) => {
+		console.log('org.bluez PropertiesChanged', iface, changed);
+	});
+
+	return new BluetoothPlayer(obj, name);
 }
 
 interface VariantMap<T = any> {
 	[name: string]: Variant<T>;
 }
 
-export class Player extends EventEmitter {
+export class BluetoothPlayer2 extends EventEmitter {
+	bus: MessageBus;
+	node: string;
+	name: string;
+	connected: boolean;
+	proxyObjectPromise: Promise<ProxyObject>;
+
+	constructor(bus: MessageBus, node: string) {
+		super();
+		debug('Creating BluetoothPlayer2 instance for %o', node);
+		this.bus = bus;
+		this.node = node;
+		this.name = '';
+		this.connected = false;
+		this.proxyObjectPromise = this.initProxyObject(node);
+	}
+
+	async initProxyObject(node: string) {
+		const obj = await this.bus.getProxyObject('org.bluez', node);
+		//console.log(node, obj.nodes);
+		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
+		properties.on('PropertiesChanged', this.onPropertyChange);
+		const [name, connected] = (
+			await Promise.all([
+				properties.Get('org.bluez.Device1', 'Alias'),
+				properties.Get('org.bluez.Device1', 'Connected'),
+			])
+		).map((v) => v.value);
+		this.name = name;
+		this.connected = connected;
+		this.emit('init');
+		return obj;
+	}
+
+	onPropertyChange = (iface: string, changed: any) => {
+		console.log('onPropertyChange', this.name || this.node, iface, changed);
+		if (changed.Connected) {
+			const connected = changed.Connected.value;
+			if (connected !== this.connected) {
+				debug('Connected: %o %o', this.name || this.node, connected);
+				this.connected = connected;
+				this.emit(connected ? 'connect' : 'disconnect');
+			}
+		}
+		if (changed.Player) {
+		}
+	}
+
+	async waitForConnect() {
+		await this.proxyObjectPromise;
+		if (!this.connected) {
+			await once(this, 'connect');
+		}
+		return this;
+	}
+}
+
+export class BluetoothPlayer extends EventEmitter {
 	obj: ProxyObject;
 	name: string;
 	fdPromise: Promise<ProxyObject>;
@@ -50,13 +130,14 @@ export class Player extends EventEmitter {
 		super();
 		this.obj = obj;
 		this.name = name;
+		console.log(obj);
 
 		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
 		properties.on('PropertiesChanged', this.onPropertyChange);
 
 		const fdNode = obj.nodes.find((node) => /^fd\d+$/.test(basename(node)));
 		if (!fdNode) {
-			throw new Error('Could not determind "fd" node');
+			throw new Error('Could not determine "fd" node');
 		}
 		debug('Using fd node: %o', fdNode);
 		this.fdPromise = obj.bus.getProxyObject('org.bluez', fdNode);
@@ -122,14 +203,19 @@ export class Player extends EventEmitter {
 	onPropertyChange = (iface: string, changed: VariantMap) => {
 		console.log('onPropertyChanged', iface, changed);
 		for (const prop of Object.keys(changed)) {
+			const { value } = changed[prop];
 			if (prop === 'Player') {
-				const playerNode = changed[prop].value;
-				debug('Setting player: %o', playerNode);
+				debug('Setting player: %o', value);
 				this.playerPromise = this.obj.bus.getProxyObject(
 					'org.bluez',
-					playerNode
+					value
 				);
 				this.initPlayer();
+			} else if (prop === 'Connected') {
+				if (value === false) {
+					debug('Bluetooth player disconnected: %s (%s)', this.obj.path, this.name);
+					this.emit('disconnect');
+				}
 			}
 		}
 	};
@@ -163,6 +249,7 @@ export class Player extends EventEmitter {
 		const props = await properties.GetAll('org.bluez.MediaPlayer1');
 		const track = await properties.Get('org.bluez.MediaPlayer1', 'Track');
 		return {
+			bluetoothName: this.name,
 			status: props.Status.value,
 			position: props.Position.value,
 			duration: props.Track.value.Duration.value,

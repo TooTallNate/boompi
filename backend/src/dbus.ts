@@ -1,17 +1,15 @@
 import dbus from 'dbus-next';
-import { getBluetoothPlayer } from './bluetooth';
+import { getBluetoothPlayer, BluetoothPlayer, BluetoothManager } from './bluetooth';
 
 async function main() {
 	const bus = dbus.systemBus();
-	const player = await getBluetoothPlayer(bus);
-	//console.log(player);
-	if (player) {
-		player.on('volume', (volume: number) => {
-			console.log({ volume });
-		});
-		console.log(await player.getVolume());
-		await player.setVolume(100);
-	}
+	const bt = new BluetoothManager(bus);
+	bt.on('connect', (player: BluetoothPlayer) => {
+		console.log('"connect" %s', player.name);
+	});
+	bt.on('disconnect', (player: BluetoothPlayer) => {
+		console.log('"disconnect" %s', player.name);
+	});
 }
 
 async function main2() {
@@ -22,9 +20,9 @@ async function main2() {
 	);
 	let iface = obj.getInterface('org.freedesktop.DBus');
 
-	//let names = await iface.ListNames();
-	//console.log({names});
-	//return;
+	let names = await iface.ListNames();
+	console.log({names});
+
 
 	obj = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
 	console.log({ obj });
@@ -32,9 +30,18 @@ async function main2() {
 	let properties = obj.getInterface('org.freedesktop.DBus.Properties');
 	console.log({ properties });
 
+	properties.on('PropertiesChanged', (iface: string, changed: any) => {
+		console.log('org.bluez PropertiesChanged', iface, changed);
+	});
+
 	let props = await properties.GetAll('org.bluez.Media1');
 	console.log({ props });
-	return;
+
+	props = await properties.GetAll('org.bluez.Adapter1');
+	console.log({ props });
+
+	props = await properties.GetAll('org.bluez.NetworkServer1');
+	console.log({ props });
 
 	obj = await bus.getProxyObject(
 		'org.bluez',
@@ -44,6 +51,10 @@ async function main2() {
 
 	properties = obj.getInterface('org.freedesktop.DBus.Properties');
 	//console.log({ properties });
+	properties.on('PropertiesChanged', (iface: string, changed: any) => {
+		console.log('org.bluez PropertiesChanged', iface, changed);
+	});
+
 	props = await properties.GetAll('org.bluez.Device1');
 	console.log({ props });
 
@@ -52,6 +63,7 @@ async function main2() {
 
 	props = await properties.GetAll('org.bluez.MediaControl1');
 	console.log({ props });
+return;
 
 	obj = await bus.getProxyObject(
 		'org.bluez',
