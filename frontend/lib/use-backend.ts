@@ -22,9 +22,11 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [duration, setDuration] = useState(0);
 	const [isCharging, setIsCharging] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
+	const [webSocketConnected, setWebSocketConnected] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
+		debug('WebSocket "message" event: %o', body);
 		if ('bluetoothName' in body) {
 			setBluetoothName(body.bluetoothName);
 		}
@@ -56,19 +58,38 @@ export default function useBackend({ url }: UseBackendOptions) {
 		}
 	}, []);
 
+	const onOpen = useCallback(() => {
+		debug('WebSocket "open" event');
+		setWebSocketConnected(true);
+	}, []);
+
+	const onClose = useCallback(() => {
+		debug('WebSocket "close" event');
+		setWebSocketConnected(false);
+	}, []);
+
+	const onError = useCallback(() => {
+		debug('WebSocket "error" event');
+		setWebSocketConnected(false);
+	}, []);
+
 	useEffect(() => {
-		debug('Creating WebSocket connection: %o', url);
+		debug('Creating reconnecting WebSocket connection: %o', url);
 		const socket = new ReconnectingWebSocket(url);
 		socket.addEventListener('message', onMessage);
+		socket.addEventListener('open', onOpen);
+		socket.addEventListener('close', onClose);
+		socket.addEventListener('error', onError);
 		wsRef.current = socket;
 		return () => {
 			debug('Closing WebSocket connection');
 			wsRef.current = undefined;
 			socket.close();
 		};
-	}, [url, onMessage]);
+	}, [url, onMessage, onOpen, onClose, onError]);
 
 	return {
+		webSocketConnected,
 		battery,
 		volume,
 		bluetoothName,

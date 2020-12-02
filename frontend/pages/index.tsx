@@ -6,6 +6,8 @@ import styles from '@styles/index.module.css';
 // Components
 import Header from '@components/header';
 import NowPlaying from '@components/now-playing';
+import ConnectBluetooth from '@components/connect-bluetooth';
+import WebSocketConnecting from '@components/websocket-connecting';
 
 // Hooks
 import useNow from '@lib/use-now';
@@ -14,6 +16,7 @@ import useBackend from '@lib/use-backend';
 export default function Index() {
 	const { now } = useNow();
 	const {
+		webSocketConnected,
 		battery,
 		volume,
 		bluetoothName,
@@ -34,6 +37,35 @@ export default function Index() {
 		url: 'ws://boompi.local:3001',
 	});
 
+	let content = null;
+
+	if (webSocketConnected) {
+		//if (true) {
+		if (typeof bluetoothName === 'string') {
+			content = (
+				<NowPlaying
+					artist={artist}
+					track={track}
+					album={album}
+					volume={volume}
+					position={position}
+					duration={duration}
+					isPlaying={isPlaying}
+					onVolumeChange={setVolume}
+					onPositionChange={setPosition}
+					onPlay={setPlay}
+					onPause={setPause}
+					onRewind={setRewind}
+					onFastForward={setFastForward}
+				/>
+			);
+		} else {
+			content = <ConnectBluetooth name="Nathan's 🔊" />;
+		}
+	} else {
+		content = <WebSocketConnecting />;
+	}
+
 	return (
 		<>
 			<Head>
@@ -51,23 +83,7 @@ export default function Index() {
 					battery={battery}
 					volume={volume}
 				/>
-				<section className={styles.content}>
-					<NowPlaying
-						artist={artist}
-						track={track}
-						album={album}
-						volume={volume}
-						position={position}
-						duration={duration}
-						isPlaying={isPlaying}
-						onVolumeChange={setVolume}
-						onPositionChange={setPosition}
-						onPlay={setPlay}
-						onPause={setPause}
-						onRewind={setRewind}
-						onFastForward={setFastForward}
-					/>
-				</section>
+				<section className={styles.content}>{content}</section>
 			</main>
 		</>
 	);
