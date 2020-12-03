@@ -6,15 +6,17 @@ import { MessageBus, ProxyObject, Variant } from 'dbus-next';
 
 const debug = createDebug('boompi:backend:bluetooth');
 
-export async function *getBluetoothPlayerEvents(bus: MessageBus) {
+export async function* getBluetoothPlayerEvents(bus: MessageBus) {
 	const hci = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
 
 	// TODO: update `players` when new devices (nodes) are connected
-	const players = hci.nodes.map(node => new BluetoothPlayer2(bus, node));
+	const players = hci.nodes.map((node) => new BluetoothPlayer2(bus, node));
 	//console.log(players);
 
 	while (true) {
-		const player = await Promise.race(players.map(p => p.waitForConnect()));
+		const player = await Promise.race(
+			players.map((p) => p.waitForConnect())
+		);
 		console.log('player connected', player.name);
 		yield { connect: true, player };
 
@@ -69,6 +71,8 @@ export class BluetoothPlayer2 extends EventEmitter {
 	name: string;
 	connected: boolean;
 	proxyObjectPromise: Promise<ProxyObject>;
+	fdPromise: Promise<ProxyObject> | null;
+	playerPromise: Promise<ProxyObject> | null;
 
 	constructor(bus: MessageBus, node: string) {
 		super();
@@ -77,11 +81,13 @@ export class BluetoothPlayer2 extends EventEmitter {
 		this.node = node;
 		this.name = '';
 		this.connected = false;
-		this.proxyObjectPromise = this.initProxyObject(node);
+		this.proxyObjectPromise = this.initProxyObject();
+		this.fdPromise = null;
+		this.playerPromise = null;
 	}
 
-	async initProxyObject(node: string) {
-		const obj = await this.bus.getProxyObject('org.bluez', node);
+	async initProxyObject() {
+		const obj = await this.bus.getProxyObject('org.bluez', this.node);
 		//console.log(node, obj.nodes);
 		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
 		properties.on('PropertiesChanged', this.onPropertyChange);
@@ -97,6 +103,10 @@ export class BluetoothPlayer2 extends EventEmitter {
 		return obj;
 	}
 
+	async initFd() {}
+
+	async initPlayer() {}
+
 	onPropertyChange = (iface: string, changed: any) => {
 		console.log('onPropertyChange', this.name || this.node, iface, changed);
 		if (changed.Connected) {
@@ -107,9 +117,18 @@ export class BluetoothPlayer2 extends EventEmitter {
 				this.emit(connected ? 'connect' : 'disconnect');
 			}
 		}
+		/*
 		if (changed.Player) {
+			const node = changed.Player.value;
+			debug('Setting player: %o', node);
+			this.playerPromise = this.obj.bus.getProxyObject(
+				'org.bluez',
+				node
+			);
+			this.initPlayer();
 		}
-	}
+		*/
+	};
 
 	async waitForConnect() {
 		await this.proxyObjectPromise;
@@ -117,6 +136,92 @@ export class BluetoothPlayer2 extends EventEmitter {
 			await once(this, 'connect');
 		}
 		return this;
+	}
+
+	async getVolume(): Promise<number> {
+		const fd = await this.fdPromise;
+		if (!fd) {
+			throw new Error('no fd');
+		}
+		const properties = fd.getInterface('org.freedesktop.DBus.Properties');
+		const volume = await properties.Get(
+			'org.bluez.MediaTransport1',
+			'Volume'
+		);
+		return volume.value;
+	}
+
+	async setVolume(volume: number) {
+		const fd = await this.fdPromise;
+		if (!fd) {
+			throw new Error('no fd');
+		}
+		const properties = fd.getInterface('org.freedesktop.DBus.Properties');
+		const v = new Variant('q', Math.round(volume * 127));
+		await properties.Set('org.bluez.MediaTransport1', 'Volume', v);
+	}
+
+	async play() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Play();
+	}
+
+	async pause() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Pause();
+	}
+
+	async stop() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Stop();
+	}
+
+	async next() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Next();
+	}
+
+	async previous() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Previous();
+	}
+
+	async fastForward() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.FastForward();
+	}
+
+	async rewind() {
+		const player = await this.playerPromise;
+		if (!player) {
+			throw new Error('no player');
+		}
+		const mediaPlayer = player.getInterface('org.bluez.MediaPlayer1');
+		await mediaPlayer.Rewind();
 	}
 }
 
@@ -213,7 +318,11 @@ export class BluetoothPlayer extends EventEmitter {
 				this.initPlayer();
 			} else if (prop === 'Connected') {
 				if (value === false) {
-					debug('Bluetooth player disconnected: %s (%s)', this.obj.path, this.name);
+					debug(
+						'Bluetooth player disconnected: %s (%s)',
+						this.obj.path,
+						this.name
+					);
 					this.emit('disconnect');
 				}
 			}
