@@ -67,17 +67,22 @@ async function main() {
 		}
 	}
 
-	// Read the actual bus voltage
-	const [voltage, current, power] = await Promise.all([
-		ina.readVoltage(),
-		ina.readCurrent(),
-		ina.readPower(),
-	]);
-	console.log(
-		`Current: ${current.toFixed(2)} mA Voltage: ${voltage.toFixed(
-			2
-		)} V Power: ${power.toFixed(2)} mW`
-	);
+	(async () => {
+		while (true) {
+			const [voltage, current, power] = await Promise.all([
+				ina.readVoltage(),
+				ina.readCurrent(),
+				ina.readPower(),
+			]);
+			const MAX_VOLTAGE = 25;
+			const MIN_VOLTAGE = 18;
+			const percentage =  (voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
+			broadcast({
+				battery: { voltage, current, power, percentage }
+			});
+			await new Promise(r => setTimeout(r, 5000));
+		}
+	})();
 
 	for await (const event of getBluetoothPlayerEvents(bus)) {
 		console.log('event', event);

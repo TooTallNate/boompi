@@ -150,41 +150,26 @@ export class INA260 {
 	}
 
 	/**
-	 * Reads the actual bus voltage in V.
-	 * Returns a Promise which will be resolved with the bus voltage, or rejected in case of an error.
-	 * @return {Promise<number>}
+	 * Reads the actual bus voltage in volts (V).
 	 */
-	public readVoltage(): Promise<number> {
-		return this.readRegister(BUS_VOLTAGE_REGISTER).then<number>(
-			(busVoltage: number) => {
-				return busVoltage * 0.00125;
-			}
-		);
+	async readVoltage(): Promise<number> {
+		const busVoltage = await this.readRegister(BUS_VOLTAGE_REGISTER);
+		return busVoltage * 0.00125;
 	}
 
 	/**
-	 * Reads the current (between V+ and V-) in mA.
-	 * Returns a Promise which will be resolved with the bus voltage, or rejected in case of an error.
-	 * @return {Promise<number>}
+	 * Reads the current (between V+ and V-) in milliamps (mA).
 	 */
-	public readCurrent(): Promise<number> {
-		return this.readRegister(SHUNT_VOLTAGE_REGISTER).then<number>(
-			(shuntVoltage: number) => {
-				return shuntVoltage * 1.25;
-			}
-		);
+	async readCurrent(): Promise<number> {
+		const shuntVoltage = await this.readRegister(SHUNT_VOLTAGE_REGISTER);
+		return shuntVoltage * 1.25;
 	}
 
 	/**
-	 * Reads the power being delivered to the load in mW.
-	 * Returns a Promise which will be resolved with the bus voltage, or rejected in case of an error.
-	 * @return {Promise<number>}
+	 * Reads the power being delivered to the load in milliwatts (mW).
 	 */
-	public readPower(): Promise<number> {
-		return this.readRegister(POWER_REGISTER).then<number>(
-			(power: number) => {
-				return power * 10;
-			}
-		);
+	async readPower(): Promise<number> {
+		const power = await this.readRegister(POWER_REGISTER);
+		return power * 10;
 	}
 }
