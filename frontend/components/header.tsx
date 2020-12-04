@@ -33,7 +33,6 @@ export default function Header({
 		const volumeLevel = volume === 0 ? 0 : Math.floor(volume * 3) + 1;
 		volumeIcon = <Volume level={volumeLevel} />;
 	}
-	console.log(battery);
 	return (
 		<section className={styles.header}>
 			<div className={styles.left}>
