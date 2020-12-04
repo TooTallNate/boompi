@@ -6,34 +6,38 @@ import { MessageBus, ProxyObject, Variant } from 'dbus-next';
 
 const debug = createDebug('boompi:backend:bluetooth');
 
-export async function* getBluetoothPlayerEvents(bus: MessageBus) {
-	const hci = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
+export class Bluetooth extends EventEmitter {
+	bus: MessageBus;
+	hciPromise: Promise<ProxyObject>;
+	players: Map<string, BluetoothPlayer2>;
 
-	// TODO: update `players` when new devices (nodes) are connected
-	const players = hci.nodes.map((node) => new BluetoothPlayer2(bus, node));
-	//console.log(players);
+	constructor(bus: MessageBus) {
+		super();
+		this.bus = bus;
+		this.players = new Map();
+		this.hciPromise = this.init();
+	}
 
-	while (true) {
-		const player = await Promise.race(
-			players.map((p) => p.waitForConnect())
+	async init() {
+		const hci = await this.bus.getProxyObject(
+			'org.bluez',
+			'/org/bluez/hci0'
 		);
-		console.log('player connected', player.name);
-		yield { connect: true, player };
 
-		await once(player, 'disconnect');
-		console.log('player disconnected', player.name);
-		yield { disconnect: true, player };
-	}
-}
+		// Create `BluetoothPlayer` instances for all registered bluetooth nodes
+		// TODO: update `players` when new devices (nodes) are registered
+		for (const node of hci.nodes) {
+			const player = new BluetoothPlayer2(this.bus, node);
+			player.on('connect', () => this.onPlayerConnect(player));
+			this.players.set(node, player);
+		}
 
-export async function getBluetoothPlayer(bus: MessageBus) {
-	const obj = await bus.getProxyObject('org.bluez', '/org/bluez/hci0');
-	let player = null;
-	for (const node of obj.nodes) {
-		player = await getPlayer(bus, node);
-		if (player) break;
+		return hci;
 	}
-	return player;
+
+	onPlayerConnect = (player: BluetoothPlayer2) => {
+		this.emit('connect', player);
+	};
 }
 
 async function getPlayer(bus: MessageBus, node: string) {
@@ -81,14 +85,25 @@ export class BluetoothPlayer2 extends EventEmitter {
 		this.node = node;
 		this.name = '';
 		this.connected = false;
+		this.on('connect', this.onConnect);
 		this.proxyObjectPromise = this.initProxyObject();
 		this.fdPromise = null;
 		this.playerPromise = null;
 	}
 
-	async initProxyObject() {
-		const obj = await this.bus.getProxyObject('org.bluez', this.node);
-		//console.log(node, obj.nodes);
+	async initProxyObject(ensureFdNode = false) {
+		let obj: ProxyObject | null = null;
+		while (!obj) {
+			debug('getting proxy object');
+			obj = await this.bus.getProxyObject('org.bluez', this.node);
+			console.log(this.node, obj.nodes);
+			if (
+				ensureFdNode &&
+				!obj.nodes.some((n) => /^fd\d+$/.test(basename(n)))
+			) {
+				obj = null;
+			}
+		}
 		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
 		properties.on('PropertiesChanged', this.onPropertyChange);
 		const [name, connected] = (
@@ -98,16 +113,70 @@ export class BluetoothPlayer2 extends EventEmitter {
 			])
 		).map((v) => v.value);
 		this.name = name;
-		this.connected = connected;
-		this.emit('init');
+
+		if (connected !== this.connected) {
+			debug('Connected: %o %o', this.name || this.node, connected);
+			this.connected = connected;
+			this.emit(connected ? 'connect' : 'disconnect');
+		}
+
 		return obj;
 	}
 
-	async initFd() {}
+	async initFd() {
+		debug('initFd');
+		const obj = await this.proxyObjectPromise;
+		const fdNode = obj.nodes.find((node) => /^fd\d+$/.test(basename(node)));
+		if (!fdNode) {
+			throw new Error('Could not determine "fd" node');
+		}
+		debug('Using fd node: %o', fdNode);
+		const fd = await obj.bus.getProxyObject('org.bluez', fdNode);
 
-	async initPlayer() {}
+		const properties = fd.getInterface('org.freedesktop.DBus.Properties');
+		properties.on('PropertiesChanged', this.onFdPropertyChange);
 
-	onPropertyChange = (iface: string, changed: any) => {
+		return fd;
+	}
+
+	async initPlayer(playerNode: string) {
+		debug('initPlayer %o', playerNode);
+		const obj = await this.proxyObjectPromise;
+		const player = await obj.bus.getProxyObject('org.bluez', playerNode);
+
+		const properties = player.getInterface(
+			'org.freedesktop.DBus.Properties'
+		);
+		properties.on('PropertiesChanged', this.onPlayerPropertyChange);
+
+		return player;
+	}
+
+	async getPlayerNode(): Promise<string | null> {
+		const obj = await this.proxyObjectPromise;
+		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
+		const player = await properties.Get(
+			'org.bluez.MediaControl1',
+			'Player'
+		);
+		return player.value;
+	}
+
+	private onConnect = () => {
+		// New "nodes" may have been set for fd/player upon connection,
+		// so regenerate the original proxy object
+		//this.proxyObjectPromise = new Promise(r => setTimeout(r, 1000)).then(() => this.initProxyObject());
+		this.proxyObjectPromise = this.initProxyObject(true);
+
+		this.fdPromise = this.initFd();
+		this.getPlayerNode().then((playerNode) => {
+			if (playerNode) {
+				this.playerPromise = this.initPlayer(playerNode);
+			}
+		});
+	};
+
+	private onPropertyChange = (iface: string, changed: any) => {
 		console.log('onPropertyChange', this.name || this.node, iface, changed);
 		if (changed.Connected) {
 			const connected = changed.Connected.value;
@@ -117,26 +186,43 @@ export class BluetoothPlayer2 extends EventEmitter {
 				this.emit(connected ? 'connect' : 'disconnect');
 			}
 		}
-		/*
 		if (changed.Player) {
 			const node = changed.Player.value;
 			debug('Setting player: %o', node);
-			this.playerPromise = this.obj.bus.getProxyObject(
-				'org.bluez',
-				node
-			);
-			this.initPlayer();
+			this.initPlayer(node);
 		}
-		*/
 	};
 
-	async waitForConnect() {
-		await this.proxyObjectPromise;
-		if (!this.connected) {
-			await once(this, 'connect');
+	private onFdPropertyChange = (iface: string, changed: VariantMap) => {
+		if (changed.Volume) {
+			this.emit('volume', changed.Volume.value / 127);
 		}
-		return this;
-	}
+	};
+
+	private onPlayerPropertyChange = (iface: string, changed: VariantMap) => {
+		console.log('onPlayerPropertyChanged', iface, changed);
+		const state: { [name: string]: any } = {};
+		for (const prop of Object.keys(changed)) {
+			const { value } = changed[prop];
+			if (prop === 'Track') {
+				if (value.Title) {
+					state.track = value.Title.value;
+				}
+				if (value.Album) {
+					state.album = value.Album.value;
+				}
+				if (value.Artist) {
+					state.artist = value.Artist.value;
+				}
+				if (value.Duration) {
+					state.duration = value.Duration.value;
+				}
+			} else {
+				state[camelCase(prop)] = value;
+			}
+		}
+		this.emit('update', state);
+	};
 
 	async getVolume(): Promise<number> {
 		const fd = await this.fdPromise;
@@ -148,7 +234,7 @@ export class BluetoothPlayer2 extends EventEmitter {
 			'org.bluez.MediaTransport1',
 			'Volume'
 		);
-		return volume.value;
+		return volume.value / 127;
 	}
 
 	async setVolume(volume: number) {

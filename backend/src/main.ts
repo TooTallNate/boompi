@@ -5,7 +5,7 @@ import createDebug from 'debug';
 
 import * as system from './system';
 import { INA260, CONFIGURATION_REGISTER } from './ina260';
-import { getBluetoothPlayerEvents, BluetoothPlayer2 } from './bluetooth';
+import { Bluetooth, BluetoothPlayer2 } from './bluetooth';
 
 const debug = createDebug('boompi:backend:main');
 
@@ -25,9 +25,8 @@ async function main() {
 		debug('Received WebSocket Message: %O', data);
 		if (typeof data.volume === 'number') {
 			system.setVolume(data.volume);
-			//player?.setVolume(data.volume);
+			player?.setVolume(data.volume);
 		}
-		/*
 		if (data.play) {
 			player?.play();
 		}
@@ -40,7 +39,6 @@ async function main() {
 		if (data.fastForward) {
 			player?.next();
 		}
-*/
 	}
 
 	function onClose() {
@@ -51,14 +49,14 @@ async function main() {
 		debug('WebSocket connected');
 		ws.on('message', onMessage);
 		ws.on('close', onClose);
-		console.log('sending', player);
-		if (player) {
-			ws.send(JSON.stringify({ bluetoothName: player.name }));
-		}
+		player?.getVolume().then((volume) => {
+			if (!player) return;
+			ws.send(JSON.stringify({ bluetoothName: player.name, volume }));
+		});
 	});
 
 	function broadcast(obj: any) {
-		debug('Broadcasting WebSocket message: %O', obj);
+		debug('Broadcasting WebSocket message: %o', obj);
 		const data = JSON.stringify(obj);
 		for (const client of wss.clients) {
 			if (client.readyState === WebSocket.OPEN) {
@@ -67,6 +65,7 @@ async function main() {
 		}
 	}
 
+	let batteryPollingInterval = 30 * 1000;
 	(async () => {
 		while (true) {
 			const [voltage, current, power] = await Promise.all([
@@ -76,35 +75,43 @@ async function main() {
 			]);
 			const MAX_VOLTAGE = 25;
 			const MIN_VOLTAGE = 18;
-			const percentage =  (voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
+			const percentage =
+				(voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
 			broadcast({
-				battery: { voltage, current, power, percentage }
+				battery: { voltage, current, power, percentage },
 			});
-			await new Promise(r => setTimeout(r, 5000));
+			await new Promise((r) => setTimeout(r, batteryPollingInterval));
 		}
 	})();
 
-	for await (const event of getBluetoothPlayerEvents(bus)) {
-		console.log('event', event);
-		if (event.connect) {
-			const { name: bluetoothName } = event.player;
-			debug('Bluetooth device connected %o', bluetoothName);
-			player = event.player;
-			console.log(player);
-			broadcast({ bluetoothName });
-		} else if (event.disconnect) {
-			debug('Bluetooth device disconnected %o', event.player.name);
+	const bt = new Bluetooth(bus);
+	bt.on('connect', async (p: BluetoothPlayer2) => {
+		player = p;
+		const { name: bluetoothName } = p;
+		const vol = await p.getVolume();
+		system.setVolume(vol);
+		debug(
+			'Bluetooth device connected %o (volume = %d)',
+			bluetoothName,
+			vol
+		);
+		broadcast({ bluetoothName, volume: vol });
+
+		player.on('update', (event) => {
+			broadcast(event);
+		});
+
+		player.on('volume', (volume) => {
+			system.setVolume(volume);
+			broadcast({ volume });
+		});
+
+		player.on('disconnect', () => {
+			debug('Bluetooth device disconnected %o', bluetoothName);
 			player = null;
 			broadcast({ bluetoothName: null });
-			//} else {
-			//	if (typeof event.volume === 'number') {
-			//		system.setVolume(event.volume);
-			//	}
-			//	broadcast(event);
-		}
-	}
-
-	console.log('Done');
+		});
+	});
 }
 
 main().catch((err) => {
