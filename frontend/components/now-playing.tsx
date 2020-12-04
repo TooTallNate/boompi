@@ -19,7 +19,7 @@ interface NowPlayingProps {
 	album: string;
 	position: number;
 	duration: number;
-	volume: number;
+	volume: number | null;
 	isPlaying: boolean;
 	onPlay: () => void;
 	onPause: () => void;
@@ -124,17 +124,19 @@ export default function NowPlaying({
 				)}
 				<FastForward onClick={onFastForward} />
 			</div>
-			<div className={styles.volume}>
-				<Volume onClick={onVolumeMute} />
-				<input
-					type="range"
-					min="0"
-					max="100"
-					onInput={onVolume}
-					value={volume * 100}
-				/>
-				<Volume level={3} onClick={onVolumeMax} />
-			</div>
+			{typeof volume === 'number' && (
+				<div className={styles.volume}>
+					<Volume onClick={onVolumeMute} />
+					<input
+						type="range"
+						min="0"
+						max="100"
+						onInput={onVolume}
+						value={volume * 100}
+					/>
+					<Volume level={3} onClick={onVolumeMax} />
+				</div>
+			)}
 		</div>
 	);
 }

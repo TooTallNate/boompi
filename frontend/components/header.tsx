@@ -1,3 +1,5 @@
+import { Battery } from '@lib/types';
+
 // CSS
 import styles from '@styles/header.module.css';
 
@@ -5,7 +7,7 @@ import styles from '@styles/header.module.css';
 import Clock from '@components/clock';
 
 // Icons
-import Battery from '@components/icons/battery';
+import BatteryIcon from '@components/icons/battery';
 import Bluetooth from '@components/icons/bluetooth';
 import Mobile from '@components/icons/mobile';
 import Volume from '@components/icons/volume';
@@ -14,8 +16,8 @@ interface HeaderProps {
 	now: Date;
 	bluetoothName: string | null;
 	isCharging: boolean;
-	battery: number;
-	volume: number;
+	battery: Battery | null;
+	volume: number | null;
 }
 
 export default function Header({
@@ -26,27 +28,34 @@ export default function Header({
 	volume,
 }: HeaderProps) {
 	const isConnected = typeof bluetoothName === 'string';
-	const volumeLevel = volume === 0 ? 0 : Math.floor(volume * 3) + 1;
+	let volumeIcon = null;
+	if (typeof volume === 'number') {
+		const volumeLevel = volume === 0 ? 0 : Math.floor(volume * 3) + 1;
+		volumeIcon = <Volume level={volumeLevel} />;
+	}
+	console.log(battery);
 	return (
 		<section className={styles.header}>
 			<div className={styles.left}>
 				<Clock date={now} />
 			</div>
 			<div className={styles.center}>
-				{ typeof bluetoothName === 'string' && <Mobile /> }
+				{typeof bluetoothName === 'string' && <Mobile />}
 				{bluetoothName || '\u00A0'}
 			</div>
 			<div className={styles.right}>
-				<Volume level={volumeLevel} />
+				{volumeIcon}
 				<Bluetooth
 					className={styles.bluetooth}
 					isConnected={isConnected}
 				/>
-				<Battery
-					className={styles.battery}
-					percentage={battery}
-					isCharging={isCharging}
-				/>
+				{battery && (
+					<BatteryIcon
+						className={styles.battery}
+						percentage={battery.percentage}
+						isCharging={isCharging}
+					/>
+				)}
 			</div>
 		</section>
 	);

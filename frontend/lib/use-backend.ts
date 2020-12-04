@@ -2,6 +2,8 @@ import createDebug from 'debug';
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { useCallback, useEffect, useState, useRef } from 'react';
 
+import { Battery } from '@lib/types';
+
 const debug = createDebug('boompi:lib:use-backend');
 
 interface UseBackendOptions {
@@ -10,11 +12,9 @@ interface UseBackendOptions {
 
 export default function useBackend({ url }: UseBackendOptions) {
 	const wsRef = useRef<ReconnectingWebSocket>();
-	const [battery, setBattery] = useState(0.8);
-	const [volume, setVolume] = useState(0);
-	const [bluetoothName, setBluetoothName] = useState<string | null>(
-		null
-	);
+	const [battery, setBattery] = useState<Battery | null>(null);
+	const [volume, setVolume] = useState<number | null>(null);
+	const [bluetoothName, setBluetoothName] = useState<string | null>(null);
 	const [artist, setArtist] = useState('');
 	const [track, setTrack] = useState('');
 	const [album, setAlbum] = useState('');
@@ -55,6 +55,9 @@ export default function useBackend({ url }: UseBackendOptions) {
 				// paused / stopped
 				setIsPlaying(false);
 			}
+		}
+		if (body.battery) {
+			setBattery(body.battery);
 		}
 	}, []);
 
