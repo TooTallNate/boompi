@@ -108,11 +108,9 @@ export default function useBackend({ url }: UseBackendOptions) {
 			wsRef.current?.send(JSON.stringify({ volume: value }));
 			setVolume(value);
 		}, []),
-		setPosition: useCallback((value: number, clientSide = false) => {
+		setPosition: useCallback((value: number) => {
 			debug('Setting track position: %o', value);
-			if (!clientSide) {
-				wsRef.current?.send(JSON.stringify({ position: value }));
-			}
+			wsRef.current?.send(JSON.stringify({ position: value }));
 			setPosition(value);
 		}, []),
 		setPlay: useCallback(() => {

@@ -1,5 +1,5 @@
 import createDebug from 'debug';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const debug = createDebug('boompi:components:now-playing');
 
@@ -51,25 +51,36 @@ export default function NowPlaying({
 	onPositionChange,
 }: NowPlayingProps) {
 	const prevPositionChange = useRef(0);
+	const [playPosition, setPlayPosition] = useState(isPlaying ? position : 0);
+	const [playStartTime, setPlayStartTime] = useState(
+		isPlaying ? Date.now() : 0
+	);
+	const [playStartPosition, setPlayStartPosition] = useState(
+		isPlaying ? position : 0
+	);
+
 	const onVolume = useCallback(
 		(event) => {
-			const { value } = event.currentTarget;
-			onVolumeChange(parseInt(value, 10) / 100);
+			const vol = parseInt(event.currentTarget.value, 10);
+			onVolumeChange(vol / 100);
 		},
 		[onVolumeChange]
 	);
+
 	const onVolumeMute = useCallback(
 		(event) => {
 			onVolumeChange(0);
 		},
 		[onVolumeChange]
 	);
+
 	const onVolumeMax = useCallback(
 		(event) => {
 			onVolumeChange(1);
 		},
 		[onVolumeChange]
 	);
+
 	const onPosition = useCallback(
 		(event) => {
 			const now = Date.now();
@@ -79,41 +90,55 @@ export default function NowPlaying({
 				return;
 			}
 			prevPositionChange.current = now;
-			const { value } = event.currentTarget;
-			onPositionChange(parseInt(value, 10));
+			const pos = parseInt(event.currentTarget.value, 10);
+			setPlayPosition(pos);
+			onPositionChange(pos);
 		},
 		[onPositionChange, prevPositionChange]
 	);
+
 	useEffect(() => {
-		if (!isPlaying || position >= duration) return;
-		const start = Date.now();
+		if (isPlaying) {
+			setPlayStartTime(Date.now());
+			setPlayStartPosition(position);
+			setPlayPosition(position);
+		} else {
+			setPlayStartTime(0);
+		}
+	}, [isPlaying, position]);
+
+	useEffect(() => {
+		if (!isPlaying) return;
+		const playPosition = playStartPosition + (Date.now() - playStartTime);
+		if (playPosition >= duration) return;
 		function step() {
-			const delta = Math.max(Date.now() - start, 1);
-			const pos = Math.min(position + delta, duration);
-			if (pos <= duration) {
-				onPositionChange(pos, true);
+			const playPosition =
+				playStartPosition + (Date.now() - playStartTime);
+			if (playPosition <= duration) {
+				setPlayPosition(playPosition);
 			}
 		}
 		const raf = window.requestAnimationFrame(step);
 		return () => {
 			window.cancelAnimationFrame(raf);
 		};
-	}, [isPlaying, position, duration]);
+	}, [isPlaying, playStartTime, playPosition, playStartPosition, duration]);
+
 	return (
 		<div className={styles.nowPlaying}>
 			<div className={styles.artist}>{artist}</div>
 			<div className={styles.track}>{track}</div>
 			<div className={styles.album}>{album}</div>
 			<div className={styles.position}>
-				{formatSeconds(position)}
+				{formatSeconds(playPosition)}
 				<input
 					type="range"
 					min="0"
 					max={duration}
 					onInput={onPosition}
-					value={position}
+					value={playPosition}
 				/>
-				-{formatSeconds(duration - position)}
+				-{formatSeconds(duration - playPosition)}
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
