@@ -9,7 +9,7 @@ const debug = createDebug('boompi:backend:bluetooth');
 export class Bluetooth extends EventEmitter {
 	bus: MessageBus;
 	hciPromise: Promise<ProxyObject>;
-	players: Map<string, BluetoothPlayer2>;
+	players: Map<string, BluetoothPlayer>;
 
 	constructor(bus: MessageBus) {
 		super();
@@ -27,7 +27,7 @@ export class Bluetooth extends EventEmitter {
 		// Create `BluetoothPlayer` instances for all registered bluetooth nodes
 		// TODO: update `players` when new devices (nodes) are registered
 		for (const node of hci.nodes) {
-			const player = new BluetoothPlayer2(this.bus, node);
+			const player = new BluetoothPlayer(this.bus, node);
 			player.on('connect', () => this.onPlayerConnect(player));
 			this.players.set(node, player);
 		}
@@ -35,7 +35,7 @@ export class Bluetooth extends EventEmitter {
 		return hci;
 	}
 
-	onPlayerConnect = (player: BluetoothPlayer2) => {
+	onPlayerConnect = (player: BluetoothPlayer) => {
 		this.emit('connect', player);
 	};
 }
@@ -44,7 +44,7 @@ interface VariantMap<T = any> {
 	[name: string]: Variant<T>;
 }
 
-export class BluetoothPlayer2 extends EventEmitter {
+export class BluetoothPlayer extends EventEmitter {
 	bus: MessageBus;
 	node: string;
 	name: string;
@@ -52,10 +52,11 @@ export class BluetoothPlayer2 extends EventEmitter {
 	proxyObjectPromise: Promise<ProxyObject>;
 	fdPromise: Promise<ProxyObject> | null;
 	playerPromise: Promise<ProxyObject> | null;
+	propertyListeningNodes: Set<string>;
 
 	constructor(bus: MessageBus, node: string) {
 		super();
-		debug('Creating BluetoothPlayer2 instance for %o', node);
+		debug('Creating BluetoothPlayer instance for %o', node);
 		this.bus = bus;
 		this.node = node;
 		this.name = '';
@@ -64,6 +65,7 @@ export class BluetoothPlayer2 extends EventEmitter {
 		this.proxyObjectPromise = this.initProxyObject();
 		this.fdPromise = null;
 		this.playerPromise = null;
+		this.propertyListeningNodes = new Set();
 	}
 
 	async initProxyObject(ensureFdNode = false) {
@@ -76,10 +78,14 @@ export class BluetoothPlayer2 extends EventEmitter {
 				!obj.nodes.some((n) => /^fd\d+$/.test(basename(n)))
 			) {
 				obj = null;
+				await new Promise((r) => setTimeout(r, 100));
 			}
 		}
 		const properties = obj.getInterface('org.freedesktop.DBus.Properties');
-		properties.on('PropertiesChanged', this.onPropertyChange);
+		if (!this.propertyListeningNodes.has(this.node)) {
+			properties.on('PropertiesChanged', this.onPropertyChange);
+			this.propertyListeningNodes.add(this.node);
+		}
 		const [name, connected] = (
 			await Promise.all([
 				properties.Get('org.bluez.Device1', 'Alias'),
@@ -107,8 +113,13 @@ export class BluetoothPlayer2 extends EventEmitter {
 		debug('Using fd node: %o', fdNode);
 		const fd = await obj.bus.getProxyObject('org.bluez', fdNode);
 
-		const properties = fd.getInterface('org.freedesktop.DBus.Properties');
-		properties.on('PropertiesChanged', this.onFdPropertyChange);
+		if (!this.propertyListeningNodes.has(fdNode)) {
+			const properties = fd.getInterface(
+				'org.freedesktop.DBus.Properties'
+			);
+			properties.on('PropertiesChanged', this.onFdPropertyChange);
+			this.propertyListeningNodes.add(fdNode);
+		}
 
 		return fd;
 	}
@@ -118,10 +129,13 @@ export class BluetoothPlayer2 extends EventEmitter {
 		const obj = await this.proxyObjectPromise;
 		const player = await obj.bus.getProxyObject('org.bluez', playerNode);
 
-		const properties = player.getInterface(
-			'org.freedesktop.DBus.Properties'
-		);
-		properties.on('PropertiesChanged', this.onPlayerPropertyChange);
+		if (!this.propertyListeningNodes.has(playerNode)) {
+			const properties = player.getInterface(
+				'org.freedesktop.DBus.Properties'
+			);
+			properties.on('PropertiesChanged', this.onPlayerPropertyChange);
+			this.propertyListeningNodes.add(playerNode);
+		}
 
 		return player;
 	}
@@ -144,7 +158,6 @@ export class BluetoothPlayer2 extends EventEmitter {
 	private onConnect = () => {
 		// New "nodes" may have been set for fd/player upon connection,
 		// so regenerate the original proxy object
-		//this.proxyObjectPromise = new Promise(r => setTimeout(r, 1000)).then(() => this.initProxyObject());
 		this.proxyObjectPromise = this.initProxyObject(true);
 
 		this.fdPromise = this.initFd();
@@ -168,7 +181,7 @@ export class BluetoothPlayer2 extends EventEmitter {
 		if (changed.Player) {
 			const node = changed.Player.value;
 			debug('Setting player: %o', node);
-			this.initPlayer(node);
+			this.playerPromise = this.initPlayer(node);
 		}
 	};
 

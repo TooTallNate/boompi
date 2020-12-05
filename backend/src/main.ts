@@ -5,7 +5,7 @@ import createDebug from 'debug';
 
 import * as system from './system';
 import { INA260, CONFIGURATION_REGISTER } from './ina260';
-import { Bluetooth, BluetoothPlayer2 } from './bluetooth';
+import { Bluetooth, BluetoothPlayer } from './bluetooth';
 
 const debug = createDebug('boompi:backend:main');
 
@@ -14,7 +14,7 @@ async function main() {
 	const i2cBus = i2c.openSync(1);
 	const ina = new INA260(i2cBus, 0x40);
 	const wss = new WebSocket.Server({ port: 3001 });
-	let player: BluetoothPlayer2 | null = null;
+	let player: BluetoothPlayer | null = null;
 
 	// Write to the Configuration Register
 	// 0x4427 means 16 averages, 1.1ms conversion time, shunt and bus continuous
@@ -95,13 +95,13 @@ async function main() {
 		broadcast({ volume });
 	}
 
-	function onBluetoothDisconnect(this: BluetoothPlayer2) {
+	function onBluetoothDisconnect(this: BluetoothPlayer) {
 		debug('Bluetooth device disconnected', this.name);
 		player = null;
 		broadcast({ bluetoothName: null });
 	}
 
-	bt.on('connect', async (p: BluetoothPlayer2) => {
+	bt.on('connect', async (p: BluetoothPlayer) => {
 		player = p;
 		const { name: bluetoothName } = p;
 		const vol = await p.getVolume();
