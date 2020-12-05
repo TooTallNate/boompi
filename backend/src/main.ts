@@ -85,6 +85,22 @@ async function main() {
 	})();
 
 	const bt = new Bluetooth(bus);
+
+	function onBluetoothUpdate(event: any) {
+		broadcast(event);
+	}
+
+	function onBluetoothVolume(volume: number) {
+		system.setVolume(volume);
+		broadcast({ volume });
+	}
+
+	function onBluetoothDisconnect(this: BluetoothPlayer2) {
+		debug('Bluetooth device disconnected', this.name);
+		player = null;
+		broadcast({ bluetoothName: null });
+	}
+
 	bt.on('connect', async (p: BluetoothPlayer2) => {
 		player = p;
 		const { name: bluetoothName } = p;
@@ -97,20 +113,15 @@ async function main() {
 		);
 		broadcast({ bluetoothName, volume: vol });
 
-		player.on('update', (event) => {
-			broadcast(event);
-		});
+		// Remove previous listeners to ensure these
+		// handlers are only invoked once per event
+		player.removeListener('update', onBluetoothUpdate);
+		player.removeListener('volume', onBluetoothVolume);
+		player.removeListener('disconnect', onBluetoothDisconnect);
 
-		player.on('volume', (volume) => {
-			system.setVolume(volume);
-			broadcast({ volume });
-		});
-
-		player.on('disconnect', () => {
-			debug('Bluetooth device disconnected %o', bluetoothName);
-			player = null;
-			broadcast({ bluetoothName: null });
-		});
+		player.on('update', onBluetoothUpdate);
+		player.on('volume', onBluetoothVolume);
+		player.on('disconnect', onBluetoothDisconnect);
 	});
 }
 
