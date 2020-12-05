@@ -28,7 +28,6 @@ export default function Index() {
 		isCharging,
 		isPlaying,
 		setVolume,
-		setPosition,
 		setPlay,
 		setPause,
 		setRewind,
@@ -40,7 +39,6 @@ export default function Index() {
 	let content = null;
 
 	if (webSocketConnected) {
-		//if (true) {
 		if (typeof bluetoothName === 'string') {
 			content = (
 				<NowPlaying
@@ -52,7 +50,6 @@ export default function Index() {
 					duration={duration}
 					isPlaying={isPlaying}
 					onVolumeChange={setVolume}
-					onPositionChange={setPosition}
 					onPlay={setPlay}
 					onPause={setPause}
 					onRewind={setRewind}
