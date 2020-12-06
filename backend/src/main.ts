@@ -39,6 +39,9 @@ async function main() {
 		if (data.fastForward) {
 			player?.next();
 		}
+		if (typeof data.batteryFastPoll === 'boolean') {
+			batteryPollingInterval = data.batteryFastPoll ? 200 : 1000 * 30;
+		}
 	}
 
 	function onClose() {
@@ -49,10 +52,14 @@ async function main() {
 		debug('WebSocket connected');
 		ws.on('message', onMessage);
 		ws.on('close', onClose);
-		player?.getVolume().then((volume) => {
-			if (!player) return;
-			ws.send(JSON.stringify({ bluetoothName: player.name, volume }));
-		});
+		if (player) {
+			player.getVolume().then((volume) => {
+				if (!player) return;
+				ws.send(JSON.stringify({ bluetoothName: player.name, volume }));
+			});
+		} else {
+			ws.send(JSON.stringify({ bluetoothName: null }));
+		}
 	});
 
 	function broadcast(obj: any) {
