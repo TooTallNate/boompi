@@ -12,21 +12,25 @@ import Bluetooth from '@components/icons/bluetooth';
 import Mobile from '@components/icons/mobile';
 import Volume from '@components/icons/volume';
 
+// Hooks
+import useNow from '@lib/use-now';
+
 interface HeaderProps {
-	now: Date;
 	bluetoothName: string | null;
 	isCharging: boolean;
 	battery: Battery | null;
 	volume: number | null;
+	onBatteryClick: () => void;
 }
 
 export default function Header({
-	now,
 	bluetoothName,
 	isCharging,
 	battery,
 	volume,
+	onBatteryClick,
 }: HeaderProps) {
+	const { now } = useNow();
 	const isConnected = typeof bluetoothName === 'string';
 	let volumeIcon = null;
 	if (typeof volume === 'number') {
@@ -53,6 +57,7 @@ export default function Header({
 						className={styles.battery}
 						percentage={battery.percentage}
 						isCharging={isCharging}
+						onClick={onBatteryClick}
 					/>
 				)}
 			</div>

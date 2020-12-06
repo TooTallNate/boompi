@@ -57,7 +57,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 			}
 		}
 		if (body.battery) {
-			setBattery(body.battery);
+			setBattery({ ...body.battery, date: Date.now() });
 		}
 	}, []);
 

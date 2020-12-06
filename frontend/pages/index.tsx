@@ -1,20 +1,21 @@
 import Head from 'next/head';
+import { useCallback, useState } from 'react';
 
 // CSS
 import styles from '@styles/index.module.css';
 
 // Components
+import Battery from '@components/battery';
 import Header from '@components/header';
 import NowPlaying from '@components/now-playing';
 import ConnectBluetooth from '@components/connect-bluetooth';
 import WebSocketConnecting from '@components/websocket-connecting';
 
 // Hooks
-import useNow from '@lib/use-now';
 import useBackend from '@lib/use-backend';
 
 export default function Index() {
-	const { now } = useNow();
+	const [panel, setPanel] = useState('');
 	const {
 		webSocketConnected,
 		battery,
@@ -36,10 +37,20 @@ export default function Index() {
 		url: 'ws://boompi.local:3001',
 	});
 
+	const showBatteryPanel = useCallback(() => {
+		setPanel('battery');
+	}, []);
+
+	const closePanel = useCallback(() => {
+		setPanel('');
+	}, []);
+
 	let content = null;
 
 	if (webSocketConnected) {
-		if (typeof bluetoothName === 'string') {
+		if (panel === 'battery') {
+			content = <Battery battery={battery} onClose={closePanel} />;
+		} else if (typeof bluetoothName === 'string') {
 			content = (
 				<NowPlaying
 					artist={artist}
@@ -74,11 +85,13 @@ export default function Index() {
 			</Head>
 			<main className={styles.main}>
 				<Header
-					now={now}
 					bluetoothName={bluetoothName}
 					isCharging={isCharging}
 					battery={battery}
 					volume={volume}
+					onBatteryClick={
+						panel === 'battery' ? closePanel : showBatteryPanel
+					}
 				/>
 				<section className={styles.content}>{content}</section>
 			</main>

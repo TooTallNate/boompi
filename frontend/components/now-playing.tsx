@@ -1,7 +1,4 @@
-import createDebug from 'debug';
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const debug = createDebug('boompi:components:now-playing');
 
 // CSS
 import styles from '@styles/now-playing.module.css';
