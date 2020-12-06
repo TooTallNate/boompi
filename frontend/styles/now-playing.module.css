@@ -1,6 +1,14 @@
 .nowPlaying {
 	line-height: 5em;
-	width: 100%;
+	width: 96%;
+}
+
+.artist,
+.track,
+.album {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .artist {
@@ -19,14 +27,6 @@
 	font-size: 2.2em;
 }
 
-.position hr {
-	display: inline-block;
-	width: 2em;
-	margin: 0 1em;
-	border: solid 1px white;
-	vertical-align: middle;
-}
-
 .controls {
 	font-size: 4.3em;
 	margin-bottom: 0.15em;
@@ -43,7 +43,7 @@
 
 .nowPlaying input[type='range'] {
 	-webkit-appearance: none;
-	width: 70%;
+	width: 74%;
 	background: transparent;
 }
 
