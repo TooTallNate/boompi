@@ -12,6 +12,9 @@ import {
 	Line,
 } from 'recharts';
 
+// CSS
+import styles from '@styles/battery.module.css';
+
 const debug = createDebug('boompi:components:battery');
 
 interface BatteryProps {
@@ -27,6 +30,8 @@ export default function BatteryPanel({
 	if (!history.current.has(battery.date)) {
 		history.current.set(battery.date, battery);
 	}
+
+	// Tell the backend to poll the battery status quickly
 	useEffect(() => {
 		debug('batt panel start');
 		batteryFastPoll(true);
@@ -35,29 +40,36 @@ export default function BatteryPanel({
 			batteryFastPoll(false);
 		};
 	}, []);
+
 	const amps =
 		battery.current < 1000 && battery.current > -1000 ? (
 			<>
-				<strong>{battery.current.toFixed(2)}</strong> Milliamps
+				<td>{battery.current.toFixed(2)}</td>
+				<td>Milliamps</td>
 			</>
 		) : (
 			<>
-				<strong>{(battery.current / 1000).toFixed(2)}</strong> Amps
+				<td>{(battery.current / 1000).toFixed(2)}</td>
+				<td>Amps</td>
 			</>
 		);
 	return (
-		<div>
-			<div>
-				<strong>{battery.voltage.toFixed(2)}</strong> Volts
-			</div>
-			<div>{amps}</div>
-			<div>
-				<strong>{(battery.power / 1000).toFixed(2)}</strong> Watts
-			</div>
-			<div>
-				<strong>{`${(battery.percentage * 100).toFixed(1)}%`}</strong>{' '}
-				Remaining
-			</div>
-		</div>
+		<table className={styles.info}>
+			<tbody>
+				<tr>
+					<td>{battery.voltage.toFixed(2)}</td>
+					<td>Volts</td>
+				</tr>
+				<tr>{amps}</tr>
+				<tr>
+					<td>{(battery.power / 1000).toFixed(2)}</td>
+					<td>Watts</td>
+				</tr>
+				<tr>
+					<td>{(battery.percentage * 100).toFixed(1)}<span className={styles.percent}>%</span></td>
+					<td>Remaining</td>
+				</tr>
+			</tbody>
+		</table>
 	);
 }

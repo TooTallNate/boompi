@@ -1,0 +1,12 @@
+.info td:first-of-type {
+	font-weight: bold;
+	text-align: right;
+}
+
+.info td:last-of-type {
+	text-align: left;
+}
+
+.percent {
+	font-size: 0.75em;
+}
