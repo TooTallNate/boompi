@@ -18,7 +18,7 @@ import styles from '@styles/battery.module.css';
 const debug = createDebug('boompi:components:battery');
 
 interface BatteryProps {
-	battery: Battery | null;
+	battery: Battery;
 	batteryFastPoll: (enabled: boolean) => void;
 }
 

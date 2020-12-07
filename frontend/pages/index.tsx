@@ -50,13 +50,9 @@ export default function Index() {
 	let content = null;
 
 	if (webSocketConnected) {
-		if (panel === 'battery') {
+		if (panel === 'battery' && battery) {
 			content = (
-				<Battery
-					battery={battery}
-					onClose={closePanel}
-					batteryFastPoll={batteryFastPoll}
-				/>
+				<Battery battery={battery} batteryFastPoll={batteryFastPoll} />
 			);
 		} else if (typeof bluetoothName === 'string') {
 			content = (

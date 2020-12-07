@@ -15,6 +15,7 @@ interface NowPlayingProps {
 	track: string;
 	album: string;
 	position: number;
+	positionChangedAt: number;
 	duration: number;
 	volume: number | null;
 	isPlaying: boolean;
