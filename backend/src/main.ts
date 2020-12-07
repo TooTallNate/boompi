@@ -40,7 +40,7 @@ async function main() {
 			player?.next();
 		}
 		if (typeof data.batteryFastPoll === 'boolean') {
-			batteryPollingInterval = data.batteryFastPoll ? 200 : 1000 * 30;
+			batteryPollingInterval = data.batteryFastPoll ? 1000 : 1000 * 30;
 		}
 	}
 
