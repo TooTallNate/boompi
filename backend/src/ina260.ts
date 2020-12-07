@@ -96,7 +96,7 @@ export class INA260 {
 	 * @return {Promise}
 	 */
 	public writeRegister(register: number, value: number): Promise<void> {
-		let buf = Buffer.alloc(2);
+		const buf = Buffer.alloc(2);
 		buf[0] = (value >> 8) & 0xff;
 		buf[1] = value & 0xff;
 
@@ -124,7 +124,7 @@ export class INA260 {
 	 * @return {Promise<number>}
 	 */
 	public readRegister(register: number): Promise<number> {
-		let buf = Buffer.alloc(2);
+		const buf = Buffer.alloc(2);
 
 		return new Promise<number>(
 			(
@@ -140,8 +140,7 @@ export class INA260 {
 						if (err) {
 							reject(err);
 						} else {
-							let value = buffer[0] * 256 + buf[1];
-							resolve(value);
+							resolve(buffer.readInt16BE(0));
 						}
 					}
 				);
