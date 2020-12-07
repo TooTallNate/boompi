@@ -33,6 +33,7 @@ export default function Index() {
 		setPause,
 		setRewind,
 		setFastForward,
+		batteryFastPoll,
 	} = useBackend({
 		url: 'ws://boompi.local:3001',
 	});
@@ -49,7 +50,13 @@ export default function Index() {
 
 	if (webSocketConnected) {
 		if (panel === 'battery') {
-			content = <Battery battery={battery} onClose={closePanel} />;
+			content = (
+				<Battery
+					battery={battery}
+					onClose={closePanel}
+					batteryFastPoll={batteryFastPoll}
+				/>
+			);
 		} else if (typeof bluetoothName === 'string') {
 			content = (
 				<NowPlaying

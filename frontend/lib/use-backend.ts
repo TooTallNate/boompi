@@ -126,5 +126,9 @@ export default function useBackend({ url }: UseBackendOptions) {
 			debug('Fast forwarding');
 			wsRef.current?.send(JSON.stringify({ fastForward: true }));
 		}, []),
+		batteryFastPoll: useCallback((enabled: boolean) => {
+			debug('battery fast poll: %o', enabled);
+			wsRef.current?.send(JSON.stringify({ batteryFastPoll: enabled }));
+		}, []),
 	};
 }
