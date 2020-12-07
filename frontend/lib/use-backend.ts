@@ -19,6 +19,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [track, setTrack] = useState('');
 	const [album, setAlbum] = useState('');
 	const [position, setPosition] = useState(0);
+	const [positionChangedAt, setPositionChangedAt] = useState(0);
 	const [duration, setDuration] = useState(0);
 	const [isCharging, setIsCharging] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
@@ -44,6 +45,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		}
 		if (typeof body.position === 'number') {
 			setPosition(body.position);
+			setPositionChangedAt(Date.now());
 		}
 		if (typeof body.duration === 'number') {
 			setDuration(body.duration);
@@ -100,6 +102,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		album,
 		track,
 		position,
+		positionChangedAt,
 		duration,
 		isCharging,
 		isPlaying,

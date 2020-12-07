@@ -25,6 +25,7 @@ export default function Index() {
 		track,
 		album,
 		position,
+		positionChangedAt,
 		duration,
 		isCharging,
 		isPlaying,
@@ -65,6 +66,7 @@ export default function Index() {
 					album={album}
 					volume={volume}
 					position={position}
+					positionChangedAt={positionChangedAt}
 					duration={duration}
 					isPlaying={isPlaying}
 					onVolumeChange={setVolume}

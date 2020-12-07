@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 // CSS
 import styles from '@styles/now-playing.module.css';
@@ -36,6 +36,7 @@ export default function NowPlaying({
 	track,
 	album,
 	position,
+	positionChangedAt,
 	duration,
 	volume,
 	isPlaying,
@@ -45,14 +46,11 @@ export default function NowPlaying({
 	onFastForward,
 	onVolumeChange,
 }: NowPlayingProps) {
-	const prevPositionChange = useRef(0);
-	const [playPosition, setPlayPosition] = useState(isPlaying ? position : 0);
+	const [playPosition, setPlayPosition] = useState(position);
 	const [playStartTime, setPlayStartTime] = useState(
-		isPlaying ? Date.now() : 0
+		isPlaying ? positionChangedAt : 0
 	);
-	const [playStartPosition, setPlayStartPosition] = useState(
-		isPlaying ? position : 0
-	);
+	const [playStartPosition, setPlayStartPosition] = useState(position);
 
 	const onVolume = useCallback(
 		(event) => {
@@ -78,13 +76,15 @@ export default function NowPlaying({
 
 	useEffect(() => {
 		if (isPlaying) {
-			setPlayStartTime(Date.now());
+			if (!playStartTime) {
+				setPlayStartTime(Date.now());
+			}
 			setPlayStartPosition(position);
 			setPlayPosition(position);
 		} else {
 			setPlayStartTime(0);
 		}
-	}, [isPlaying, position]);
+	}, [isPlaying, playStartTime, position]);
 
 	useEffect(() => {
 		if (!isPlaying) return;
