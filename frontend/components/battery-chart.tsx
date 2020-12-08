@@ -42,7 +42,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 			return now - ms('1m');
 		}, [now]),
 		useCallback(() => {
-			return now + ms('5s');
+			return now;
 		}, [now]),
 	];
 
@@ -57,25 +57,25 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					type="number"
 					tickFormatter={(val) => {
 						const diff = now - val;
-						if (diff < 1000) return '';
-						return `${ms(now - val)} ago`;
+						return `${ms(diff)} ago`;
 					}}
 					allowDataOverflow={true}
 					tick={{ fontSize: 10 }}
+					stroke="#aaa"
 					domain={xDomain}
-				>
-				</XAxis>
+				></XAxis>
 				<YAxis
 					width={80}
 					yAxisId="left"
 					tick={{ fontSize: 10 }}
+					stroke="#aaa"
 					domain={[17, 26]}
 				>
 					<Label
 						value="Voltage"
 						angle={-90}
 						position="outside"
-						fill="#676767"
+						fill="white"
 						fontSize={14}
 					/>
 				</YAxis>
@@ -84,13 +84,14 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					yAxisId="right"
 					orientation="right"
 					tick={{ fontSize: 10 }}
+					stroke="#aaa"
 					domain={[50, 300]}
 				>
 					<Label
 						value="Amperage"
 						angle={90}
 						position="outside"
-						fill="#676767"
+						fill="white"
 						fontSize={14}
 					/>
 				</YAxis>
