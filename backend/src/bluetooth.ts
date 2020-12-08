@@ -213,6 +213,7 @@ export class BluetoothPlayer extends EventEmitter {
 				state[camelCase(prop)] = value;
 			}
 		}
+		state.updatedAt = Date.now();
 		this.emit('update', state);
 	};
 

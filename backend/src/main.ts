@@ -80,7 +80,7 @@ async function main() {
 				ina.readCurrent(),
 				ina.readPower(),
 			]);
-			const MAX_VOLTAGE = 25;
+			const MAX_VOLTAGE = 25.02;
 			const MIN_VOLTAGE = 18;
 			const percentage =
 				(voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
