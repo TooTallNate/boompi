@@ -33,7 +33,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 	}
 
 	for (const batt of history.current.values()) {
-		if (now - batt.date > ms('1m')) {
+		if (now - batt.date > ms('2m')) {
 			history.current.delete(batt.date);
 		}
 	}
@@ -55,6 +55,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 				<XAxis
 					height={40}
 					dataKey="date"
+					type="number"
 					tickFormatter={(val) => {
 						const diff = now - val;
 						if (diff < 1000) return '';
@@ -64,12 +65,6 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					tick={{ fontSize: 10 }}
 					domain={xDomain}
 				>
-					<Label
-						value="Timestamp"
-						position="insideBottom"
-						fontSize={14}
-						fill="#676767"
-					/>
 				</XAxis>
 				<YAxis
 					width={80}
@@ -78,7 +73,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					domain={[17, 26]}
 				>
 					<Label
-						value="Volts"
+						value="Voltage"
 						angle={-90}
 						position="outside"
 						fill="#676767"
@@ -93,19 +88,21 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					domain={[50, 300]}
 				>
 					<Label
-						value="Milliamps"
+						value="Amperage"
 						angle={90}
 						position="outside"
 						fill="#676767"
 						fontSize={14}
 					/>
 				</YAxis>
+				<Legend />
 				<Tooltip />
 				<Line
 					yAxisId="left"
 					type="monotone"
 					dataKey={'voltage'}
-					stroke={'green'}
+					name="Volts"
+					stroke="yellow"
 					isAnimationActive={false}
 					dot={false}
 				/>
@@ -113,6 +110,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					yAxisId="right"
 					type="monotone"
 					dataKey={'current'}
+					name="Milliamps"
 					stroke={'cyan'}
 					isAnimationActive={false}
 					dot={false}
