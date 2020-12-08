@@ -99,18 +99,18 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 				<Line
 					yAxisId="left"
 					type="monotone"
-					dataKey={'voltage'}
+					dataKey="voltage"
 					name="Volts"
-					stroke="yellow"
+					stroke="orange"
 					isAnimationActive={false}
 					dot={false}
 				/>
 				<Line
 					yAxisId="right"
 					type="monotone"
-					dataKey={'current'}
+					dataKey="current"
 					name="Milliamps"
-					stroke={'cyan'}
+					stroke="cyan"
 					isAnimationActive={false}
 					dot={false}
 				/>

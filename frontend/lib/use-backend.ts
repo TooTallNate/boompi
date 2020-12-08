@@ -44,7 +44,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		}
 		if (typeof body.position === 'number') {
 			setPosition(body.position);
-			setPositionChangedAt(Date.now());
+			setPositionChangedAt(body.updatedAt || Date.now());
 		}
 		if (typeof body.duration === 'number') {
 			setDuration(body.duration);
