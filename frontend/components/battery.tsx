@@ -1,19 +1,12 @@
 import createDebug from 'debug';
 import { Battery } from '@lib/types';
-import { useEffect, useRef } from 'react';
-import {
-	LineChart,
-	ReferenceLine,
-	ResponsiveContainer,
-	XAxis,
-	YAxis,
-	AxisDomain,
-	Tooltip,
-	Line,
-} from 'recharts';
+import { useEffect } from 'react';
 
 // CSS
 import styles from '@styles/battery.module.css';
+
+// Components
+import BatteryChart from '@components/battery-chart';
 
 const debug = createDebug('boompi:components:battery');
 
@@ -26,11 +19,6 @@ export default function BatteryPanel({
 	battery,
 	batteryFastPoll,
 }: BatteryProps) {
-	const history = useRef<Map<number, Battery>>(new Map());
-	if (!history.current.has(battery.date)) {
-		history.current.set(battery.date, battery);
-	}
-
 	// Tell the backend to poll the battery status quickly
 	useEffect(() => {
 		debug('batt panel start');
@@ -54,25 +42,32 @@ export default function BatteryPanel({
 			</>
 		);
 	return (
-		<table className={styles.info}>
-			<tbody>
-				<tr>
-					<td>{battery.voltage.toFixed(2)}</td>
-					<td>Volts</td>
-				</tr>
-				<tr>{amps}</tr>
-				<tr>
-					<td>{(battery.power / 1000).toFixed(2)}</td>
-					<td>Watts</td>
-				</tr>
-				<tr>
-					<td>
-						{(battery.percentage * 100).toFixed(1)}
-						<span className={styles.percent}>%</span>
-					</td>
-					<td>Remaining</td>
-				</tr>
-			</tbody>
-		</table>
+		<div className={styles.outer}>
+			<div className={styles.infoContainer}>
+				<table className={styles.info}>
+					<tbody>
+						<tr>
+							<td>{battery.voltage.toFixed(2)}</td>
+							<td>Volts</td>
+						</tr>
+						<tr>{amps}</tr>
+						<tr>
+							<td>{(battery.power / 1000).toFixed(2)}</td>
+							<td>Watts</td>
+						</tr>
+						<tr>
+							<td>
+								{(battery.percentage * 100).toFixed(1)}
+								<span className={styles.percent}>%</span>
+							</td>
+							<td>Remaining</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+			<div className={styles.chartContainer}>
+				<BatteryChart battery={battery} />
+			</div>
+		</div>
 	);
 }

@@ -1,5 +1,11 @@
+.info {
+	font-size: 2em;
+	margin: 0 auto;
+}
+
 .info td:first-of-type {
 	font-weight: bold;
+	padding-right: 0.5em;
 	text-align: right;
 }
 
@@ -9,4 +15,20 @@
 
 .percent {
 	font-size: 0.75em;
+}
+
+.infoContainer {
+	text-align: center;
+}
+
+.chartContainer {
+	height: 320px;
+}
+
+.chartContainer svg {
+	height: initial;
+}
+
+.outer {
+	width: 100%;
 }

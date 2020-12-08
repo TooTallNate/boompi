@@ -17,7 +17,6 @@ import useNow from '@lib/use-now';
 
 interface HeaderProps {
 	bluetoothName: string | null;
-	isCharging: boolean;
 	battery: Battery | null;
 	volume: number | null;
 	onBatteryClick: () => void;
@@ -25,7 +24,6 @@ interface HeaderProps {
 
 export default function Header({
 	bluetoothName,
-	isCharging,
 	battery,
 	volume,
 	onBatteryClick,
@@ -56,7 +54,7 @@ export default function Header({
 					<BatteryIcon
 						className={styles.battery}
 						percentage={battery.percentage}
-						isCharging={isCharging}
+						isCharging={battery.current <= -100}
 						onClick={onBatteryClick}
 					/>
 				)}
