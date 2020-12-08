@@ -13,7 +13,6 @@ import {
 	XAxis,
 	YAxis,
 	AxisDomain,
-	Tooltip,
 	Legend,
 	Line,
 } from 'recharts';
@@ -96,7 +95,6 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					/>
 				</YAxis>
 				<Legend />
-				<Tooltip />
 				<Line
 					yAxisId="left"
 					type="monotone"
