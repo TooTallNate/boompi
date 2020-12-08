@@ -9,6 +9,7 @@ import {
 	LineChart,
 	ReferenceLine,
 	ResponsiveContainer,
+	Label,
 	XAxis,
 	YAxis,
 	AxisDomain,
@@ -17,9 +18,6 @@ import {
 	Line,
 } from 'recharts';
 
-// Hooks
-import useNow from '@lib/use-now';
-
 interface BatteryChartProps {
 	battery: Battery;
 }
@@ -27,11 +25,17 @@ interface BatteryChartProps {
 const debug = createDebug('boompi:components:battery-chart');
 
 export default function BatteryChart({ battery }: BatteryChartProps) {
-	const { now } = useNow();
+	const now = Date.now();
 
 	const history = useRef<Map<number, Battery>>(new Map());
 	if (!history.current.has(battery.date)) {
 		history.current.set(battery.date, battery);
+	}
+
+	for (const batt of history.current.values()) {
+		if (now - batt.date > ms('1m')) {
+			history.current.delete(batt.date);
+		}
 	}
 
 	const xDomain: [AxisDomain, AxisDomain] = [
@@ -39,7 +43,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 			return now - ms('1m');
 		}, [now]),
 		useCallback(() => {
-			return now - ms('5s');
+			return now + ms('5s');
 		}, [now]),
 	];
 
@@ -47,36 +51,72 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 
 	return (
 		<ResponsiveContainer height="100%" width="100%">
-			<LineChart
-				data={data}
-				margin={{ top: 5, right: 15, left: 0, bottom: 5 }}
-			>
-				<CartesianGrid strokeDasharray="3 3" />
+			<LineChart data={data} margin={{ left: -10, right: -10 }}>
 				<XAxis
+					height={40}
 					dataKey="date"
-					type="number"
-					//tickFormatter={formatHoursMinutes}
+					tickFormatter={(val) => {
+						const diff = now - val;
+						if (diff < 1000) return '';
+						return `${ms(now - val)} ago`;
+					}}
 					allowDataOverflow={true}
+					tick={{ fontSize: 10 }}
 					domain={xDomain}
-				/>
-				<YAxis type="number" domain={[17, 26]} />
-				<Legend />
-
+				>
+					<Label
+						value="Timestamp"
+						position="insideBottom"
+						fontSize={14}
+						fill="#676767"
+					/>
+				</XAxis>
+				<YAxis
+					width={80}
+					yAxisId="left"
+					tick={{ fontSize: 10 }}
+					domain={[17, 26]}
+				>
+					<Label
+						value="Volts"
+						angle={-90}
+						position="outside"
+						fill="#676767"
+						fontSize={14}
+					/>
+				</YAxis>
+				<YAxis
+					width={80}
+					yAxisId="right"
+					orientation="right"
+					tick={{ fontSize: 10 }}
+					domain={[50, 300]}
+				>
+					<Label
+						value="Milliamps"
+						angle={90}
+						position="outside"
+						fill="#676767"
+						fontSize={14}
+					/>
+				</YAxis>
+				<Tooltip />
 				<Line
+					yAxisId="left"
 					type="monotone"
-					dataKey="voltage"
-					stroke="green"
+					dataKey={'voltage'}
+					stroke={'green'}
 					isAnimationActive={false}
+					dot={false}
 				/>
-
 				<Line
+					yAxisId="right"
 					type="monotone"
-					dataKey="current"
-					stroke="blue"
+					dataKey={'current'}
+					stroke={'cyan'}
 					isAnimationActive={false}
+					dot={false}
 				/>
-
-				<ReferenceLine x={now} stroke="#333" />
 			</LineChart>
 		</ResponsiveContainer>
 	);

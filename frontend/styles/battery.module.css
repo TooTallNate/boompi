@@ -1,6 +1,10 @@
 .info {
 	font-size: 2em;
-	margin: 0 auto;
+	width: 100%;
+}
+
+.info td {
+	width: 50%;
 }
 
 .info td:first-of-type {
@@ -26,6 +30,7 @@
 }
 
 .chartContainer svg {
+	cursor: initial;
 	height: initial;
 }
 
