@@ -21,7 +21,6 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [position, setPosition] = useState(0);
 	const [positionChangedAt, setPositionChangedAt] = useState(0);
 	const [duration, setDuration] = useState(0);
-	const [isCharging, setIsCharging] = useState(false);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [webSocketConnected, setWebSocketConnected] = useState(false);
 
@@ -104,7 +103,6 @@ export default function useBackend({ url }: UseBackendOptions) {
 		position,
 		positionChangedAt,
 		duration,
-		isCharging,
 		isPlaying,
 		setVolume: useCallback((value: number) => {
 			debug('Setting volume: %o', value);

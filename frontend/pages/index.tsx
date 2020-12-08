@@ -27,7 +27,6 @@ export default function Index() {
 		position,
 		positionChangedAt,
 		duration,
-		isCharging,
 		isPlaying,
 		setVolume,
 		setPlay,
@@ -91,7 +90,6 @@ export default function Index() {
 			<main className={styles.main}>
 				<Header
 					bluetoothName={bluetoothName}
-					isCharging={isCharging}
 					battery={battery}
 					volume={volume}
 					onBatteryClick={
