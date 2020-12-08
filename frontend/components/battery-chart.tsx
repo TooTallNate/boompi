@@ -32,7 +32,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 	}
 
 	for (const batt of history.current.values()) {
-		if (now - batt.date > ms('2m')) {
+		if (now - batt.date > ms('1m') + 2000) {
 			history.current.delete(batt.date);
 		}
 	}

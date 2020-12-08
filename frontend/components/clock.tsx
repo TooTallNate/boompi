@@ -6,7 +6,7 @@ interface ClockProps {
 }
 
 export default function Clock({ date }: ClockProps) {
-	const hours = format(date, 'HH');
+	const hours = format(date, 'H');
 	const minutes = format(date, 'MM');
 	const opacity = date.getSeconds() % 2 ? 1 : 0.2;
 	return (
