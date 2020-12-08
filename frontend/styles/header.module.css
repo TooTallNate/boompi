@@ -12,6 +12,14 @@
 	height: 100%;
 }
 
+.left {
+	font-size: 0.7em;
+}
+
+.dayOfWeek {
+	padding-right: 0.4em;
+}
+
 .left,
 .right {
 	width: 23%;

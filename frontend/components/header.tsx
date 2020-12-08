@@ -22,6 +22,8 @@ interface HeaderProps {
 	onBatteryClick: () => void;
 }
 
+const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 export default function Header({
 	bluetoothName,
 	battery,
@@ -38,6 +40,9 @@ export default function Header({
 	return (
 		<section className={styles.header}>
 			<div className={styles.left}>
+				<span className={styles.dayOfWeek}>
+					{daysOfWeek[now.getDay()]}
+				</span>
 				<Clock date={now} />
 			</div>
 			<div className={styles.center}>
