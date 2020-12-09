@@ -1,8 +1,9 @@
 import ms from 'ms';
 import createDebug from 'debug';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Battery } from '@lib/types';
+import useRequestAnimationFrame from '@lib/use-raf';
 
 import {
 	CartesianGrid,
@@ -24,17 +25,21 @@ interface BatteryChartProps {
 const debug = createDebug('boompi:components:battery-chart');
 
 export default function BatteryChart({ battery }: BatteryChartProps) {
-	const now = Date.now();
+	const [now, setNow] = useState(Date.now());
+
+	useRequestAnimationFrame(() => {
+		setNow(Date.now());
+	}, [now]);
 
 	const history = useRef<Map<number, Battery>>(new Map());
 	if (!history.current.has(battery.date)) {
-		history.current.set(battery.date, battery);
-	}
-
-	for (const batt of history.current.values()) {
-		if (now - batt.date > ms('1m') + 2000) {
-			history.current.delete(batt.date);
+		for (const batt of history.current.values()) {
+			if (now - batt.date > ms('1m') + 2000) {
+				history.current.delete(batt.date);
+			}
 		}
+
+		history.current.set(battery.date, battery);
 	}
 
 	const xDomain: [AxisDomain, AxisDomain] = [
