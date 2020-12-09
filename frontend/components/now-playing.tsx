@@ -48,10 +48,6 @@ export default function NowPlaying({
 	onVolumeChange,
 }: NowPlayingProps) {
 	const [playPosition, setPlayPosition] = useState(position);
-	const [playStartTime, setPlayStartTime] = useState(
-		isPlaying ? positionChangedAt : 0
-	);
-	const [playStartPosition, setPlayStartPosition] = useState(position);
 
 	const onVolume = useCallback(
 		(event) => {
@@ -76,33 +72,25 @@ export default function NowPlaying({
 	);
 
 	useEffect(() => {
-		if (isPlaying) {
-			if (!playStartTime) {
-				setPlayStartTime(Date.now());
-			}
-			setPlayStartPosition(position);
-			setPlayPosition(position);
-		} else {
-			setPlayStartTime(0);
-		}
-	}, [isPlaying, playStartTime, position]);
+		setPlayPosition(position);
+	}, [position]);
 
 	useEffect(() => {
 		if (!isPlaying) return;
-		const playPosition = playStartPosition + (Date.now() - playStartTime);
-		if (playPosition >= duration) return;
+		const newPlayPosition = position + (Date.now() - positionChangedAt);
+		if (newPlayPosition >= duration) return;
 		function step() {
-			const playPosition =
-				playStartPosition + (Date.now() - playStartTime);
-			if (playPosition <= duration) {
-				setPlayPosition(playPosition);
+			if (!isPlaying) return;
+			const newPlayPosition = position + (Date.now() - positionChangedAt);
+			if (newPlayPosition <= duration) {
+				setPlayPosition(newPlayPosition);
 			}
 		}
 		const raf = window.requestAnimationFrame(step);
 		return () => {
 			window.cancelAnimationFrame(raf);
 		};
-	}, [isPlaying, playStartTime, playPosition, playStartPosition, duration]);
+	}, [isPlaying, position, positionChangedAt, duration, playPosition]);
 
 	return (
 		<div className={styles.nowPlaying}>
