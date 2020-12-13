@@ -1,9 +1,8 @@
 import ms from 'ms';
 import createDebug from 'debug';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 
 import { Battery } from '@lib/types';
-import useRequestAnimationFrame from '@lib/use-raf';
 
 import {
 	CartesianGrid,
@@ -24,31 +23,56 @@ interface BatteryChartProps {
 
 const debug = createDebug('boompi:components:battery-chart');
 
+// Adapted from: https://stackoverflow.com/a/21294619/376773
+function millisToMinutesAndSeconds(millis: number): string {
+	const minutes = Math.floor(millis / 60000);
+	const seconds = ((millis % 60000) / 1000).toFixed(0);
+	const parts = [];
+	if (minutes > 0) {
+		parts.push(minutes, 'm');
+	}
+	if (seconds > 0 || minutes === 0) {
+		parts.push(seconds, 's');
+	}
+	parts.push(' ago');
+	return parts.join('');
+}
+
 export default function BatteryChart({ battery }: BatteryChartProps) {
 	const [now, setNow] = useState(Date.now());
+	const [lookback, setLookback] = useState(ms('3m'));
 
-	useRequestAnimationFrame(() => {
-		setNow(Date.now());
+	// Update the position of the chart 5 times per second
+	useEffect(() => {
+		const t = setTimeout(() => {
+			setNow(Date.now());
+		}, 200);
+		return () => clearTimeout(t);
 	}, [now]);
 
 	const history = useRef<Map<number, Battery>>(new Map());
 	if (!history.current.has(battery.date)) {
+		// Purge old battery readings
+		const ageThreshold = lookback + 2000;
 		for (const batt of history.current.values()) {
-			if (now - batt.date > ms('1m') + 2000) {
+			if (now - batt.date > ageThreshold) {
 				history.current.delete(batt.date);
 			}
 		}
 
+		// Add the new battery reading
 		history.current.set(battery.date, battery);
 	}
 
-	const xDomain: [AxisDomain, AxisDomain] = [
-		useCallback(() => {
-			return now - ms('1m');
-		}, [now]),
-		useCallback(() => {
-			return now;
-		}, [now]),
+	const xStart = now - lookback;
+	const xDomain: [AxisDomain, AxisDomain] = [() => xStart, () => now];
+	const amperageDomain: [AxisDomain, AxisDomain] = [
+		(dataMin) => {
+			return Math.min(Math.floor(dataMin) - 20, 0);
+		},
+		(dataMax) => {
+			return Math.max(0, Math.ceil(dataMax) + 20);
+		},
 	];
 
 	const data = Array.from(history.current.values());
@@ -61,43 +85,53 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					dataKey="date"
 					type="number"
 					tickFormatter={(val) => {
-						const diff = now - val;
-						return `${ms(diff)} ago`;
+						return millisToMinutesAndSeconds(now - val);
 					}}
+					allowDecimals={false}
 					allowDataOverflow={true}
-					tick={{ fontSize: 10 }}
+					tick={{ fontSize: 14 }}
 					stroke="#aaa"
 					domain={xDomain}
+					tickCount={7}
 				></XAxis>
 				<YAxis
 					width={80}
 					yAxisId="left"
-					tick={{ fontSize: 10 }}
+					tick={{ fontSize: 13 }}
 					stroke="#aaa"
+					allowDecimals={false}
 					domain={[17, 26]}
+					tickCount={4}
+					padding={{ top: 20, bottom: 20 }}
+					unit="v"
 				>
 					<Label
 						value="Voltage"
 						angle={-90}
 						position="outside"
+						offset={100}
 						fill="white"
-						fontSize={14}
+						fontSize={18}
 					/>
 				</YAxis>
 				<YAxis
 					width={80}
 					yAxisId="right"
 					orientation="right"
-					tick={{ fontSize: 10 }}
+					tick={{ fontSize: 13 }}
 					stroke="#aaa"
-					domain={[50, 300]}
+					allowDecimals={false}
+					padding={{ top: 20, bottom: 20 }}
+					domain={amperageDomain}
+					tickCount={5}
+					unit="mA"
 				>
 					<Label
 						value="Amperage"
 						angle={90}
 						position="outside"
 						fill="white"
-						fontSize={14}
+						fontSize={18}
 					/>
 				</YAxis>
 				<Legend />
@@ -106,7 +140,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					type="monotone"
 					dataKey="voltage"
 					name="Volts"
-					stroke="orange"
+					stroke="magenta"
 					isAnimationActive={false}
 					dot={false}
 				/>
