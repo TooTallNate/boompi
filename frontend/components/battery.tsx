@@ -49,13 +49,10 @@ export default function BatteryPanel({
 						<tr>
 							<td>{battery.voltage.toFixed(2)}</td>
 							<td>Volts</td>
-						</tr>
-						<tr>{amps}</tr>
-						<tr>
 							<td>{(battery.power / 1000).toFixed(2)}</td>
 							<td>Watts</td>
 						</tr>
-						<tr>
+						<tr>{amps}
 							<td>
 								{(battery.percentage * 100).toFixed(1)}
 								<span className={styles.percent}>%</span>
