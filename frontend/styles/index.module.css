@@ -6,6 +6,7 @@
 	user-select: none;
 	position: relative;
 	overflow: hidden;
+	cursor: none;
 
 	/**
 	 * Carbon fiber gradient credit: https://stackoverflow.com/a/34556311/376773
@@ -41,7 +42,6 @@
 
 .main svg {
 	fill: white;
-	cursor: pointer;
 }
 
 .content {
