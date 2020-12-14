@@ -38,7 +38,7 @@ export default function Header({
 		volumeIcon = <Volume level={volumeLevel} />;
 	}
 	const batteryClasses = [styles.battery];
-	if (battery?.percentage < 0.2) {
+	if (battery && battery.percentage < 0.2) {
 		batteryClasses.push(styles.low);
 	}
 	return (
