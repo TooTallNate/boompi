@@ -5,6 +5,8 @@
 	pointer-events: none;
 }
 
+/* Ivana (https://tympanus.net/codrops/2015/02/11/subtle-click-feedback-effects) */
+.click::before,
 .click::after {
 	content: '';
 	position: absolute;
@@ -14,21 +16,71 @@
 	width: 70px;
 	height: 70px;
 	border-radius: 50%;
-	opacity: 1;
+	opacity: 0;
 	pointer-events: none;
-	animation: anim-effect-boris 0.3s forwards;
-	background: rgba(111,148,182,0.1);
+	box-shadow: 0 0 0 2px rgba(111, 148, 182, 0.9);
 }
 
-@keyframes anim-effect-boris {
+.click::before {
+	-webkit-animation: anim-effect-ivana-1 0.5s forwards;
+	animation: anim-effect-ivana-1 0.5s forwards;
+}
+
+.click::after {
+	-webkit-animation: anim-effect-ivana-2 0.5s forwards;
+	animation: anim-effect-ivana-2 0.5s forwards;
+}
+
+@-webkit-keyframes anim-effect-ivana-1 {
 	0% {
-		transform: scale3d(0.3, 0.3, 1);
-	}
-	25%, 50% {
 		opacity: 1;
+		-webkit-transform: scale3d(0.5, 0.5, 1);
+		transform: scale3d(0.5, 0.5, 1);
 	}
 	100% {
 		opacity: 0;
+		-webkit-transform: scale3d(1.1, 1.1, 1);
+		transform: scale3d(1.1, 1.1, 1);
+	}
+}
+
+@keyframes anim-effect-ivana-1 {
+	0% {
+		opacity: 1;
+		-webkit-transform: scale3d(0.5, 0.5, 1);
+		transform: scale3d(0.5, 0.5, 1);
+	}
+	100% {
+		opacity: 0;
+		-webkit-transform: scale3d(1.1, 1.1, 1);
+		transform: scale3d(1.1, 1.1, 1);
+	}
+}
+
+@-webkit-keyframes anim-effect-ivana-2 {
+	0% {
+		opacity: 1;
+		-webkit-transform: scale3d(0.5, 0.5, 1);
+		transform: scale3d(0.5, 0.5, 1);
+	}
+	50%,
+	100% {
+		opacity: 0;
+		-webkit-transform: scale3d(1.2, 1.2, 1);
+		transform: scale3d(1.2, 1.2, 1);
+	}
+}
+
+@keyframes anim-effect-ivana-2 {
+	0% {
+		opacity: 1;
+		-webkit-transform: scale3d(0.5, 0.5, 1);
+		transform: scale3d(0.5, 0.5, 1);
+	}
+	50%,
+	100% {
+		opacity: 0;
+		-webkit-transform: scale3d(1.2, 1.2, 1);
 		transform: scale3d(1.2, 1.2, 1);
 	}
 }
