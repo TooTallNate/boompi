@@ -26,7 +26,7 @@ const debug = createDebug('boompi:components:battery-chart');
 // Adapted from: https://stackoverflow.com/a/21294619/376773
 function millisToMinutesAndSeconds(millis: number): string {
 	const minutes = Math.floor(millis / 60000);
-	const seconds = ((millis % 60000) / 1000).toFixed(0);
+	const seconds = Math.floor((millis % 60000) / 1000);
 	const parts = [];
 	if (minutes > 0) {
 		parts.push(minutes, 'm');
