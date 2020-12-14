@@ -62,7 +62,7 @@ export default function ClickEffect({ children }: ClickEffectProps) {
 	));
 
 	return (
-		<div onClick={handleClick}>
+		<div className={styles.wrapper} onClick={handleClick}>
 			{children}
 			{clicks}
 		</div>

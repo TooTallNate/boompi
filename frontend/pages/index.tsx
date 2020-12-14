@@ -80,7 +80,7 @@ export default function Index() {
 	}
 
 	return (
-		<ClickEffect>
+		<>
 			<Head>
 				<title>Boompi</title>
 				<meta
@@ -89,16 +89,18 @@ export default function Index() {
 				/>
 			</Head>
 			<main className={styles.main}>
-				<Header
-					bluetoothName={bluetoothName}
-					battery={battery}
-					volume={volume}
-					onBatteryClick={
-						panel === 'battery' ? closePanel : showBatteryPanel
-					}
-				/>
-				<section className={styles.content}>{content}</section>
+				<ClickEffect>
+					<Header
+						bluetoothName={bluetoothName}
+						battery={battery}
+						volume={volume}
+						onBatteryClick={
+							panel === 'battery' ? closePanel : showBatteryPanel
+						}
+					/>
+					<section className={styles.content}>{content}</section>
+				</ClickEffect>
 			</main>
-		</ClickEffect>
+		</>
 	);
 }
