@@ -38,6 +38,12 @@ function millisToMinutesAndSeconds(millis: number): string {
 	return parts.join('');
 }
 
+function formatAmps(current: number): string {
+	return current < 1000 && current > -1000
+		? `${current}mA`
+		: `${(current / 1000).toFixed(1)}A`;
+}
+
 export default function BatteryChart({ battery }: BatteryChartProps) {
 	const [now, setNow] = useState(Date.now());
 	const [lookback, setLookback] = useState(ms('3m'));
@@ -78,8 +84,8 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 	const data = Array.from(history.current.values());
 
 	return (
-		<ResponsiveContainer height="100%" width="100%">
-			<LineChart data={data} margin={{ left: -10, right: -10 }}>
+		<ResponsiveContainer height="100%" width="99.4%">
+			<LineChart data={data}>
 				<XAxis
 					height={40}
 					dataKey="date"
@@ -89,7 +95,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					}}
 					allowDecimals={false}
 					allowDataOverflow={true}
-					tick={{ fontSize: 14 }}
+					tick={{ fontSize: 15 }}
 					stroke="#aaa"
 					domain={xDomain}
 					tickCount={7}
@@ -97,7 +103,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 				<YAxis
 					width={80}
 					yAxisId="left"
-					tick={{ fontSize: 13 }}
+					tick={{ fontSize: 14 }}
 					stroke="#aaa"
 					allowDecimals={false}
 					domain={[17, 26]}
@@ -109,7 +115,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 						value="Voltage"
 						angle={-90}
 						position="outside"
-						offset={100}
+						dx={-15}
 						fill="white"
 						fontSize={18}
 					/>
@@ -123,13 +129,14 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					allowDecimals={false}
 					padding={{ top: 20, bottom: 20 }}
 					domain={amperageDomain}
+					tickFormatter={formatAmps}
 					tickCount={5}
-					unit="mA"
 				>
 					<Label
 						value="Amperage"
 						angle={90}
 						position="outside"
+						dx={28}
 						fill="white"
 						fontSize={18}
 					/>
@@ -148,7 +155,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					yAxisId="right"
 					type="monotone"
 					dataKey="current"
-					name="Milliamps"
+					name="Current"
 					stroke="cyan"
 					isAnimationActive={false}
 					dot={false}
