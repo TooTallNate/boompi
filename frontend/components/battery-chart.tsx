@@ -1,6 +1,6 @@
 import ms from 'ms';
 import createDebug from 'debug';
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 
 import { Battery } from '@lib/types';
 
@@ -44,6 +44,8 @@ function formatAmps(current: number): string {
 		: `${(current / 1000).toFixed(1)}A`;
 }
 
+const history = new Map<number, Battery>();
+
 export default function BatteryChart({ battery }: BatteryChartProps) {
 	const [now, setNow] = useState(Date.now());
 	const [lookback, setLookback] = useState(ms('3m'));
@@ -56,18 +58,17 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 		return () => clearTimeout(t);
 	}, [now]);
 
-	const history = useRef<Map<number, Battery>>(new Map());
-	if (!history.current.has(battery.date)) {
+	if (!history.has(battery.date)) {
 		// Purge old battery readings
 		const ageThreshold = lookback + 2000;
-		for (const batt of history.current.values()) {
+		for (const batt of history.values()) {
 			if (now - batt.date > ageThreshold) {
-				history.current.delete(batt.date);
+				history.delete(batt.date);
 			}
 		}
 
 		// Add the new battery reading
-		history.current.set(battery.date, battery);
+		history.set(battery.date, battery);
 	}
 
 	const xStart = now - lookback;
@@ -81,7 +82,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 		},
 	];
 
-	const data = Array.from(history.current.values());
+	const data = Array.from(history.values());
 
 	return (
 		<ResponsiveContainer height="100%" width="99.4%">
