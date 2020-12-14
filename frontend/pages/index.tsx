@@ -47,6 +47,10 @@ export default function Index() {
 		setPanel('');
 	}, []);
 
+	const handleRefresh = useCallback(() => {
+		window.location.reload();
+	}, []);
+
 	let content = null;
 
 	if (webSocketConnected) {
@@ -99,6 +103,7 @@ export default function Index() {
 						}
 					/>
 					<section className={styles.content}>{content}</section>
+					<div className={styles.refresh} onClick={handleRefresh} />
 				</ClickEffect>
 			</main>
 		</>
