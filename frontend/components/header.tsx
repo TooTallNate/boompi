@@ -37,6 +37,10 @@ export default function Header({
 		const volumeLevel = volume === 0 ? 0 : Math.floor(volume * 3) + 1;
 		volumeIcon = <Volume level={volumeLevel} />;
 	}
+	const batteryClasses = [ styles.battery ];
+	if (battery?.percentage < 0.20) {
+		batteryClasses.push(styles.low);
+	}
 	return (
 		<section className={styles.header}>
 			<div className={styles.left}>
@@ -57,7 +61,7 @@ export default function Header({
 				/>
 				{battery && (
 					<BatteryIcon
-						className={styles.battery}
+						className={batteryClasses.join(' ')}
 						percentage={battery.percentage}
 						isCharging={battery.current <= -100}
 						onClick={onBatteryClick}
