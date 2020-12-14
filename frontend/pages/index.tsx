@@ -8,6 +8,7 @@ import styles from '@styles/index.module.css';
 import Battery from '@components/battery';
 import Header from '@components/header';
 import NowPlaying from '@components/now-playing';
+import ClickEffect from '@components/click-effect';
 import ConnectBluetooth from '@components/connect-bluetooth';
 import WebSocketConnecting from '@components/websocket-connecting';
 
@@ -79,7 +80,7 @@ export default function Index() {
 	}
 
 	return (
-		<>
+		<ClickEffect>
 			<Head>
 				<title>Boompi</title>
 				<meta
@@ -98,6 +99,6 @@ export default function Index() {
 				/>
 				<section className={styles.content}>{content}</section>
 			</main>
-		</>
+		</ClickEffect>
 	);
 }
