@@ -107,8 +107,8 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					tick={{ fontSize: 14 }}
 					stroke="#aaa"
 					allowDecimals={false}
-					domain={[17, 26]}
-					tickCount={4}
+					domain={[18, 25]}
+					tickCount={8}
 					padding={{ top: 20, bottom: 20 }}
 					unit="v"
 				>
@@ -131,13 +131,13 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 					padding={{ top: 20, bottom: 20 }}
 					domain={amperageDomain}
 					tickFormatter={formatAmps}
-					tickCount={5}
+					tickCount={8}
 				>
 					<Label
 						value="Amperage"
 						angle={90}
 						position="outside"
-						dx={28}
+						dx={34}
 						fill="white"
 						fontSize={18}
 					/>
