@@ -40,12 +40,23 @@ export default function ClickEffect({ children }: ClickEffectProps) {
 
 	const handleClick = useCallback(
 		(e) => {
-			const click = {
-				x: e.clientX,
-				y: e.clientY,
-				date: Date.now(),
-			};
-			setClicksData([...clicksData, click]);
+			const clicks: ClickData[] = [];
+			if (Array.isArray(e.touches)) {
+				for (const t of e.touches) {
+					clicks.push({
+						x: t.clientX,
+						y: t.clientY,
+						date: Date.now(),
+					});
+				}
+			} else if (typeof e.clientX === 'number') {
+				clicks.push({
+					x: e.clientX,
+					y: e.clientY,
+					date: Date.now(),
+				});
+			}
+			setClicksData([...clicksData, ...clicks]);
 		},
 		[clicksData]
 	);
@@ -62,7 +73,11 @@ export default function ClickEffect({ children }: ClickEffectProps) {
 	));
 
 	return (
-		<div className={styles.wrapper} onMouseDown={handleClick}>
+		<div
+			className={styles.wrapper}
+			onMouseDown={handleClick}
+			onTouchStart={handleClick}
+		>
 			{children}
 			{clicks}
 		</div>

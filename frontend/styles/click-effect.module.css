@@ -17,13 +17,13 @@
 	position: absolute;
 	top: 50%;
 	left: 50%;
-	margin: -35px 0 0 -35px;
-	width: 70px;
-	height: 70px;
+	margin: -50px 0 0 -50px;
+	width: 100px;
+	height: 100px;
 	border-radius: 50%;
 	opacity: 0;
 	pointer-events: none;
-	box-shadow: 0 0 0 2px rgba(111, 148, 182, 0.9);
+	box-shadow: 0 0 0 10px rgba(151, 178, 200, 0.9);
 }
 
 .click::before {
