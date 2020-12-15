@@ -45,33 +45,12 @@
 	filter: drop-shadow(0 0 0.2em #b26cf7);
 }
 
-@keyframes flickerAnimation {
-	0% {
-		opacity: 1;
-	}
-	20% {
-		opacity: 1;
-	}
-	50% {
-		opacity: 0;
-	}
-	80% {
-		opacity: 1;
-	}
-	100% {
-		opacity: 1;
-	}
-}
-
 .battery.low [data-fill] {
 	fill: red;
 }
 
 .battery [data-charge] {
-	fill: yellow;
-	opacity: 1;
-	animation: flickerAnimation 3s infinite;
-	stroke: black;
-	stroke-width: 1px;
-	stroke-linejoin: round;
+	fill: black;
+	stroke: white;
+	stroke-width: 0.05em;
 }
