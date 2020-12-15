@@ -35,8 +35,11 @@
 	height: 340px;
 }
 
+.chartContainer :global(.recharts-wrapper) {
+	cursor: none !important;
+}
+
 .chartContainer svg {
-	cursor: initial;
 	height: initial;
 }
 
