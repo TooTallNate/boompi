@@ -1,5 +1,4 @@
 import ms from 'ms';
-import createDebug from 'debug';
 import { useCallback, useState, useEffect } from 'react';
 
 import { Battery } from '@lib/types';
@@ -20,8 +19,6 @@ import {
 interface BatteryChartProps {
 	battery: Battery;
 }
-
-const debug = createDebug('boompi:components:battery-chart');
 
 // Adapted from: https://stackoverflow.com/a/21294619/376773
 function millisToMinutesAndSeconds(millis: number): string {

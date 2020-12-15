@@ -26,7 +26,6 @@ export default function useBackend({ url }: UseBackendOptions) {
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		const body = JSON.parse(event.data);
-		debug('WebSocket "message" event: %o', body);
 		if ('bluetoothName' in body) {
 			setBluetoothName(body.bluetoothName);
 		}
@@ -128,7 +127,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 			wsRef.current?.send(JSON.stringify({ fastForward: true }));
 		}, []),
 		batteryFastPoll: useCallback((enabled: boolean) => {
-			debug('battery fast poll: %o', enabled);
+			debug('Battery fast poll: %o', enabled);
 			wsRef.current?.send(JSON.stringify({ batteryFastPoll: enabled }));
 		}, []),
 	};

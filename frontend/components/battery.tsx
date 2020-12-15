@@ -1,4 +1,3 @@
-import createDebug from 'debug';
 import { Battery } from '@lib/types';
 import { useEffect } from 'react';
 
@@ -7,8 +6,6 @@ import styles from '@styles/battery.module.css';
 
 // Components
 import BatteryChart from '@components/battery-chart';
-
-const debug = createDebug('boompi:components:battery');
 
 interface BatteryProps {
 	battery: Battery;
@@ -21,10 +18,8 @@ export default function BatteryPanel({
 }: BatteryProps) {
 	// Tell the backend to poll the battery status quickly
 	useEffect(() => {
-		debug('batt panel start');
 		batteryFastPoll(true);
 		return () => {
-			debug('batt panel end');
 			batteryFastPoll(false);
 		};
 	}, []);
