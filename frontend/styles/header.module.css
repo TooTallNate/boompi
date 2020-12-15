@@ -49,8 +49,12 @@
 	fill: red;
 }
 
+.battery.charging [data-fill] {
+	fill: #00e300;
+}
+
 .battery [data-charge] {
 	fill: black;
 	stroke: white;
-	stroke-width: 0.05em;
+	stroke-width: 0.07em;
 }
