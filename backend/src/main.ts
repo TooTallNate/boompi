@@ -2,6 +2,7 @@ import i2c from 'i2c-bus';
 import WebSocket from 'ws';
 import dbus from 'dbus-next';
 import createDebug from 'debug';
+import { uptime } from 'os';
 
 import * as system from './system';
 import { INA260, CONFIGURATION_REGISTER } from './ina260';
@@ -55,10 +56,17 @@ async function main() {
 		if (player) {
 			player.getVolume().then((volume) => {
 				if (!player) return;
-				ws.send(JSON.stringify({ bluetoothName: player.name, volume }));
+				ws.send(JSON.stringify({
+					bluetoothName: player.name,
+					volume,
+					uptime: uptime()
+				}));
 			});
 		} else {
-			ws.send(JSON.stringify({ bluetoothName: null }));
+			ws.send(JSON.stringify({
+				bluetoothName: null,
+				uptime: uptime()
+			 }));
 		}
 	});
 
