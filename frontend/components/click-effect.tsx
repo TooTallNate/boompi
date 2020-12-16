@@ -13,28 +13,6 @@ interface ClickData {
 	date: number;
 }
 
-interface ClickProps extends ClickData {
-	onEffectFinished: (date: number) => void;
-}
-
-function Click({ x, y, date, onEffectFinished }: ClickProps) {
-	useEffect(() => {
-		const t = setTimeout(() => {
-			onEffectFinished(date);
-		}, 600);
-		return () => {
-			clearTimeout(t);
-		};
-	}, [date]);
-	return (
-		<div
-			key={date}
-			className={styles.click}
-			style={{ top: `${y}px`, left: `${x}px` }}
-		/>
-	);
-}
-
 export default function ClickEffect({ children }: ClickEffectProps) {
 	const [clicksData, setClicksData] = useState<ClickData[]>([]);
 
@@ -61,15 +39,23 @@ export default function ClickEffect({ children }: ClickEffectProps) {
 		[clicksData]
 	);
 
-	const handleEffectFinished = useCallback(
-		(date: number) => {
-			setClicksData(clicksData.filter((d) => d.date !== date));
-		},
-		[clicksData]
-	);
+	useEffect(() => {
+		if (clicksData.length === 0) return;
+		// Sleep for the duration of the CSS effect
+		const t = setTimeout(() => {
+			setClicksData([]);
+		}, 600);
+		return () => {
+			clearTimeout(t);
+		};
+	}, [clicksData]);
 
 	const clicks = clicksData.map((data) => (
-		<Click onEffectFinished={handleEffectFinished} {...data} />
+		<div
+			key={data.date}
+			className={styles.click}
+			style={{ top: `${data.y}px`, left: `${data.x}px` }}
+		/>
 	));
 
 	return (
