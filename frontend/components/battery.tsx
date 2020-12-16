@@ -38,6 +38,9 @@ export default function BatteryPanel({
 		);
 	return (
 		<div className={styles.outer}>
+			<div className={styles.chartContainer}>
+				<BatteryChart battery={battery} />
+			</div>
 			<div className={styles.infoContainer}>
 				<table className={styles.info}>
 					<tbody>
@@ -57,9 +60,6 @@ export default function BatteryPanel({
 						</tr>
 					</tbody>
 				</table>
-			</div>
-			<div className={styles.chartContainer}>
-				<BatteryChart battery={battery} />
 			</div>
 		</div>
 	);

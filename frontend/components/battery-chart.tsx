@@ -12,7 +12,6 @@ import {
 	XAxis,
 	YAxis,
 	AxisDomain,
-	Legend,
 	Line,
 } from 'recharts';
 
@@ -82,7 +81,7 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 	const data = Array.from(history.values());
 
 	return (
-		<ResponsiveContainer height="100%" width="98.6%">
+		<ResponsiveContainer height="100%" width="97.6%">
 			<LineChart data={data}>
 				<XAxis
 					height={40}
@@ -134,12 +133,11 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 						value="Amperage"
 						angle={90}
 						position="outside"
-						dx={42}
+						dx={40}
 						fill="white"
 						fontSize={18}
 					/>
 				</YAxis>
-				<Legend />
 				<Line
 					yAxisId="left"
 					type="monotone"

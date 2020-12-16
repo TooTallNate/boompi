@@ -88,12 +88,12 @@ async function main() {
 				ina.readCurrent(),
 				ina.readPower(),
 			]);
-			const MAX_VOLTAGE = 25.02;
+			const MAX_VOLTAGE = 24.98;
 			const MIN_VOLTAGE = 18;
 			const percentage =
 				(voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
 			broadcast({
-				battery: { voltage, current, power, percentage },
+				battery: { voltage, current, power, percentage, date: Date.now() },
 			});
 			await new Promise((r) => setTimeout(r, batteryPollingInterval));
 		}

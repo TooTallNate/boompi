@@ -6,7 +6,7 @@ import styles from '@styles/index.module.css';
 
 // Components
 import Battery from '@components/battery';
-import Header from '@components/header';
+import Footer from '@components/footer';
 import NowPlaying from '@components/now-playing';
 import ClickEffect from '@components/click-effect';
 import ConnectBluetooth from '@components/connect-bluetooth';
@@ -36,7 +36,7 @@ export default function Index() {
 		setFastForward,
 		batteryFastPoll,
 	} = useBackend({
-		url: 'ws://boompi.local:3001',
+		url: 'ws://localhost:3001',
 	});
 
 	const showBatteryPanel = useCallback(() => {
@@ -94,7 +94,8 @@ export default function Index() {
 			</Head>
 			<main className={styles.main}>
 				<ClickEffect>
-					<Header
+					<section className={styles.content}>{content}</section>
+					<Footer
 						bluetoothName={bluetoothName}
 						battery={battery}
 						volume={volume}
@@ -102,7 +103,6 @@ export default function Index() {
 							panel === 'battery' ? closePanel : showBatteryPanel
 						}
 					/>
-					<section className={styles.content}>{content}</section>
 					<div className={styles.refresh} onClick={handleRefresh} />
 				</ClickEffect>
 			</main>
