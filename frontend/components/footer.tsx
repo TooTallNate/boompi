@@ -47,7 +47,7 @@ export default function Footer({
 			batteryClasses.push(styles.low);
 		}
 		let isCharging = battery.current <= -20;
-		if (isCharging || battery.percentage >= 0.93) {
+		if (isCharging || battery.percentage >= 0.99) {
 			batteryClasses.push(styles.charging);
 		}
 		batteryIcon = (
