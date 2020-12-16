@@ -40,6 +40,10 @@
 	transition: fill 0.5s, filter 0.5s;
 }
 
+.settings {
+	font-size: 0.7em;
+}
+
 .bluetooth[data-connected] path {
 	fill: #66a9ff;
 	filter: drop-shadow(0 0 0.2em #b26cf7);

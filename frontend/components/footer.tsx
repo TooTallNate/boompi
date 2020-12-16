@@ -10,6 +10,7 @@ import Clock from '@components/clock';
 import BatteryIcon from '@components/icons/battery';
 import Bluetooth from '@components/icons/bluetooth';
 import Mobile from '@components/icons/mobile';
+import Settings from '@components/icons/settings';
 import Volume from '@components/icons/volume';
 
 // Hooks
@@ -49,12 +50,14 @@ export default function Footer({
 		if (isCharging || battery.percentage >= 0.93) {
 			batteryClasses.push(styles.charging);
 		}
-		batteryIcon = <BatteryIcon
-						className={batteryClasses.join(' ')}
-						percentage={battery.percentage}
-						isCharging={isCharging}
-						onClick={onBatteryClick}
-					/>
+		batteryIcon = (
+			<BatteryIcon
+				className={batteryClasses.join(' ')}
+				percentage={battery.percentage}
+				isCharging={isCharging}
+				onClick={onBatteryClick}
+			/>
+		);
 	}
 
 	return (
@@ -76,6 +79,7 @@ export default function Footer({
 					isConnected={isConnected}
 				/>
 				{batteryIcon}
+				<Settings className={styles.settings} />
 			</div>
 		</section>
 	);
