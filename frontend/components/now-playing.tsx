@@ -57,20 +57,6 @@ export default function NowPlaying({
 		[onVolumeChange]
 	);
 
-	const onVolumeMute = useCallback(
-		(event) => {
-			onVolumeChange(0);
-		},
-		[onVolumeChange]
-	);
-
-	const onVolumeMax = useCallback(
-		(event) => {
-			onVolumeChange(1);
-		},
-		[onVolumeChange]
-	);
-
 	useEffect(() => {
 		setPlayPosition(position);
 	}, [position]);
@@ -98,7 +84,7 @@ export default function NowPlaying({
 			<div className={styles.track}>{track}</div>
 			<div className={styles.album}>{album}</div>
 			<div className={styles.position}>
-				{formatSeconds(playPosition)}
+				<div className={styles.time}>{formatSeconds(playPosition)}</div>
 				<input
 					type="range"
 					min="0"
@@ -106,7 +92,7 @@ export default function NowPlaying({
 					value={playPosition}
 					readOnly
 				/>
-				-{formatSeconds(duration - playPosition)}
+				<div className={styles.time}>-{formatSeconds(duration - playPosition)}</div>
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
@@ -119,7 +105,7 @@ export default function NowPlaying({
 			</div>
 			{typeof volume === 'number' && (
 				<div className={styles.volume}>
-					<Volume onClick={onVolumeMute} />
+					<div className={styles.time}><Volume className={styles.volumeMin}/></div>
 					<input
 						type="range"
 						min="0"
@@ -127,7 +113,7 @@ export default function NowPlaying({
 						onInput={onVolume}
 						value={volume * 100}
 					/>
-					<Volume level={3} onClick={onVolumeMax} />
+					<div className={styles.time}><Volume level={3} /></div>
 				</div>
 			)}
 		</div>

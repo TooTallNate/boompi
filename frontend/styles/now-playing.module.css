@@ -27,6 +27,12 @@
 	font-size: 2.2em;
 }
 
+.time {
+	display: inline-block;
+	text-align: center;
+	width: 12%;
+}
+
 .controls {
 	font-size: 4.3em;
 	margin-bottom: 0.15em;
@@ -39,6 +45,11 @@
 .volume svg {
 	font-size: 3.5em;
 	vertical-align: middle;
+}
+
+.volumeMin {
+	position: relative;
+	left: 0.25em;
 }
 
 .nowPlaying input[type='range'] {
