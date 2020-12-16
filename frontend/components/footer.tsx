@@ -1,7 +1,7 @@
 import { Battery } from '@lib/types';
 
 // CSS
-import styles from '@styles/header.module.css';
+import styles from '@styles/footer.module.css';
 
 // Components
 import Clock from '@components/clock';
@@ -15,7 +15,7 @@ import Volume from '@components/icons/volume';
 // Hooks
 import useNow from '@lib/use-now';
 
-interface HeaderProps {
+interface FooterProps {
 	bluetoothName: string | null;
 	battery: Battery | null;
 	volume: number | null;
@@ -24,12 +24,12 @@ interface HeaderProps {
 
 const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-export default function Header({
+export default function Footer({
 	bluetoothName,
 	battery,
 	volume,
 	onBatteryClick,
-}: HeaderProps) {
+}: FooterProps) {
 	const { now } = useNow();
 	const isConnected = typeof bluetoothName === 'string';
 
@@ -58,7 +58,7 @@ export default function Header({
 	}
 
 	return (
-		<section className={styles.header}>
+		<section className={styles.footer}>
 			<div className={styles.left}>
 				<span className={styles.dayOfWeek}>
 					{daysOfWeek[now.getDay()]}
