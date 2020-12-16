@@ -111,6 +111,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		setPlay: useCallback(() => {
 			debug('Playing');
 			wsRef.current?.send(JSON.stringify({ play: true }));
+			setPositionChangedAt(Date.now());
 			setIsPlaying(true);
 		}, []),
 		setPause: useCallback(() => {
