@@ -36,7 +36,7 @@ export default function Index() {
 		setFastForward,
 		batteryFastPoll,
 	} = useBackend({
-		url: 'ws://boompi.local:3001',
+		url: 'ws://localhost:3001',
 	});
 
 	const showBatteryPanel = useCallback(() => {
