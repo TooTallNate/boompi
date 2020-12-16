@@ -47,7 +47,9 @@ export default function NowPlaying({
 	onFastForward,
 	onVolumeChange,
 }: NowPlayingProps) {
-	const [playPosition, setPlayPosition] = useState(position);
+	const [playPosition, setPlayPosition] = useState(
+		position + (Date.now() - positionChangedAt)
+	);
 
 	const onVolume = useCallback(
 		(event) => {
@@ -61,20 +63,20 @@ export default function NowPlaying({
 		setPlayPosition(position);
 	}, [position]);
 
+	// Update the artificial play position at 5 FPS
 	useEffect(() => {
 		if (!isPlaying) return;
 		const newPlayPosition = position + (Date.now() - positionChangedAt);
 		if (newPlayPosition >= duration) return;
-		function step() {
+		const t = setTimeout(() => {
 			if (!isPlaying) return;
 			const newPlayPosition = position + (Date.now() - positionChangedAt);
 			if (newPlayPosition <= duration) {
 				setPlayPosition(newPlayPosition);
 			}
-		}
-		const raf = window.requestAnimationFrame(step);
+		}, 200);
 		return () => {
-			window.cancelAnimationFrame(raf);
+			clearTimeout(t);
 		};
 	}, [isPlaying, position, positionChangedAt, duration, playPosition]);
 
@@ -92,7 +94,9 @@ export default function NowPlaying({
 					value={playPosition}
 					readOnly
 				/>
-				<div className={styles.time}>-{formatSeconds(duration - playPosition)}</div>
+				<div className={styles.time}>
+					-{formatSeconds(duration - playPosition)}
+				</div>
 			</div>
 			<div className={styles.controls}>
 				<Rewind onClick={onRewind} />
@@ -105,7 +109,9 @@ export default function NowPlaying({
 			</div>
 			{typeof volume === 'number' && (
 				<div className={styles.volume}>
-					<div className={styles.time}><Volume className={styles.volumeMin}/></div>
+					<div className={styles.time}>
+						<Volume className={styles.volumeMin} />
+					</div>
 					<input
 						type="range"
 						min="0"
@@ -113,7 +119,9 @@ export default function NowPlaying({
 						onInput={onVolume}
 						value={volume * 100}
 					/>
-					<div className={styles.time}><Volume level={3} /></div>
+					<div className={styles.time}>
+						<Volume level={3} />
+					</div>
 				</div>
 			)}
 		</div>
