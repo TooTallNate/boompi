@@ -3,6 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 // CSS
 import styles from '@styles/now-playing.module.css';
 
+// Components
+import Marquee from '@components/marquee';
+
 // Icons
 import Play from '@components/icons/play';
 import Pause from '@components/icons/pause';
@@ -48,7 +51,7 @@ export default function NowPlaying({
 	onVolumeChange,
 }: NowPlayingProps) {
 	const [playPosition, setPlayPosition] = useState(
-		position + (Date.now() - positionChangedAt)
+		position + (isPlaying ? Date.now() - positionChangedAt : 0)
 	);
 
 	const onVolume = useCallback(
@@ -60,8 +63,10 @@ export default function NowPlaying({
 	);
 
 	useEffect(() => {
-		setPlayPosition(position);
-	}, [position]);
+		setPlayPosition(
+			position + (isPlaying ? Date.now() - positionChangedAt : 0)
+		);
+	}, [position, positionChangedAt, isPlaying]);
 
 	// Update the artificial play position at 5 FPS
 	useEffect(() => {
@@ -75,21 +80,25 @@ export default function NowPlaying({
 				setPlayPosition(newPlayPosition);
 			}
 		}, 200);
-		return () => {
-			clearTimeout(t);
-		};
+		return () => clearTimeout(t);
 	}, [isPlaying, position, positionChangedAt, duration, playPosition]);
 
 	return (
 		<div className={styles.nowPlaying}>
-			<div className={styles.artist}>{artist}</div>
-			<div className={styles.track}>{track}</div>
-			<div className={styles.album}>{album}</div>
+			<div className={styles.artist}>
+				<Marquee>{artist}</Marquee>
+			</div>
+			<div className={styles.track}>
+				<Marquee>{track}</Marquee>
+			</div>
+			<div className={styles.album}>
+				<Marquee>{album}</Marquee>
+			</div>
 			<div className={styles.position}>
 				<div className={styles.time}>{formatSeconds(playPosition)}</div>
 				<input
 					type="range"
-					min="0"
+					min={0}
 					max={duration}
 					value={playPosition}
 					readOnly

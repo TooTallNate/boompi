@@ -1,0 +1,30 @@
+.outer {
+	position: relative;
+	overflow: hidden;
+	white-space: nowrap;
+	width: 100%;
+	height: 100%;
+}
+
+.outerActive {
+	background: -webkit-linear-gradient(
+		right,
+		rgba(255, 255, 255, 0) 0%,
+		rgba(255, 255, 255, 1) 5%,
+		rgba(255, 255, 255, 1) 95%,
+		rgba(255, 255, 255, 0) 100%
+	);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.active {
+	animation: marquee 15s linear infinite;
+}
+
+@keyframes marquee {
+	0%,
+	40% {
+		transform: translateX(0);
+	}
+}
