@@ -1,5 +1,5 @@
 import createDebug from 'debug';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
 
 const debug = createDebug('boompi:components:marquee');
 
@@ -11,7 +11,7 @@ export default function Marquee({ children }: any) {
 	const outer = useRef();
 	const [width, setWidth] = useState(0);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const { width: outerWidth } = outer.current.getBoundingClientRect();
 		const { width: contentWidth } = content.current.getBoundingClientRect();
 		setWidth(contentWidth <= outerWidth ? 0 : contentWidth);
@@ -22,6 +22,7 @@ export default function Marquee({ children }: any) {
 	const innerClasses = [styles.inner];
 	const spacerWidth = 200;
 
+	let leftSpacer = null;
 	let runningComponents = null;
 	if (width > 0) {
 		const copy = React.Children.map(children, (el) => {
@@ -41,6 +42,14 @@ export default function Marquee({ children }: any) {
 				<span className={styles.copy}>{copy}</span>
 			</>
 		);
+		leftSpacer = (
+			<div
+				style={{
+					width: `${20}px`,
+					display: 'inline-block',
+				}}
+			/>
+		);
 		innerStyle.transform = `translateX(-${width + spacerWidth}px)`;
 		innerClasses.push(styles.active);
 		outerClasses.push(styles.outerActive);
@@ -49,6 +58,7 @@ export default function Marquee({ children }: any) {
 	return (
 		<div ref={outer} className={outerClasses.join(' ')}>
 			<div className={innerClasses.join(' ')} style={innerStyle}>
+				{leftSpacer}
 				<span ref={content} className={styles.source}>
 					{children}
 				</span>
