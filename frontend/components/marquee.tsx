@@ -7,17 +7,18 @@ const debug = createDebug('boompi:components:marquee');
 import styles from '@styles/marquee.module.css';
 
 export default function Marquee({ children }: any) {
-	const content = useRef();
-	const outer = useRef();
+	const content = useRef<HTMLSpanElement>(null);
+	const outer = useRef<HTMLDivElement>(null);
 	const [width, setWidth] = useState(0);
 
 	useLayoutEffect(() => {
+		if (!outer.current || !content.current) return;
 		const { width: outerWidth } = outer.current.getBoundingClientRect();
 		const { width: contentWidth } = content.current.getBoundingClientRect();
 		setWidth(contentWidth <= outerWidth ? 0 : contentWidth);
 	}, [children]);
 
-	const innerStyle: CSSStyleDeclaration = {};
+	const innerStyle: React.CSSProperties = {};
 	const outerClasses = [styles.outer];
 	const innerClasses = [styles.inner];
 	const spacerWidth = 200;
