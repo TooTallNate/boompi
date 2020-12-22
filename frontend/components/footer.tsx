@@ -79,7 +79,6 @@ export default function Footer({
 					isConnected={isConnected}
 				/>
 				{batteryIcon}
-				<Settings className={styles.settings} />
 			</div>
 		</section>
 	);
