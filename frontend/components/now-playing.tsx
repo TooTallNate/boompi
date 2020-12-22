@@ -95,7 +95,9 @@ export default function NowPlaying({
 				<Marquee>{album}</Marquee>
 			</div>
 			<div className={styles.position}>
-				<div className={styles.time}>{formatSeconds(playPosition)}</div>
+				<div className={styles.label}>
+					{formatSeconds(playPosition)}
+				</div>
 				<input
 					type="range"
 					min={0}
@@ -103,7 +105,7 @@ export default function NowPlaying({
 					value={playPosition}
 					readOnly
 				/>
-				<div className={styles.time}>
+				<div className={styles.label}>
 					-{formatSeconds(duration - playPosition)}
 				</div>
 			</div>
@@ -118,7 +120,7 @@ export default function NowPlaying({
 			</div>
 			{typeof volume === 'number' && (
 				<div className={styles.volume}>
-					<div className={styles.time}>
+					<div className={styles.label}>
 						<Volume className={styles.volumeMin} />
 					</div>
 					<input
@@ -128,7 +130,7 @@ export default function NowPlaying({
 						onInput={onVolume}
 						value={volume * 100}
 					/>
-					<div className={styles.time}>
+					<div className={styles.label}>
 						<Volume level={3} />
 					</div>
 				</div>
