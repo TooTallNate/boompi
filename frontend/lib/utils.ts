@@ -22,18 +22,35 @@ export function formatAmps(current: number): string {
 }
 
 export function calculateAmpsMinDomain(dataMin: number): number {
-	const min = dataMin + (100 - (dataMin % 100)) - 100;
-	//const min = dataMin + ((dataMin % 100) - 100);
-	//console.log({ dataMin, min });
-	return min;
-	//return Math.min(min, 0);
+	if (dataMin < 0) {
+		return dataMin - (100 + (dataMin % 100));
+	}
+	return dataMin + (100 - (dataMin % 100)) - 100;
 }
 
 export function calculateAmpsMaxDomain(dataMax: number): number {
-	const max = dataMax + (100 - (dataMax % 100));
-	//console.log({ dataMax, max });
-	return max;
-	//return Math.max(0, max);
+	if (dataMax < 0) {
+		return dataMax - (dataMax % 100);
+	}
+	return dataMax + (100 - (dataMax % 100));
 }
 
+assert.equal(formatAmps(23), '23mA');
+assert.equal(formatAmps(123), '123mA');
+assert.equal(formatAmps(999), '999mA');
+assert.equal(formatAmps(1000), '1.0A');
+assert.equal(formatAmps(1349), '1.3A');
+assert.equal(formatAmps(1351), '1.4A');
+assert.equal(formatAmps(1999), '2.0A');
+
+assert.equal(calculateAmpsMinDomain(1), 0);
+assert.equal(calculateAmpsMinDomain(100), 100);
+assert.equal(calculateAmpsMinDomain(53), 0);
+assert.equal(calculateAmpsMinDomain(-93), -100);
+assert.equal(calculateAmpsMinDomain(-123), -200);
+
 assert.equal(calculateAmpsMaxDomain(1), 100);
+assert.equal(calculateAmpsMaxDomain(100), 200);
+assert.equal(calculateAmpsMaxDomain(53), 100);
+assert.equal(calculateAmpsMaxDomain(-93), 0);
+assert.equal(calculateAmpsMaxDomain(-123), -100);
