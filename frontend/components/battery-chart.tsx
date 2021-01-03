@@ -2,6 +2,12 @@ import ms from 'ms';
 import { useCallback, useState, useEffect } from 'react';
 
 import { Battery } from '@lib/types';
+import {
+	formatAmps,
+	calculateAmpsMinDomain,
+	calculateAmpsMaxDomain,
+	millisToMinutesAndSeconds,
+} from '@lib/utils';
 
 import {
 	CartesianGrid,
@@ -17,27 +23,6 @@ import {
 
 interface BatteryChartProps {
 	battery: Battery;
-}
-
-// Adapted from: https://stackoverflow.com/a/21294619/376773
-function millisToMinutesAndSeconds(millis: number): string {
-	const minutes = Math.floor(millis / 60000);
-	const seconds = Math.floor((millis % 60000) / 1000);
-	const parts = [];
-	if (minutes > 0) {
-		parts.push(minutes, 'm');
-	}
-	if (seconds > 0 || minutes === 0) {
-		parts.push(seconds, 's');
-	}
-	parts.push(' ago');
-	return parts.join('');
-}
-
-function formatAmps(current: number): string {
-	return current < 1000 && current > -1000
-		? `${current}mA`
-		: `${(current / 1000).toFixed(1)}A`;
 }
 
 const history = new Map<number, Battery>();
@@ -70,12 +55,8 @@ export default function BatteryChart({ battery }: BatteryChartProps) {
 	const xStart = now - lookback;
 	const xDomain: [AxisDomain, AxisDomain] = [() => xStart, () => now];
 	const amperageDomain: [AxisDomain, AxisDomain] = [
-		(dataMin) => {
-			return Math.min(Math.floor(dataMin) - 20, 0);
-		},
-		(dataMax) => {
-			return Math.max(0, Math.ceil(dataMax) + 20);
-		},
+		calculateAmpsMinDomain,
+		calculateAmpsMaxDomain,
 	];
 
 	const data = Array.from(history.values());
