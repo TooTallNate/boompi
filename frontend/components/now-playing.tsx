@@ -5,6 +5,7 @@ import styles from '@styles/now-playing.module.css';
 
 // Components
 import Marquee from '@components/marquee';
+import TrackPosition from '@components/track-position';
 
 // Icons
 import Volume from '@components/icons/volume';
@@ -24,12 +25,6 @@ interface NowPlayingProps {
 	onRewind: () => void;
 	onFastForward: () => void;
 	onVolumeChange: (value: number) => void;
-}
-
-function formatSeconds(ms: number) {
-	const minutes = Math.floor(ms / (1000 * 60));
-	const seconds = Math.floor((ms - minutes * (1000 * 60)) / 1000);
-	return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export default function NowPlaying({
@@ -91,21 +86,7 @@ export default function NowPlaying({
 			<div className={styles.album}>
 				<Marquee>{album}</Marquee>
 			</div>
-			<div className={styles.position}>
-				<div className={styles.label}>
-					{formatSeconds(playPosition)}
-				</div>
-				<input
-					type="range"
-					min={0}
-					max={duration}
-					value={playPosition}
-					readOnly
-				/>
-				<div className={styles.label}>
-					-{formatSeconds(duration - playPosition)}
-				</div>
-			</div>
+			<TrackPosition playPosition={playPosition} duration={duration} />
 			<div className={styles.controls}>
 				<TrackPrevious onClick={onRewind} />
 				{isPlaying ? (

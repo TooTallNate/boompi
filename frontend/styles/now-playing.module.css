@@ -67,6 +67,23 @@
 	cursor: none;
 }
 
+.progress {
+	position: relative;
+	height: 10px;
+	overflow: hidden;
+	border-radius: 5px;
+	background: gainsboro;
+	display: inline-block;
+	width: 74%;
+}
+
+.progress > div {
+	box-sizing: border-box;
+	position: absolute;
+	background-color: dodgerblue;
+	height: 100%;
+}
+
 .nowPlaying input[type='range']::-webkit-slider-thumb {
 	-webkit-appearance: none;
 }
