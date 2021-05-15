@@ -1,7 +1,4 @@
-import createDebug from 'debug';
-import React, { useState, useLayoutEffect, useCallback, useRef } from 'react';
-
-const debug = createDebug('boompi:components:marquee');
+import React, { useState, useLayoutEffect, useRef } from 'react';
 
 // CSS
 import styles from '@styles/marquee.module.css';

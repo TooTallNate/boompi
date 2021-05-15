@@ -7,11 +7,8 @@ import styles from '@styles/now-playing.module.css';
 import Marquee from '@components/marquee';
 
 // Icons
-import Play from '@components/icons/play';
-import Pause from '@components/icons/pause';
-import Rewind from '@components/icons/rewind';
 import Volume from '@components/icons/volume';
-import FastForward from '@components/icons/fast-forward';
+import { Play, Pause, TrackNext, TrackPrevious } from '@components/icons/radix';
 
 interface NowPlayingProps {
 	artist: string;
@@ -110,18 +107,18 @@ export default function NowPlaying({
 				</div>
 			</div>
 			<div className={styles.controls}>
-				<Rewind onClick={onRewind} />
+				<TrackPrevious onClick={onRewind} />
 				{isPlaying ? (
 					<Pause onClick={onPause} />
 				) : (
 					<Play onClick={onPlay} />
 				)}
-				<FastForward onClick={onFastForward} />
+				<TrackNext onClick={onFastForward} />
 			</div>
 			{typeof volume === 'number' && (
 				<div className={styles.volume}>
 					<div className={styles.label}>
-						<Volume className={styles.volumeMin} />
+						<Volume level={1} className={styles.volumeMin} />
 					</div>
 					<input
 						type="range"

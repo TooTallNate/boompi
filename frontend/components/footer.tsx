@@ -10,7 +10,6 @@ import Clock from '@components/clock';
 import BatteryIcon from '@components/icons/battery';
 import Bluetooth from '@components/icons/bluetooth';
 import Mobile from '@components/icons/mobile';
-import Settings from '@components/icons/settings';
 import Volume from '@components/icons/volume';
 
 // Hooks

@@ -1,5 +1,5 @@
 import ms from 'ms';
-import { useCallback, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import { Battery } from '@lib/types';
 import {
@@ -10,9 +10,7 @@ import {
 } from '@lib/utils';
 
 import {
-	CartesianGrid,
 	LineChart,
-	ReferenceLine,
 	ResponsiveContainer,
 	Label,
 	XAxis,
@@ -29,7 +27,7 @@ const history = new Map<number, Battery>();
 
 export default function BatteryChart({ battery }: BatteryChartProps) {
 	const [now, setNow] = useState(Date.now());
-	const [lookback, setLookback] = useState(ms('3m'));
+	const [lookback] = useState(ms('3m'));
 
 	// Update the position of the chart 5 times per second
 	useEffect(() => {

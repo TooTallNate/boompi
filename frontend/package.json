@@ -11,6 +11,7 @@
   "author": "Nathan Rajlich <n@n8.io>",
   "license": "MIT",
   "dependencies": {
+    "@radix-ui/react-icons": "^1.0.3",
     "dateformat": "^3.0.3",
     "dbus-next": "^0.9.1",
     "debug": "^4.2.0",
