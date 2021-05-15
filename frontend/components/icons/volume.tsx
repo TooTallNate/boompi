@@ -5,19 +5,13 @@ import {
 	SpeakerQuietIcon,
 } from './radix';
 
-interface VolumeParams extends React.ComponentPropsWithoutRef<'svg'> {
+interface VolumeProps extends React.ComponentPropsWithoutRef<'svg'> {
 	mute?: boolean;
 	level?: number;
 }
 
-export default function Volume({
-	mute = false,
-	level = 0,
-	...props
-}: VolumeParams) {
-	if (mute) {
-		return <SpeakerOffIcon {...props} />;
-	} else if (level === 3) {
+export default function Volume({ level = 0, ...props }: VolumeProps) {
+	if (level === 3) {
 		return <SpeakerLoudIcon {...props} />;
 	} else if (level === 2) {
 		return <SpeakerModerateIcon {...props} />;
