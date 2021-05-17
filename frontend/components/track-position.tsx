@@ -1,5 +1,6 @@
-import styles from '@styles/now-playing.module.css';
 import * as Progress from '@radix-ui/react-progress';
+
+import styles from '@styles/now-playing.module.css';
 
 function formatSeconds(ms: number) {
 	const minutes = Math.floor(ms / (1000 * 60));
@@ -12,7 +13,7 @@ interface TrackPositionProps {
 	playPosition: number;
 }
 
-export default function NowPlaying({
+export default function TrackPosition({
 	duration,
 	playPosition,
 }: TrackPositionProps) {

@@ -60,6 +60,48 @@
 	left: 0.25em;
 }
 
+.slider {
+	display: inline-block;
+	width: 74%;
+}
+
+.volumeSlider {
+	position: relative;
+	display: flex;
+	align-items: center;
+	user-select: none;
+	touch-action: none;
+	height: 16px;
+}
+
+.volumeTrack {
+	background-color: gainsboro;
+	position: relative;
+	flex-grow: 1;
+	height: 2px;
+}
+
+.volumeRange {
+	position: absolute;
+	background-color: dodgerblue;
+	border-radius: 9999px;
+	height: 100%;
+}
+
+.volumeThumb {
+	display: block;
+	width: 16px;
+	height: 16px;
+	background-color: white;
+	border: 1px solid lightgray;
+	border-radius: 20px;
+}
+
+.volumeThumb:focus {
+	outline: none;
+	border-color: dodgerblue;
+}
+
 .nowPlaying input[type='range'] {
 	-webkit-appearance: none;
 	width: 74%;

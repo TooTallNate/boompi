@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // CSS
 import styles from '@styles/now-playing.module.css';
@@ -8,8 +8,8 @@ import Marquee from '@components/marquee';
 import TrackPosition from '@components/track-position';
 
 // Icons
-import Volume from '@components/icons/volume';
 import { Play, Pause, TrackNext, TrackPrevious } from '@components/icons/radix';
+import VolumeControl from './volume-control';
 
 interface NowPlayingProps {
 	artist: string;
@@ -44,14 +44,6 @@ export default function NowPlaying({
 }: NowPlayingProps) {
 	const [playPosition, setPlayPosition] = useState(
 		position + (isPlaying ? Date.now() - positionChangedAt : 0)
-	);
-
-	const onVolume = useCallback(
-		(event) => {
-			const vol = parseInt(event.currentTarget.value, 10);
-			onVolumeChange(vol / 100);
-		},
-		[onVolumeChange]
 	);
 
 	useEffect(() => {
@@ -97,21 +89,10 @@ export default function NowPlaying({
 				<TrackNext onClick={onFastForward} />
 			</div>
 			{typeof volume === 'number' && (
-				<div className={styles.volume}>
-					<div className={styles.label}>
-						<Volume level={1} className={styles.volumeMin} />
-					</div>
-					<input
-						type="range"
-						min="0"
-						max="100"
-						onInput={onVolume}
-						value={volume * 100}
-					/>
-					<div className={styles.label}>
-						<Volume level={3} />
-					</div>
-				</div>
+				<VolumeControl
+					volume={volume}
+					onVolumeChange={onVolumeChange}
+				/>
 			)}
 		</div>
 	);
