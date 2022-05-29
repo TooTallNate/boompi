@@ -3,9 +3,9 @@ import WebSocket from 'ws';
 import dbus from 'dbus-next';
 import createDebug from 'debug';
 import { uptime } from 'os';
+import { INA260, CONFIGURATION_REGISTER } from '@tootallnate/ina260';
 
 import * as system from './system';
-import { INA260, CONFIGURATION_REGISTER } from './ina260';
 import { Bluetooth, BluetoothPlayer } from './bluetooth';
 
 const debug = createDebug('boompi:backend:main');
