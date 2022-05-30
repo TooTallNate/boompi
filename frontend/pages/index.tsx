@@ -15,6 +15,9 @@ import WebSocketConnecting from '@components/websocket-connecting';
 // Hooks
 import useBackend from '@lib/use-backend';
 
+const BACKEND_HOSTNAME = process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
+const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || '3001';
+
 export default function Index() {
 	const [panel, setPanel] = useState('');
 	const {
@@ -36,7 +39,7 @@ export default function Index() {
 		setFastForward,
 		batteryFastPoll,
 	} = useBackend({
-		url: 'ws://boompi.local:3001',
+		url: `ws://${BACKEND_HOSTNAME}:${BACKEND_PORT}`,
 	});
 
 	const showBatteryPanel = useCallback(() => {
