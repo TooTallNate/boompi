@@ -1,12 +1,11 @@
 .main {
-	width: 1024px;
-	height: 600px;
-
+	width: 100%;
+	height: 100%;
 	color: white;
 	user-select: none;
 	position: relative;
 	overflow: hidden;
-	cursor: none;
+	/*cursor: none;*/
 
 	/**
 	 * Carbon fiber gradient credit: https://stackoverflow.com/a/34556311/376773

@@ -1,11 +1,8 @@
 .info {
-	font-size: 2.6em;
+	font-size: 3.5vw;
 	width: 80%;
 	margin: 0 auto;
 	padding-bottom: 1em;
-}
-
-.info tr {
 }
 
 .info td {
@@ -33,7 +30,7 @@
 
 .chartContainer {
 	padding-top: 2em;
-	height: 340px;
+	height: 300px;
 }
 
 .chartContainer :global(.recharts-wrapper) {
