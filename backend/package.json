@@ -1,5 +1,6 @@
 {
   "name": "@tootallnate/boompi-backend",
+  "private": true,
   "version": "0.0.0",
   "description": "Boompi backend WebSocket server",
   "bin": {
