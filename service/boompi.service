@@ -1,0 +1,14 @@
+[Unit]
+Description=Boompi frontend Next.js server
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/boompi/frontend
+ExecStart=/usr/local/bin/node /home/pi/boompi/node_modules/.bin/next start
+Restart=on-failure
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=default.target
