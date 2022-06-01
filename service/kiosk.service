@@ -7,7 +7,7 @@ After=graphical.target
 Environment=DISPLAY=:0.0
 Environment=XAUTHORITY=/home/pi/.Xauthority
 Type=simple
-ExecStart=/bin/bash /home/pi/kiosk.sh
+ExecStart=/bin/bash /home/pi/boompi/service/kiosk.sh
 Restart=on-abort
 User=pi
 Group=pi
