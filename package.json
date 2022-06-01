@@ -14,5 +14,8 @@
   },
   "keywords": [],
   "author": "Nathan Rajlich <n@n8.io>",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@types/i2c-bus": "^5.1.0"
+  }
 }
