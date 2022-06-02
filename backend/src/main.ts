@@ -119,14 +119,15 @@ async function main() {
 	bt.on('connect', async (p: BluetoothPlayer) => {
 		player = p;
 		const { name: bluetoothName } = p;
-		const vol = await p.getVolume();
-		system.setVolume(vol);
-		debug(
-			'Bluetooth device connected %o (volume = %d)',
-			bluetoothName,
-			vol
-		);
-		broadcast({ bluetoothName, volume: vol });
+		//const vol = await p.getVolume();
+		//system.setVolume(vol);
+		//debug(
+		//	'Bluetooth device connected %o (volume = %d)',
+		//	bluetoothName,
+		//	vol
+		//);
+		//broadcast({ bluetoothName, volume: vol });
+		broadcast({ bluetoothName });
 
 		// Remove previous listeners to ensure these
 		// handlers are only invoked once per event
