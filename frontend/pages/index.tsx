@@ -1,4 +1,6 @@
 import Head from 'next/head';
+import * as fs from 'fs/promises';
+import * as dotenv from 'dotenv';
 import { useCallback, useState } from 'react';
 
 // CSS
@@ -18,7 +20,20 @@ import useBackend from '@lib/use-backend';
 const BACKEND_HOSTNAME = process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
 const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || '3001';
 
-export default function Index() {
+export async function getStaticProps() {
+  const machineInfo = dotenv.parse(await fs.readFile('/etc/machine-info', 'utf8'))
+  return {
+    props: {
+		bluetoothHostname: machineInfo.PRETTY_HOSTNAME || 'Unknown'
+	},
+  }
+}
+
+interface IndexProps {
+	bluetoothHostname: string;
+}
+
+export default function Index({ bluetoothHostname }: IndexProps) {
 	const [panel, setPanel] = useState('');
 	const {
 		webSocketConnected,
@@ -80,7 +95,7 @@ export default function Index() {
 				/>
 			);
 		} else {
-			content = <ConnectBluetooth name="Nathan's 🔊" />;
+			content = <ConnectBluetooth name={ bluetoothHostname } />;
 		}
 	} else {
 		content = <WebSocketConnecting />;
