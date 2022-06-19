@@ -17,16 +17,19 @@ import WebSocketConnecting from '@components/websocket-connecting';
 // Hooks
 import useBackend from '@lib/use-backend';
 
-const BACKEND_HOSTNAME = process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
+const BACKEND_HOSTNAME =
+	process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
 const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || '3001';
 
 export async function getStaticProps() {
-  const machineInfo = dotenv.parse(await fs.readFile('/etc/machine-info', 'utf8'))
-  return {
-    props: {
-		bluetoothHostname: machineInfo.PRETTY_HOSTNAME || 'Unknown'
-	},
-  }
+	const machineInfo = dotenv.parse(
+		await fs.readFile('/etc/machine-info', 'utf8')
+	);
+	return {
+		props: {
+			bluetoothHostname: machineInfo.PRETTY_HOSTNAME || 'Unknown',
+		},
+	};
 }
 
 interface IndexProps {
@@ -95,7 +98,7 @@ export default function Index({ bluetoothHostname }: IndexProps) {
 				/>
 			);
 		} else {
-			content = <ConnectBluetooth name={ bluetoothHostname } />;
+			content = <ConnectBluetooth name={bluetoothHostname} />;
 		}
 	} else {
 		content = <WebSocketConnecting />;
