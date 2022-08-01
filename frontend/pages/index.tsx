@@ -20,14 +20,19 @@ import useBackend from '@lib/use-backend';
 const BACKEND_HOSTNAME =
 	process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
 const BACKEND_PORT = process.env.NEXT_PUBLIC_BACKEND_PORT || '3001';
+const PRETTY_HOSTNAME = process.env.NEXT_PUBLIC_PRETTY_HOSTNAME;
 
 export async function getStaticProps() {
-	const machineInfo = dotenv.parse(
-		await fs.readFile('/etc/machine-info', 'utf8')
-	);
+	let bluetoothHostname = PRETTY_HOSTNAME;
+	if (!bluetoothHostname) {
+		const machineInfo = dotenv.parse(
+			await fs.readFile("/etc/machine-info", "utf8")
+		);
+		bluetoothHostname = machineInfo.PRETTY_HOSTNAME || "Unknown";
+	}
 	return {
 		props: {
-			bluetoothHostname: machineInfo.PRETTY_HOSTNAME || 'Unknown',
+			bluetoothHostname,
 		},
 	};
 }
