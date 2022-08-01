@@ -7,6 +7,7 @@ import { INA260, CONFIGURATION_REGISTER } from '@tootallnate/ina260';
 
 import * as system from './system';
 import { Bluetooth, BluetoothPlayer } from './bluetooth';
+import { startCava } from './cava';
 
 const debug = createDebug('boompi:backend:main');
 
@@ -15,6 +16,10 @@ async function main() {
 	const i2cBus = i2c.openSync(1);
 	const ina = new INA260(i2cBus, 0x40);
 	const wss = new WebSocket.Server({ port: 3001 });
+	const cava = await startCava({
+		bars: 10,
+		bitFormat: 16
+	});
 	const prettyHostname = await system.getPrettyHostname();
 
 	let player: BluetoothPlayer | null = null;
@@ -74,12 +79,16 @@ async function main() {
 		}
 	});
 
-	function broadcast(obj: any) {
+	cava.stdout?.on('data', (data) => {
+		broadcast(data, true);
+	})
+
+	function broadcast(obj: any, binary = false) {
 		debug('Broadcasting WebSocket message: %o', obj);
 		const data = JSON.stringify(obj);
 		for (const client of wss.clients) {
 			if (client.readyState === WebSocket.OPEN) {
-				client.send(data);
+				client.send(data, { binary });
 			}
 		}
 	}

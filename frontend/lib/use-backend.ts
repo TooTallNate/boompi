@@ -26,6 +26,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [webSocketConnected, setWebSocketConnected] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
+		console.log(event.data);
 		const body = JSON.parse(event.data);
 		if ('bluetoothName' in body) {
 			setBluetoothName(body.bluetoothName);
