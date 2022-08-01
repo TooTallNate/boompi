@@ -1,4 +1,6 @@
+import fs from 'fs-extra';
 import execa from 'execa';
+import dotenv from 'dotenv';
 import createDebug from 'debug';
 
 const debug = createDebug('boompi:backend:system');
@@ -16,4 +18,11 @@ export async function setVolume(volume: number): Promise<void> {
 	} catch (err) {
 		console.log(`Error while setting volume: ${err}`);
 	}
+}
+
+export async function getPrettyHostname(): Promise<string | undefined> {
+	const machineInfo = dotenv.parse(
+		await fs.readFile("/etc/machine-info", "utf8")
+	);
+	return machineInfo.PRETTY_HOSTNAME;
 }

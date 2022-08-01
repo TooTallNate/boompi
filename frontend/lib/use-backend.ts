@@ -12,6 +12,7 @@ interface UseBackendOptions {
 
 export default function useBackend({ url }: UseBackendOptions) {
 	const wsRef = useRef<ReconnectingWebSocket>();
+	const [prettyHostname, setPrettyHostname] = useState<string>('Unknown');
 	const [battery, setBattery] = useState<Battery | null>(null);
 	const [volume, setVolume] = useState<number | null>(null);
 	const [bluetoothName, setBluetoothName] = useState<string | null>(null);
@@ -47,6 +48,9 @@ export default function useBackend({ url }: UseBackendOptions) {
 		}
 		if (typeof body.duration === 'number') {
 			setDuration(body.duration);
+		}
+		if (typeof body.prettyHostname === 'string') {
+			setPrettyHostname(body.prettyHostname);
 		}
 		if (typeof body.status === 'string') {
 			if (body.status === 'playing') {
@@ -93,6 +97,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 
 	return {
 		webSocketConnected,
+		prettyHostname,
 		battery,
 		volume,
 		bluetoothName,

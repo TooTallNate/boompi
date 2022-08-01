@@ -15,6 +15,8 @@ async function main() {
 	const i2cBus = i2c.openSync(1);
 	const ina = new INA260(i2cBus, 0x40);
 	const wss = new WebSocket.Server({ port: 3001 });
+	const prettyHostname = await system.getPrettyHostname();
+
 	let player: BluetoothPlayer | null = null;
 
 	// Write to the Configuration Register
@@ -57,6 +59,7 @@ async function main() {
 			player.getVolume().then((volume) => {
 				if (!player) return;
 				ws.send(JSON.stringify({
+					prettyHostname,
 					bluetoothName: player.name,
 					volume,
 					uptime: uptime()
@@ -64,6 +67,7 @@ async function main() {
 			});
 		} else {
 			ws.send(JSON.stringify({
+				prettyHostname,
 				bluetoothName: null,
 				uptime: uptime()
 			 }));
