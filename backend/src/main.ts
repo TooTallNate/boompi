@@ -18,7 +18,8 @@ async function main() {
 	const wss = new WebSocket.Server({ port: 3001 });
 	const cava = await startCava({
 		bars: 10,
-		bitFormat: 16
+		bitFormat: 16,
+		framerate: 33
 	});
 	const prettyHostname = await system.getPrettyHostname();
 

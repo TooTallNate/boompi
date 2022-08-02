@@ -6,6 +6,7 @@ import { spawn } from 'child_process';
 export interface CavaConfig {
     bars: number;
     bitFormat: 8 | 16;
+    framerate: number;
 }
 
 /**
@@ -17,6 +18,7 @@ export async function startCava(config: CavaConfig) {
     const configFilePath = join(backendRoot, 'cava.config');
     const configFile = ini.stringify({
         general: {
+            framerate: config.framerate,
             bars: config.bars
         },
         output: {
@@ -42,6 +44,6 @@ export async function startCava(config: CavaConfig) {
 		proc,
 		stream,
 		bars: config.bars,
-		pageSize: config.bars * (config.bitFormat / 2),
+		pageSize: config.bars * (config.bitFormat / 8),
 	};
 }
