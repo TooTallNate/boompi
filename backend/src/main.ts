@@ -1,4 +1,3 @@
-import fs from 'fs';
 import i2c from 'i2c-bus';
 import WebSocket from 'ws';
 import dbus from 'dbus-next';
@@ -80,8 +79,7 @@ async function main() {
 		}
 	});
 
-	const cavaFifo = fs.createReadStream(cava.fifoPath);
-	cavaFifo.on('data', (data) => {
+	cava.fifo.on('data', (data) => {
 		broadcast(data, true);
 	});
 

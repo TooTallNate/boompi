@@ -1,7 +1,7 @@
 import ini from 'ini';
 import { join } from 'path';
-import { writeFile } from 'fs-extra';
-import { ChildProcess, spawn } from 'child_process';
+import { writeFile, remove, createReadStream } from 'fs-extra';
+import { spawn, spawnSync } from 'child_process';
 
 export interface CavaConfig {
     bars: number;
@@ -26,10 +26,15 @@ export async function startCava(config: CavaConfig) {
             bit_format: `${config.bitFormat}bit`
         }
     });
+
+    await remove(fifoPath);
+    spawnSync('mkfifo', [fifoPath]);
+    const fifo = createReadStream(fifoPath);
+
     await writeFile(configFilePath, configFile);
     const proc = spawn('cava', ['-p', configFilePath], {
         cwd: backendRoot,
         stdio: ['ignore', 'inherit', 'inherit']
     });
-    return { proc, fifoPath };
+    return { proc, fifo };
 }
