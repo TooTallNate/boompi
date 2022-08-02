@@ -79,7 +79,7 @@ async function main() {
 		}
 	});
 
-	cava.fifo.on('data', (data) => {
+	cava.stream.on('data', (data) => {
 		broadcast(data, true);
 	});
 

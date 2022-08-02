@@ -1,7 +1,7 @@
 import ini from 'ini';
 import { join } from 'path';
-import { writeFile, remove, createReadStream } from 'fs-extra';
-import { spawn, spawnSync } from 'child_process';
+import { writeFile } from 'fs-extra';
+import { spawn } from 'child_process';
 
 export interface CavaConfig {
     bars: number;
@@ -15,26 +15,28 @@ export interface CavaConfig {
 export async function startCava(config: CavaConfig) {
     const backendRoot = join(__dirname, '..');
     const configFilePath = join(backendRoot, 'cava.config');
-    const fifoPath = join(backendRoot, 'cava.fifo');
     const configFile = ini.stringify({
         general: {
             bars: config.bars
         },
         output: {
             method: 'raw',
-            raw_target: fifoPath,
-            bit_format: `${config.bitFormat}bit`
+            bit_format: `${config.bitFormat}bit`,
+
+            // Requires custom `cava` fork:
+            // https://github.com/TooTallNate/cava/tree/add/raw_target_fd
+            raw_target_fd: 3,
         }
     });
-
-    await remove(fifoPath);
-    spawnSync('mkfifo', [fifoPath]);
-    const fifo = createReadStream(fifoPath);
 
     await writeFile(configFilePath, configFile);
     const proc = spawn('cava', ['-p', configFilePath], {
         cwd: backendRoot,
         stdio: ['ignore', 'inherit', 'inherit']
     });
-    return { proc, fifo };
+    const stream = proc.stdio[3];
+    if (!stream) {
+        throw new Error('Could not get FD 3 for cava');
+    }
+    return { proc, stream };
 }
