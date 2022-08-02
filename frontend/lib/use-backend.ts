@@ -26,7 +26,6 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [webSocketConnected, setWebSocketConnected] = useState(false);
 
 	const onMessage = useCallback((event: MessageEvent) => {
-		console.log(event.data);
 		if (typeof event.data === 'string') {
 			const body = JSON.parse(event.data);
 			if ('bluetoothName' in body) {
@@ -65,6 +64,8 @@ export default function useBackend({ url }: UseBackendOptions) {
 			if (body.battery) {
 				setBattery({ ...body.battery, date: Date.now() });
 			}
+		} else {
+			console.log(event.data);
 		}
 	}, []);
 
@@ -86,6 +87,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	useEffect(() => {
 		debug('Creating reconnecting WebSocket connection: %o', url);
 		const socket = new ReconnectingWebSocket(url);
+		socket.binaryType = 'arraybuffer';
 		socket.addEventListener('message', onMessage);
 		socket.addEventListener('open', onOpen);
 		socket.addEventListener('close', onClose);

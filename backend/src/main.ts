@@ -88,6 +88,11 @@ async function main() {
 		const leftover = buf.length - numBytes;
 		cavaExtra = leftover > 0 ? buf.slice(numBytes) : undefined;
 
+		if (numPages === 0) {
+			// wait for more data
+			return;
+		}
+
 		// Only broadcast if non-empty
 		let isEmpty = true;
 		for (let i = 0; i < buf.length; i++) {
