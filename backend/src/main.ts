@@ -60,6 +60,7 @@ async function main() {
 		debug('WebSocket connected');
 		ws.on('message', onMessage);
 		ws.on('close', onClose);
+		//ws.binaryType = 'arraybuffer';
 		if (player) {
 			player.getVolume().then((volume) => {
 				if (!player) return;
@@ -97,14 +98,14 @@ async function main() {
 		}
 
 		if (!isEmpty) {
-			const uint8Array = buf.buffer.slice(buf.byteOffset, buf.byteLength + buf.length);
+			const uint8Array = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length);
 			broadcast(uint8Array, true);
 		}
 	});
 
 	function broadcast(obj: any, binary = false) {
 		debug('Broadcasting WebSocket message: %o', obj);
-		const data = JSON.stringify(obj);
+		const data = binary ? obj : JSON.stringify(obj);
 		for (const client of wss.clients) {
 			if (client.readyState === WebSocket.OPEN) {
 				client.send(data, { binary });

@@ -27,42 +27,44 @@ export default function useBackend({ url }: UseBackendOptions) {
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		console.log(event.data);
-		const body = JSON.parse(event.data);
-		if ('bluetoothName' in body) {
-			setBluetoothName(body.bluetoothName);
-		}
-		if (typeof body.volume === 'number') {
-			setVolume(body.volume);
-		}
-		if (typeof body.artist === 'string') {
-			setArtist(body.artist);
-		}
-		if (typeof body.track === 'string') {
-			setTrack(body.track);
-		}
-		if (typeof body.album === 'string') {
-			setAlbum(body.album);
-		}
-		if (typeof body.position === 'number') {
-			setPosition(body.position);
-			setPositionChangedAt(body.updatedAt || Date.now());
-		}
-		if (typeof body.duration === 'number') {
-			setDuration(body.duration);
-		}
-		if (typeof body.prettyHostname === 'string') {
-			setPrettyHostname(body.prettyHostname);
-		}
-		if (typeof body.status === 'string') {
-			if (body.status === 'playing') {
-				setIsPlaying(true);
-			} else {
-				// paused / stopped
-				setIsPlaying(false);
+		if (typeof event.data === 'string') {
+			const body = JSON.parse(event.data);
+			if ('bluetoothName' in body) {
+				setBluetoothName(body.bluetoothName);
 			}
-		}
-		if (body.battery) {
-			setBattery({ ...body.battery, date: Date.now() });
+			if (typeof body.volume === 'number') {
+				setVolume(body.volume);
+			}
+			if (typeof body.artist === 'string') {
+				setArtist(body.artist);
+			}
+			if (typeof body.track === 'string') {
+				setTrack(body.track);
+			}
+			if (typeof body.album === 'string') {
+				setAlbum(body.album);
+			}
+			if (typeof body.position === 'number') {
+				setPosition(body.position);
+				setPositionChangedAt(body.updatedAt || Date.now());
+			}
+			if (typeof body.duration === 'number') {
+				setDuration(body.duration);
+			}
+			if (typeof body.prettyHostname === 'string') {
+				setPrettyHostname(body.prettyHostname);
+			}
+			if (typeof body.status === 'string') {
+				if (body.status === 'playing') {
+					setIsPlaying(true);
+				} else {
+					// paused / stopped
+					setIsPlaying(false);
+				}
+			}
+			if (body.battery) {
+				setBattery({ ...body.battery, date: Date.now() });
+			}
 		}
 	}, []);
 
