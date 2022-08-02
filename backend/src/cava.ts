@@ -32,7 +32,7 @@ export async function startCava(config: CavaConfig) {
     await writeFile(configFilePath, configFile);
     const proc = spawn('cava', ['-p', configFilePath], {
         cwd: backendRoot,
-        stdio: ['ignore', 'inherit', 'inherit']
+        stdio: ['ignore', 'inherit', 'inherit', 'pipe']
     });
     const stream = proc.stdio[3];
     if (!stream) {
