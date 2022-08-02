@@ -86,8 +86,20 @@ async function main() {
 		const numBytes = numPages * cava.pageSize;
 		const leftover = buf.length - numBytes;
 		cavaExtra = leftover > 0 ? buf.slice(numBytes) : undefined;
-		const uint8Array = buf.buffer.slice(buf.byteOffset, buf.byteLength + buf.length);
-		broadcast(uint8Array, true);
+
+		// Only broadcast if non-empty
+		let isEmpty = true;
+		for (let i = 0; i < buf.length; i++) {
+			if (buf[i] !== 0) {
+				isEmpty = false;
+				break;
+			}
+		}
+
+		if (!isEmpty) {
+			const uint8Array = buf.buffer.slice(buf.byteOffset, buf.byteLength + buf.length);
+			broadcast(uint8Array, true);
+		}
 	});
 
 	function broadcast(obj: any, binary = false) {
