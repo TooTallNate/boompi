@@ -38,5 +38,10 @@ export async function startCava(config: CavaConfig) {
     if (!stream) {
         throw new Error('Could not get FD 3 for cava');
     }
-    return { proc, stream };
+    return {
+		proc,
+		stream,
+		bars: config.bars,
+		pageSize: config.bars * (config.bitFormat / 2),
+	};
 }
