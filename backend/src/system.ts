@@ -22,7 +22,7 @@ export async function setVolume(volume: number): Promise<void> {
 
 export async function getPrettyHostname(): Promise<string | undefined> {
 	const machineInfo = dotenv.parse(
-		await fs.readFile("/etc/machine-info", "utf8")
+		await fs.readFile('/etc/machine-info', 'utf8')
 	);
 	return machineInfo.PRETTY_HOSTNAME;
 }

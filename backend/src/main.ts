@@ -19,7 +19,7 @@ async function main() {
 	const cava = await startCava({
 		bars: 10,
 		bitFormat: 16,
-		framerate: 33
+		framerate: 33,
 	});
 	const prettyHostname = await system.getPrettyHostname();
 
@@ -65,19 +65,23 @@ async function main() {
 		if (player) {
 			player.getVolume().then((volume) => {
 				if (!player) return;
-				ws.send(JSON.stringify({
-					prettyHostname,
-					bluetoothName: player.name,
-					volume,
-					uptime: uptime()
-				}));
+				ws.send(
+					JSON.stringify({
+						prettyHostname,
+						bluetoothName: player.name,
+						volume,
+						uptime: uptime(),
+					})
+				);
 			});
 		} else {
-			ws.send(JSON.stringify({
-				prettyHostname,
-				bluetoothName: null,
-				uptime: uptime()
-			 }));
+			ws.send(
+				JSON.stringify({
+					prettyHostname,
+					bluetoothName: null,
+					uptime: uptime(),
+				})
+			);
 		}
 	});
 
@@ -104,13 +108,18 @@ async function main() {
 		}
 
 		if (!isEmpty) {
-			const uint8Array = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.length);
-			broadcast(uint8Array, true);
+			const arrayBuffer = buf.buffer.slice(
+				buf.byteOffset,
+				buf.byteOffset + buf.length
+			);
+			broadcast(arrayBuffer, true);
 		}
 	});
 
 	function broadcast(obj: any, binary = false) {
-		debug('Broadcasting WebSocket message: %o', obj);
+		if (!binary) {
+			debug('Broadcasting WebSocket message: %o', obj);
+		}
 		const data = binary ? obj : JSON.stringify(obj);
 		for (const client of wss.clients) {
 			if (client.readyState === WebSocket.OPEN) {
@@ -132,7 +141,13 @@ async function main() {
 			const percentage =
 				(voltage - MIN_VOLTAGE) / (MAX_VOLTAGE - MIN_VOLTAGE);
 			broadcast({
-				battery: { voltage, current, power, percentage, date: Date.now() },
+				battery: {
+					voltage,
+					current,
+					power,
+					percentage,
+					date: Date.now(),
+				},
 			});
 			await new Promise((r) => setTimeout(r, batteryPollingInterval));
 		}
