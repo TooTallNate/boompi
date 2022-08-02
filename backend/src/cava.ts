@@ -12,21 +12,24 @@ export interface CavaConfig {
  * Spawn `cava` to output raw binary data.
  * https://github.com/karlstav/cava/issues/123#issuecomment-307891020
  */
-export async function startCava(config: CavaConfig): Promise<ChildProcess> {
-    const configFilePath = join(__dirname, '..', 'cava.config');
+export async function startCava(config: CavaConfig) {
+    const backendRoot = join(__dirname, '..');
+    const configFilePath = join(backendRoot, 'cava.config');
+    const fifoPath = join(backendRoot, 'cava.fifo');
     const configFile = ini.stringify({
         general: {
             bars: config.bars
         },
         output: {
             method: 'raw',
-            raw_target: '/dev/stdout',
+            raw_target: fifoPath,
             bit_format: `${config.bitFormat}bit`
         }
     });
     await writeFile(configFilePath, configFile);
     const proc = spawn('cava', ['-p', configFilePath], {
-        stdio: ['ignore', 'pipe', 'inherit']
+        cwd: backendRoot,
+        stdio: ['ignore', 'inherit', 'inherit']
     });
-    return proc;
+    return { proc, fifoPath };
 }

@@ -1,3 +1,4 @@
+import fs from 'fs';
 import i2c from 'i2c-bus';
 import WebSocket from 'ws';
 import dbus from 'dbus-next';
@@ -79,9 +80,10 @@ async function main() {
 		}
 	});
 
-	cava.stdout?.on('data', (data) => {
+	const cavaFifo = fs.createReadStream(cava.fifoPath);
+	cavaFifo.on('data', (data) => {
 		broadcast(data, true);
-	})
+	});
 
 	function broadcast(obj: any, binary = false) {
 		debug('Broadcasting WebSocket message: %o', obj);
