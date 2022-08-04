@@ -19,7 +19,7 @@ async function main() {
 	const cava = await startCava({
 		bars: 10,
 		bitFormat: 16,
-		framerate: 33,
+		framerate: 30,
 	});
 	const prettyHostname = await system.getPrettyHostname();
 
