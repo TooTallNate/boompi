@@ -5,11 +5,8 @@
 	height: 11.6%;
 	text-align: center;
 	text-overflow: no-wrap;
-}
-
-.footer > div {
-	display: inline-block;
-	height: 100%;
+	display: flex;
+	align-items: center;
 }
 
 .left {
@@ -22,12 +19,13 @@
 
 .left,
 .right {
-	width: 23%;
+	width: 16vw;
 }
 
 .center {
 	width: 54%;
 	font-size: 3vw;
+	flex: 1;
 }
 
 .right > svg {
@@ -36,7 +34,7 @@
 }
 
 .bluetooth {
-	font-size: 2vw;
+	font-size: 3.5vw;
 	transition: fill 0.5s, filter 0.5s;
 }
 
