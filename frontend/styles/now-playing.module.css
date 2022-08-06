@@ -1,5 +1,4 @@
 .nowPlaying {
-	line-height: 7vw;
 	width: 96%;
 }
 
@@ -48,6 +47,7 @@
 
 .controls svg {
 	margin: 0 0.4em;
+	/*filter: drop-shadow(0 0 2px rgb(0 0 0 / 0.4));*/
 }
 
 .volume svg {
@@ -117,6 +117,10 @@
 	background: gainsboro;
 	display: inline-block;
 	width: 74%;
+	/*box-shadow:
+	 0 0 0.4vw black,
+	 0 0 0.4vw black,
+	 0 0 0.4vw black;*/
 }
 
 .progress > div {

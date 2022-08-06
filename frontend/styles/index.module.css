@@ -5,38 +5,12 @@
 	user-select: none;
 	position: relative;
 	overflow: hidden;
-	/*cursor: none;*/
+	cursor: none;
 
 	/**
 	 * Carbon fiber gradient credit: https://stackoverflow.com/a/34556311/376773
 	 */
-	background-color: rgb(32, 32, 32);
-	background-image: linear-gradient(
-			to right,
-			rgba(0, 0, 0, 1),
-			rgba(0, 0, 0, 0) 20%,
-			rgba(0, 0, 0, 0) 80%,
-			rgba(0, 0, 0, 1)
-		),
-		linear-gradient(
-			45deg,
-			black 25%,
-			transparent 25%,
-			transparent 75%,
-			black 75%,
-			black
-		),
-		linear-gradient(
-			45deg,
-			black 25%,
-			transparent 25%,
-			transparent 75%,
-			black 75%,
-			black
-		),
-		linear-gradient(to bottom, rgb(8, 8, 8), rgb(32, 32, 32));
-	background-size: 100% 100%, 10px 10px, 10px 10px, 10px 5px;
-	background-position: 0px 0px, 0px 0px, 5px 5px, 0px 0px;
+	background-color: black;
 }
 
 .main svg {
@@ -49,12 +23,17 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
+	position: relative;
+	/*text-shadow:
+	0 0 0.3vw #fff,
+	0 0 0.6vw #f0f,
+	0 0 0.9vw #0ff;*/
 }
 
 .refresh {
 	position: absolute;
 	top: 0;
 	right: 0;
-	width: 50px;
-	height: 50px;
+	width: 6.25vw;
+	height: 6.25vw;
 }

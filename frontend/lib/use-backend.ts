@@ -24,6 +24,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 	const [duration, setDuration] = useState(0);
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [webSocketConnected, setWebSocketConnected] = useState(false);
+	const [cavaArray, setCavaArray] = useState<Uint16Array>();
 
 	const onMessage = useCallback((event: MessageEvent) => {
 		if (typeof event.data === 'string') {
@@ -65,7 +66,9 @@ export default function useBackend({ url }: UseBackendOptions) {
 				setBattery({ ...body.battery, date: Date.now() });
 			}
 		} else {
-			console.log(event.data);
+			// "cava" ArrayBuffer payload
+			const array = new Uint16Array(event.data);
+			setCavaArray(array);
 		}
 	}, []);
 
@@ -113,6 +116,7 @@ export default function useBackend({ url }: UseBackendOptions) {
 		positionChangedAt,
 		duration,
 		isPlaying,
+		cavaArray,
 		setVolume: useCallback((value: number) => {
 			debug('Setting volume: %o', value);
 			wsRef.current?.send(JSON.stringify({ volume: value }));

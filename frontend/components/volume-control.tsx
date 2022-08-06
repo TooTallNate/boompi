@@ -25,7 +25,7 @@ export default function VolumeControl({
 	const range = <Slider.Range as="span" className={styles.volumeRange} />;
 
 	const track = (
-	    // @ts-ignore
+		// @ts-ignore
 		<Slider.Track as="span" className={styles.volumeTrack}>
 			{range}
 		</Slider.Track>
@@ -35,7 +35,7 @@ export default function VolumeControl({
 	const thumb = <Slider.Thumb as="span" className={styles.volumeThumb} />;
 
 	const slider = (
-	    // @ts-ignore
+		// @ts-ignore
 		<Slider.Root
 			as="span"
 			className={styles.volumeSlider}

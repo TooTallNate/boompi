@@ -14,6 +14,7 @@ import WebSocketConnecting from '@components/websocket-connecting';
 
 // Hooks
 import useBackend from '@lib/use-backend';
+import { Visualizer } from '@components/visualizer';
 
 const BACKEND_HOSTNAME =
 	process.env.NEXT_PUBLIC_BACKEND_HOSTNAME || '127.0.0.1';
@@ -34,6 +35,7 @@ export default function Index() {
 		positionChangedAt,
 		duration,
 		isPlaying,
+		cavaArray,
 		setVolume,
 		setPlay,
 		setPause,
@@ -99,6 +101,7 @@ export default function Index() {
 			</Head>
 			<main className={styles.main}>
 				<ClickEffect>
+					<Visualizer data={cavaArray} max={Math.pow(2, 16)} />
 					<section className={styles.content}>{content}</section>
 					<Footer
 						bluetoothName={bluetoothName}
