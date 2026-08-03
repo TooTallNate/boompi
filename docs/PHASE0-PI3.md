@@ -67,36 +67,40 @@ layer is good regardless of what Slint does next.
 
 ### 1c. Build and run kms-test
 
-Rust on the Pi (one-time, slow-ish):
+**Cross-compile from the Mac** — building on the Pi 3 doesn't work: rustup's
+rustc segfaults deterministically on Trixie/Pi 3 (SIGSEGV in
+`Symbol::intern`, not fixed by `RUST_MIN_STACK`), and even if it worked,
+1 GB RAM makes Slint builds miserable.
+
+On the **Pi** (one-time): install the C libraries Slint links against, so
+they can be pulled into the cross sysroot:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source ~/.cargo/env
-sudo apt install -y git pkg-config clang libinput-dev libudev-dev libgbm-dev libdrm-dev
+sudo apt install -y libinput-dev libudev-dev libxkbcommon-dev libfontconfig1-dev libdrm-dev libgbm-dev
 ```
 
-The Pi 3 has 1 GB RAM — bump swap before the first build:
+On the **Mac** (one-time):
 
 ```sh
-sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=1024/' /etc/dphys-swapfile
-sudo systemctl restart dphys-swapfile
+brew install zig cargo-zigbuild
+rustup target add aarch64-unknown-linux-gnu
+ssh-copy-id pi@boompi-dev.local          # so rsync/scp don't prompt
+make sysroot PI=pi@boompi-dev.local      # pulls /usr/include + libs from the Pi
 ```
 
-Get the code and build (first build may take a long while; limit jobs to
-avoid OOM):
+Build + ship:
 
 ```sh
-git clone -b v2 https://github.com/TooTallNate/boompi.git
-cd boompi/rust
-CARGO_BUILD_JOBS=2 cargo build --release -p kms-test --no-default-features --features kms
+make cross-kms-test        # or cross-kms-test-gl for the GLES variant
+scp rust/target/aarch64-unknown-linux-gnu/release/kms-test pi@boompi-dev.local:
 ```
 
-Run it. The linuxkms backend needs direct access to `/dev/dri` and
-`/dev/input` — simplest is root, and it must own the display (fine on Lite,
-nothing else does):
+Run it on the Pi. The linuxkms backend needs direct access to `/dev/dri`
+and `/dev/input` — simplest is root, and it must own the display (fine on
+Lite, nothing else does):
 
 ```sh
-sudo ./target/release/kms-test
+sudo ./kms-test
 ```
 
 ### 1d. What to check + record

@@ -26,8 +26,32 @@ sim:
 ui:
 	cargo run --manifest-path $(MANIFEST) -p boompi-ui -- --backend $(BACKEND)
 
+# ---- cross-compilation for the Pi (see scripts/cross-build.sh) ------------
+# One-time: brew install zig cargo-zigbuild && rustup target add aarch64-unknown-linux-gnu
+PI ?= pi@boompi-dev.local
+SYSROOT ?= $(HOME)/boompi-sysroot
+
+# Pull headers + libs from the running Pi (the C deps Slint links against).
+sysroot:
+	mkdir -p $(SYSROOT)/usr/lib $(SYSROOT)/usr/share
+	rsync -a --info=progress2 $(PI):/usr/include $(SYSROOT)/usr/
+	rsync -a --info=progress2 $(PI):/usr/lib/aarch64-linux-gnu $(SYSROOT)/usr/lib/
+	rsync -a $(PI):/usr/share/pkgconfig $(SYSROOT)/usr/share/
+
+cross-kms-test:
+	scripts/cross-build.sh kms-test --no-default-features --features kms
+
+cross-kms-test-gl:
+	scripts/cross-build.sh kms-test --no-default-features --features kms-gl
+
+cross-boompid:
+	scripts/cross-build.sh boompid
+
+cross-ui:
+	scripts/cross-build.sh boompi-ui --no-default-features --features kms
+
 deploy:
-	@echo "TODO(Phase 1): cross-compile for aarch64, scp to the box, restart services"
+	@echo "TODO(Phase 1): cross-build boompid+ui, scp to the box, restart services"
 	@exit 1
 
 image-pi3 image-pi4:

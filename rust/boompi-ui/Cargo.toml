@@ -14,11 +14,23 @@ chrono = "0.4"
 clap = { workspace = true }
 futures-util = "0.3"
 serde_json = { workspace = true }
-# Default backend: winit (laptop dev). The Buildroot package enables the
-# `backend-linuxkms` feature for direct DRM/KMS rendering on the Pi.
-slint = "1"
+# Default backend: winit (laptop dev). On the Pi, build with
+# `--no-default-features --features kms` for direct DRM/KMS rendering.
+slint = { version = "1", default-features = false, features = [
+    "compat-1-2",
+    "std",
+] }
 tokio = { workspace = true, features = ["rt", "macros", "net", "sync", "time"] }
 tokio-tungstenite = "0.24"
 
 [build-dependencies]
 slint-build = "1"
+
+[features]
+default = ["desktop"]
+# Laptop preview (winit window).
+desktop = ["slint/backend-winit", "slint/renderer-femtovg", "slint/accessibility"]
+# On the Pi: direct DRM/KMS + libinput, CPU rendering.
+kms = ["slint/backend-linuxkms-noseat", "slint/renderer-software"]
+# On the Pi: direct DRM/KMS + libinput, OpenGL ES rendering (vc4).
+kms-gl = ["slint/backend-linuxkms-noseat", "slint/renderer-femtovg"]
