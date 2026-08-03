@@ -1,0 +1,168 @@
+// Drawn vector iconography — zero font dependency.
+//
+// RPi OS Lite and the Buildroot image ship no emoji/symbol fonts, and glyph
+// coverage varies by renderer, so all icons are Slint Paths (viewbox
+// 100×100, scaled to the element size). Keep icon elements square —
+// Path viewbox scaling does not preserve aspect ratio.
+
+export component IconPlay inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 22 6 L 92 50 L 22 94 Z";
+    fill: root.icon-color;
+}
+
+export component IconPause inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 20 10 H 42 V 90 H 20 Z M 58 10 H 80 V 90 H 58 Z";
+    fill: root.icon-color;
+}
+
+export component IconPrev inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 12 10 H 26 V 90 H 12 Z M 90 10 L 34 50 L 90 90 Z";
+    fill: root.icon-color;
+}
+
+export component IconNext inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 88 10 H 74 V 90 H 88 Z M 10 10 L 66 50 L 10 90 Z";
+    fill: root.icon-color;
+}
+
+// Speaker with mute-X (level 0) or 1–2 sound waves.
+export component IconSpeaker inherits Rectangle {
+    in property <color> icon-color: white;
+    /// 0 = muted, 1 = quiet, 2 = loud.
+    in property <int> level: 2;
+
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 4 35 H 28 L 58 10 V 90 L 28 65 H 4 Z";
+        fill: root.icon-color;
+    }
+    if root.level == 0: Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 68 36 L 94 64 M 94 36 L 68 64";
+        stroke: root.icon-color;
+        stroke-width: 8px;
+        fill: transparent;
+    }
+    if root.level >= 1: Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 68 36 Q 78 50 68 64";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+    if root.level >= 2: Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 80 24 Q 96 50 80 76";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+}
+
+export component IconBluetooth inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 24 30 L 76 72 L 50 93 L 50 7 L 76 28 L 24 70";
+    stroke: root.icon-color;
+    stroke-width: 8px;
+    fill: transparent;
+}
+
+// Settings: three sliders with staggered knobs.
+export component IconSliders inherits Rectangle {
+    in property <color> icon-color: white;
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 8 25 H 92 M 8 50 H 92 M 8 75 H 92";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+    Rectangle {
+        x: parent.width * 22% - self.width / 2;
+        y: parent.height * 25% - self.height / 2;
+        width: parent.width * 24%;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.icon-color;
+    }
+    Rectangle {
+        x: parent.width * 68% - self.width / 2;
+        y: parent.height * 50% - self.height / 2;
+        width: parent.width * 24%;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.icon-color;
+    }
+    Rectangle {
+        x: parent.width * 40% - self.width / 2;
+        y: parent.height * 75% - self.height / 2;
+        width: parent.width * 24%;
+        height: self.width;
+        border-radius: self.width / 2;
+        background: root.icon-color;
+    }
+}
+
+export component IconBolt inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 58 2 L 16 56 H 44 L 40 98 L 84 42 H 54 Z";
+    fill: root.icon-color;
+}
+
+export component IconBack inherits Path {
+    in property <color> icon-color: white;
+    viewbox-width: 100;
+    viewbox-height: 100;
+    commands: "M 64 10 L 24 50 L 64 90";
+    stroke: root.icon-color;
+    stroke-width: 10px;
+    fill: transparent;
+}
+
+// Eighth note for the album-art placeholder.
+export component IconNote inherits Rectangle {
+    in property <color> icon-color: white;
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 60 14 V 74";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 60 12 Q 84 18 88 40 Q 76 30 60 32 Z";
+        fill: root.icon-color;
+    }
+    Rectangle {
+        x: parent.width * 40% - self.width / 2;
+        y: parent.height * 74% - self.height / 2;
+        width: parent.width * 30%;
+        height: parent.height * 22%;
+        border-radius: self.height / 2;
+        background: root.icon-color;
+    }
+}

@@ -3,6 +3,7 @@
 // (viewbox 0–100 × 0–100, newest sample at the right edge).
 
 import { Theme } from "theme.slint";
+import { IconBack, IconBolt } from "icons.slint";
 
 component Stat inherits Rectangle {
     in property <string> value;
@@ -53,13 +54,12 @@ export component BatteryPanel inherits Rectangle {
                 clicked => {
                     root.close();
                 }
-                Text {
-                    width: 100%;
-                    height: 100%;
-                    text: "←";
-                    font-size: 26px;
-                    color: Theme.dim;
-                    vertical-alignment: center;
+                IconBack {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    width: 20px;
+                    height: 22px;
+                    icon-color: Theme.dim;
                 }
             }
             Text {
@@ -69,10 +69,23 @@ export component BatteryPanel inherits Rectangle {
                 vertical-alignment: center;
             }
             Rectangle { }
-            Text {
-                text: root.charging ? "⚡ charging" : "";
-                color: Theme.good;
-                vertical-alignment: center;
+            if root.charging: HorizontalLayout {
+                spacing: 6px;
+                Rectangle {
+                    width: 16px;
+                    IconBolt {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 14px;
+                        height: 18px;
+                        icon-color: Theme.good;
+                    }
+                }
+                Text {
+                    text: "charging";
+                    color: Theme.good;
+                    vertical-alignment: center;
+                }
             }
         }
 

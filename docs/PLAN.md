@@ -218,6 +218,13 @@ BR2_EXTERNAL tree fleshed out: both defconfigs, custom packages, rootfs
 overlay, RO rootfs + `/data`, genimage SD layout, Wi-Fi/BT firmware, recent
 BlueZ pinned with experimental flags, obexd service wiring, SSH for dev.
 
+**Fonts**: UI chrome uses drawn vector icons (`icons.slint`, zero font
+dependency), but user content (speaker name, track/artist/device names)
+is arbitrary Unicode — the image must ship a text font (e.g. Noto Sans /
+Inter) **plus an emoji-capable fallback** (Noto Color Emoji, or monochrome
+Noto Emoji if the software renderer lacks color-font support — validated
+on the dev Pi) with fontconfig wired up.
+
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
 

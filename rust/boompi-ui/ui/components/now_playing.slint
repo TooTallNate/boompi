@@ -1,10 +1,28 @@
 // Now Playing: album art (placeholder until Phase 3), track metadata
 // marquees, position bar, transport controls, volume slider.
 
-import { Slider, Button } from "std-widgets.slint";
+import { Slider } from "std-widgets.slint";
 import { Theme } from "theme.slint";
 import { Marquee } from "marquee.slint";
 import { TrackPosition } from "track_position.slint";
+import { IconPlay, IconPause, IconPrev, IconNext, IconSpeaker, IconNote } from "icons.slint";
+
+component TransportButton inherits Rectangle {
+    in property <bool> primary: false;
+    callback clicked();
+    width: root.primary ? 84px : 66px;
+    height: self.width;
+    border-radius: self.width / 2;
+    background: ta.pressed ? #2c2c48 : #1b1b2e;
+    border-width: 1px;
+    border-color: #32324e;
+    ta := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+    @children
+}
 
 export component NowPlaying inherits VerticalLayout {
     in property <string> track-title;
@@ -35,14 +53,12 @@ export component NowPlaying inherits VerticalLayout {
             height: 180px;
             border-radius: 12px;
             background: #16161f;
-            Text {
-                width: 100%;
-                height: 100%;
-                text: "♪";
-                font-size: 64px;
-                color: Theme.faint;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            IconNote {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 64px;
+                height: 64px;
+                icon-color: Theme.faint;
             }
         }
 
@@ -76,32 +92,66 @@ export component NowPlaying inherits VerticalLayout {
     HorizontalLayout {
         alignment: center;
         spacing: 28px;
-        Button {
-            text: "⏮";
+        TransportButton {
             clicked => {
                 root.previous();
             }
+            IconPrev {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 40%;
+                height: 40%;
+                icon-color: Theme.fg;
+            }
         }
-        Button {
-            text: root.playing ? "⏸" : "▶";
+        TransportButton {
+            primary: true;
             clicked => {
                 root.toggle-play();
             }
+            if root.playing: IconPause {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 40%;
+                height: 40%;
+                icon-color: Theme.fg;
+            }
+            if !root.playing: IconPlay {
+                // Nudge right: play triangles look centered slightly off-axis.
+                x: (parent.width - self.width) / 2 + 3px;
+                y: (parent.height - self.height) / 2;
+                width: 42%;
+                height: 42%;
+                icon-color: Theme.fg;
+            }
         }
-        Button {
-            text: "⏭";
+        TransportButton {
             clicked => {
                 root.next();
+            }
+            IconNext {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 40%;
+                height: 40%;
+                icon-color: Theme.fg;
             }
         }
     }
 
     HorizontalLayout {
         alignment: center;
-        spacing: 12px;
-        Text {
-            text: "🔈";
-            vertical-alignment: center;
+        spacing: 14px;
+        Rectangle {
+            width: 22px;
+            IconSpeaker {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 18px;
+                height: 18px;
+                icon-color: Theme.dim;
+                level: 1;
+            }
         }
         Slider {
             width: 360px;
@@ -112,9 +162,16 @@ export component NowPlaying inherits VerticalLayout {
                 root.volume-edited(value);
             }
         }
-        Text {
-            text: "🔊";
-            vertical-alignment: center;
+        Rectangle {
+            width: 26px;
+            IconSpeaker {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 22px;
+                height: 22px;
+                icon-color: Theme.dim;
+                level: 2;
+            }
         }
     }
 }

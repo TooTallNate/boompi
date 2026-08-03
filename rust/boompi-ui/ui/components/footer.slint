@@ -1,10 +1,9 @@
 // Persistent bottom bar: clock (blinking colon), connected device,
 // volume level, Bluetooth indicator, battery icon, settings.
-//
-// TODO(Phase 4): the emoji/rune glyphs assume a font that has them; the
-// Buildroot image must ship one (or these become drawn/SVG icons).
+// All iconography is drawn (see icons.slint) — no font dependency.
 
 import { Theme } from "theme.slint";
+import { IconSpeaker, IconBluetooth, IconSliders } from "icons.slint";
 
 export component Footer inherits Rectangle {
     in property <string> clock-day;
@@ -64,20 +63,27 @@ export component Footer inherits Rectangle {
             overflow: elide;
         }
 
-        Text {
-            text: root.volume <= 0.001 ? "🔇"
-                : root.volume < 0.33 ? "🔈"
-                : root.volume < 0.66 ? "🔉"
-                : "🔊";
-            vertical-alignment: center;
+        Rectangle {
+            width: 24px;
+            IconSpeaker {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 20px;
+                height: 20px;
+                icon-color: Theme.dim;
+                level: root.volume <= 0.001 ? 0 : root.volume < 0.5 ? 1 : 2;
+            }
         }
 
-        // Bluetooth rune.
-        Text {
-            text: "ᛒ";
-            color: root.bt-connected ? Theme.accent : Theme.faint;
-            font-size: 20px;
-            vertical-alignment: center;
+        Rectangle {
+            width: 20px;
+            IconBluetooth {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 16px;
+                height: 18px;
+                icon-color: root.bt-connected ? Theme.accent : Theme.faint;
+            }
         }
 
         // Battery icon (tap → diagnostics panel).
@@ -123,14 +129,12 @@ export component Footer inherits Rectangle {
             clicked => {
                 root.open-settings();
             }
-            Text {
-                width: 100%;
-                height: 100%;
-                text: "⚙";
-                color: Theme.dimmer;
-                font-size: 20px;
-                vertical-alignment: center;
-                horizontal-alignment: center;
+            IconSliders {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 19px;
+                height: 19px;
+                icon-color: Theme.dimmer;
             }
         }
     }
