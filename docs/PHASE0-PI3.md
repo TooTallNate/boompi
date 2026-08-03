@@ -271,6 +271,7 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 | A: touch driver | ✔ pass | GT911 at `11-005d` (ID 911 v1060), input device registered; 0x14 probe fail is normal (dual-address overlay) |
 | A: Slint KMS render | ✔ pass | Software renderer, smooth at 800×480. Panel-orientation hint NOT auto-applied: bare run renders portrait 480×800; `SLINT_KMS_ROTATION=270` is correct (90 = upside down). Cross-compiled from macOS (zig), ~25 s builds. |
 | A: touch mapping | ✔ pass | Perfect with DT touch transforms (`touchscreen-swapped-x-y,touchscreen-inverted-x`) + `SLINT_KMS_ROTATION=270` — no double-transform. **Image recipe: keep v1 config.txt lines + set `SLINT_KMS_ROTATION=270` in the UI service env.** |
+| A: emoji in user text | ✔ pass | UI chrome uses drawn icons (no fonts). For user content (speaker name `George's 🔊`): **monochrome** Noto Emoji in `/usr/local/share/fonts` + fontconfig alias `emoji → "Noto Emoji"` in `/etc/fonts/local.conf`. Color CBDT fonts render as silent empty in the software renderer — do not ship them. Slint embeds Inter for regular text. |
 | B: A2DP + metadata | | |
 | B: monitor capture | | |
 | B: crackle fix | | |

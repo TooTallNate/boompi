@@ -218,14 +218,16 @@ BR2_EXTERNAL tree fleshed out: both defconfigs, custom packages, rootfs
 overlay, RO rootfs + `/data`, genimage SD layout, Wi-Fi/BT firmware, recent
 BlueZ pinned with experimental flags, obexd service wiring, SSH for dev.
 
-**Fonts**: UI chrome uses drawn vector icons (`icons.slint`, zero font
-dependency), but user content (speaker name, track/artist/device names)
-is arbitrary Unicode — the image must ship a text font (e.g. Noto Sans /
-Inter) **plus monochrome Noto Emoji** as fallback, with fontconfig wired
-up. Phase 0 finding: Slint's software renderer silently renders *nothing*
-for color-bitmap (CBDT) fonts like Noto Color Emoji — fallback finds the
-glyph but can't rasterize it — so the outline (monochrome) emoji font is
-required, and the color font must not be installed ahead of it.
+**Fonts** (recipe validated in Phase 0): UI chrome uses drawn vector icons
+(`icons.slint`, zero font dependency); Slint 1.17 embeds Inter for regular
+text. For arbitrary user content (speaker name, track/device names) the
+image ships exactly two things:
+1. **Monochrome** Noto Emoji (`NotoEmoji[wght].ttf`) in a fontconfig font dir
+2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Emoji`
+
+Do **not** ship color emoji fonts: Slint's software renderer silently
+renders nothing for color-bitmap (CBDT) fonts — fallback finds the glyph
+but rasterizes empty. (Verified with `George's 🔊` on the panel.)
 
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
