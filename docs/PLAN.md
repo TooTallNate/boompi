@@ -150,13 +150,16 @@ and UI.
 | | Pi 4 box | Pi 3 box |
 |---|---|---|
 | SoC | BCM2711 (aarch64) | BCM2837 (aarch64) |
-| Display | HDMI monitor | Pimoroni HyperPixel 4.0 (800×480 DPI), `vc4-kms-dpi-hyperpixel4` overlay |
-| Touch | USB HID (from monitor) — libinput, no extra work | HyperPixel I2C touch (handled by overlay) |
-| Audio out | I2S DAC HAT — **model/overlay TBD** (read from v1 image dump) | USB audio dongle |
-| INA260 | I2C bus 1 @ 0x40 (confirm) | Wired to HyperPixel rear GPIO breakout — **bus number TBD** (bit-banged `i2c-gpio`; read from v1 image dump) |
+| Display | HDMI monitor (KMS trivial) | Pimoroni HyperPixel 4.0 800×480, 18-bit DPI (`dpi_18bit_cpadhi_gpio0`), `dtoverlay=vc4-kms-dpi-hyperpixel4` + `dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x` ✔ confirmed from v1 card |
+| Touch | USB HID (from monitor) — libinput, no extra work | Goodix GT911 on overlay-created `i2c-gpio` bus (GPIO 10=SDA / 11=SCL, ~100 kHz) ✔ |
+| Audio | I2S DAC HAT — **model/overlay TBD** (read from Pi 4 v1 image dump) | USB audio |
+| INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | On the HyperPixel rear breakout = the overlay's `i2c-gpio` bus (GPIO 10/11). Bus number is dynamically assigned (likely `/dev/i2c-3`); **confirm exact number from deployed code in the v1 rootfs dump** — git main opens bus 1, which cannot be right for this box, so the deployed code was likely patched on-device. |
+| v1 OS | (dump pending) | Raspberry Pi OS Bullseye 2022-04-04 (pi-gen stage4), kernel 5.15 ✔ |
 
-> Before Phase 4: mount the v1 SD image backup and extract `/boot/config.txt`
-> (dtoverlays, I2C bus setup) for both boxes.
+> The Pi 3's KMS status is a major Phase 0 de-risk: the panel already runs
+> the modern `vc4-kms-dpi-hyperpixel4` overlay that Slint's `linuxkms`
+> backend requires. Display rotation (270°) + touch transforms must be
+> carried into the v2 config.
 
 ## Repository layout
 
@@ -231,8 +234,12 @@ CI image builds with ccache. Tag v2.0.
 
 ## Open items
 
-- [ ] DAC HAT model on Pi 4 (→ dtoverlay) — from v1 image dump
-- [ ] INA260 I2C bus number on Pi 3 — from v1 image dump
-- [ ] HyperPixel touch variant confirmation (assumed touch)
+- [ ] DAC HAT model on Pi 4 (→ dtoverlay) — from Pi 4 v1 image dump
+- [ ] INA260 I2C bus number on Pi 3 — likely `/dev/i2c-3` (overlay's dynamic
+      `i2c-gpio`); confirm from deployed backend code in the v1 rootfs dump
+- [x] HyperPixel touch variant: touch (Goodix GT911, per KMS overlay)
 - [ ] AirPlay 2 vs classic decision after Buildroot packaging check
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
+- [ ] v2 must handle display rotation on the Pi 3 (panel is `rotate=270`):
+      verify Slint linuxkms rotation handling (e.g. panel orientation from
+      DRM vs. `SLINT_KMS_ROTATION`-style config) during the Phase 0 spike
