@@ -273,7 +273,7 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 | A: touch mapping | ✔ pass | Perfect with DT touch transforms (`touchscreen-swapped-x-y,touchscreen-inverted-x`) + `SLINT_KMS_ROTATION=270` — no double-transform. **Image recipe: keep v1 config.txt lines + set `SLINT_KMS_ROTATION=270` in the UI service env.** |
 | A: emoji in user text | ✔ pass | UI chrome uses drawn icons (no fonts). User content emoji: **Skia OpenGL renderer + Noto Color Emoji + fontconfig alias `emoji → "Noto Color Emoji"`** renders full color. (Software renderer is outline-only: color CBDT fonts = silent empty, monochrome Noto Emoji = outline glyphs — kept as fallback recipe.) Slint embeds Inter for regular text. |
 | A: Skia OpenGL on KMS | ✔ pass | "Using Skia OpenGL renderer" on Pi 3 (vc4 GLES via EGL/GBM, dlopen'd — mesa runtime required: `libegl1 libegl-mesa0 libgles2 libgl1-mesa-dri`). Rotation via `SLINT_KMS_ROTATION=270` works; also falls back to Skia CPU raster when GL is absent. **Pi UI renderer of record.** |
-| B: A2DP + metadata | | |
+| B: A2DP + metadata | ✔ pass | iPhone streams to USB sink; track metadata + bidirectional AVRCP absolute volume verified **through the real boompid BlueZ source** (not just busctl). See gotchas below — four independent blockers. |
 | B: monitor capture | | |
 | B: crackle fix | | |
 | C: cover art (iPhone) | | ObexPort / ImgHandle / image |
@@ -283,5 +283,31 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 Environment: Debian 13 (Trixie), BlueZ 5.82, `throttled=0x0` on wall power
 (the boombox pack is deeply discharged and browned out the Pi — do not run
 spikes from the pack until it's charged/inspected).
+
+## Bluetooth gotchas (all bake into the Buildroot image)
+
+1. **Image ships Bluetooth rfkill-blocked**: `/var/lib/systemd/rfkill/*`
+   state files are pre-seeded `1` at image build time. Unblock live
+   (`/sys/class/rfkill/*/soft`) *and* fix the state file, or it re-blocks
+   on reboot. Our image: ship state files as `0`.
+2. **WirePlumber gates Bluetooth on an active logind seat** — headless/
+   SSH/linger sessions have none, so the bluez monitor loads but never
+   registers A2DP endpoints (adapter Class stays non-audio → invisible to
+   iPhones, which filter by class). Fix (rootfs overlay):
+   `wireplumber.conf.d` fragment setting profile `main`
+   `monitor.bluez.seat-monitoring = disabled`.
+3. **Discoverable times out after 3 min by default** — set
+   `DiscoverableTimeout u 0` (boompid owns discoverable state in Phase 3).
+4. **The CSR-clone USB dongle (`00:1A:7D:...`) firmware hard-locks on
+   Secure Connections pairing with iOS** (`hardware error 0x00`,
+   controller stops accepting commands; USB reset required to recover).
+   Fix: `btmgmt sc off` (command is `sc`, not `secure-conn`). Historically
+   reliable dongle otherwise; Pi 3 onboard BT causes audio stutter (shared
+   antenna/UART) and stays disabled via `dtoverlay=disable-bt`.
+5. Pairing confirmations need an agent: bluez-tools `bt-agent -c
+   NoInputNoOutput` as a user service (v1 parity) until boompid's `Agent1`
+   with on-screen confirm lands in Phase 3.
+6. Bonus: installing `bluez-tools` pulls in `bluez-obexd` → Spike C's
+   dependency is already present.
 
 When filled in, update `docs/PLAN.md` (risks + open items) accordingly.
