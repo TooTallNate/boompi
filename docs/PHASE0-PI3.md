@@ -269,8 +269,8 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 |---|---|---|
 | A: console on panel | ✔ pass | Trixie 2026-06-18: console renders rotated on HyperPixel |
 | A: touch driver | ✔ pass | GT911 at `11-005d` (ID 911 v1060), input device registered; 0x14 probe fail is normal (dual-address overlay) |
-| A: Slint KMS render | | renderer (sw/GL), rotation method, CPU % |
-| A: touch mapping | | |
+| A: Slint KMS render | ✔ pass | Software renderer, smooth at 800×480. Panel-orientation hint NOT auto-applied: bare run renders portrait 480×800; `SLINT_KMS_ROTATION=270` is correct (90 = upside down). Cross-compiled from macOS (zig), ~25 s builds. |
+| A: touch mapping | ✔ pass | Perfect with DT touch transforms (`touchscreen-swapped-x-y,touchscreen-inverted-x`) + `SLINT_KMS_ROTATION=270` — no double-transform. **Image recipe: keep v1 config.txt lines + set `SLINT_KMS_ROTATION=270` in the UI service env.** |
 | B: A2DP + metadata | | |
 | B: monitor capture | | |
 | B: crackle fix | | |

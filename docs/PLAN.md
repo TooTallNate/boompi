@@ -230,7 +230,7 @@ CI image builds with ccache. Tag v2.0.
 
 | Risk | Mitigation |
 |---|---|
-| Slint KMS on HyperPixel DPI | Phase 0 gate; software-renderer fallback |
+| ~~Slint KMS on HyperPixel DPI~~ | ✔ **Resolved in Phase 0**: software renderer smooth at 800×480, touch perfect. Requires `SLINT_KMS_ROTATION=270` in the UI environment (panel-orientation hint not auto-applied by Slint). |
 | AVRCP cover art is `[experimental]` in BlueZ; sender support varies (iOS good, Android varies) | Phase 0 spike with real phones; online fallback covers gaps |
 | AirPlay 2 (nqptp) availability in Buildroot | Verify in Phase 0; fall back to AirPlay classic |
 | librespot API/version churn | Subprocess integration keeps it swappable |
@@ -255,6 +255,6 @@ CI image builds with ccache. Tag v2.0.
       discharged pack browned out the Pi and corrupted the SD mid-boot).
       v2 should surface a low-battery warning in the UI and consider a
       safe-shutdown voltage threshold via the INA260 — v1 had neither.
-- [ ] v2 must handle display rotation on the Pi 3 (panel is `rotate=270`):
-      verify Slint linuxkms rotation handling (e.g. panel orientation from
-      DRM vs. `SLINT_KMS_ROTATION`-style config) during the Phase 0 spike
+- [x] Pi 3 display rotation under Slint: `SLINT_KMS_ROTATION=270` env var
+      (DRM panel-orientation hint is not auto-applied). Touch works
+      unmodified alongside the existing DT touch transforms.
