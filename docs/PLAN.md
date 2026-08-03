@@ -221,9 +221,11 @@ BlueZ pinned with experimental flags, obexd service wiring, SSH for dev.
 **Fonts**: UI chrome uses drawn vector icons (`icons.slint`, zero font
 dependency), but user content (speaker name, track/artist/device names)
 is arbitrary Unicode — the image must ship a text font (e.g. Noto Sans /
-Inter) **plus an emoji-capable fallback** (Noto Color Emoji, or monochrome
-Noto Emoji if the software renderer lacks color-font support — validated
-on the dev Pi) with fontconfig wired up.
+Inter) **plus monochrome Noto Emoji** as fallback, with fontconfig wired
+up. Phase 0 finding: Slint's software renderer silently renders *nothing*
+for color-bitmap (CBDT) fonts like Noto Color Emoji — fallback finds the
+glyph but can't rasterize it — so the outline (monochrome) emoji font is
+required, and the color font must not be installed ahead of it.
 
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
