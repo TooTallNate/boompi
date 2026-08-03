@@ -229,6 +229,15 @@ Do **not** ship color emoji fonts: Slint's software renderer silently
 renders nothing for color-bitmap (CBDT) fonts — fallback finds the glyph
 but rasterizes empty. (Verified with `George's 🔊` on the panel.)
 
+Root cause confirmed in Slint 1.17.1 source: the software renderer
+requests outline-only alpha rendering from swash
+(`i-slint-renderer-software/fonts/vectorfont.rs`, `Source::Outline` +
+`Format::Alpha`; glyph cache is single-channel). Known upstream gaps:
+slint-ui/slint#8646 (missing emoji support, open) and #5171 (FemtoVG
+renders emoji monochrome, open). Only the Skia renderer does color emoji.
+If color emoji ever matters: try Skia+linuxkms on the Pi, or contribute
+an RGBA glyph path upstream. Monochrome is the v2 recipe.
+
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
 
