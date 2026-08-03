@@ -81,9 +81,10 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
   - *Bluetooth art* uses **AVRCP 1.6 Cover Art** (new in recent BlueZ,
     `[experimental]`): `MediaPlayer1.ObexPort` (BIP OBEX PSM) +
     `Track.ImgHandle` → obexd client session (`org.bluez.obex.Image1`)
-    → `GetThumbnail`/`Get`. Requires BlueZ ≥ ~5.79 with the experimental
-    flag on `bluetoothd`/`obexd` (we control this in Buildroot; Pi OS
-    Bookworm's 5.66 is too old — build from source during dev phases).
+    → `GetThumbnail`/`Get`. Requires BlueZ ≥ ~5.79 with
+    `Experimental = true` on `bluetoothd` (obexd needs no flag; BIP client
+    is built in). Current RPi OS (Trixie) ships BlueZ 5.82 ✔ — no source
+    build needed for dev; Buildroot pins its own version.
   - *Online fallback* (*user-toggleable in Settings, default TBD*): when a
     source provides no art, look up artist+album via iTunes Search /
     MusicBrainz Cover Art Archive over Wi-Fi; cache results.
@@ -250,6 +251,10 @@ CI image builds with ccache. Tag v2.0.
       is the authoritative reference.)
 - [ ] AirPlay 2 vs classic decision after Buildroot packaging check
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
+- [ ] Low-battery safeguard (new, motivated by Phase 0: the deeply
+      discharged pack browned out the Pi and corrupted the SD mid-boot).
+      v2 should surface a low-battery warning in the UI and consider a
+      safe-shutdown voltage threshold via the INA260 — v1 had neither.
 - [ ] v2 must handle display rotation on the Pi 3 (panel is `rotate=270`):
       verify Slint linuxkms rotation handling (e.g. panel orientation from
       DRM vs. `SLINT_KMS_ROTATION`-style config) during the Phase 0 spike

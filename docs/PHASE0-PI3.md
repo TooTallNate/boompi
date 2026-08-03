@@ -6,7 +6,15 @@ the loop.
 
 > **Use a spare SD card.** The v1 card stays untouched (backup:
 > `~/boompi-pi3-v1-backup.img.gz`). Everything below happens on a fresh
-> Raspberry Pi OS **Lite 64-bit (Bookworm)** install on a different card.
+> Raspberry Pi OS **Lite 64-bit** install (current release; verified with
+> the 2026-06-18 image = Debian 13 "Trixie", BlueZ 5.82) on a different card.
+
+> ⚠️ **Power**: first boot is write-heavy and a sagging 5V rail corrupts the
+> SD filesystem (learned the hard way — a deeply discharged boombox pack
+> browned out mid-first-boot: intermittent no-boot + EXT4 journal aborts).
+> Use a solid supply (bench/wall 5V ≥2.5A) or a charged pack, and check
+> `vcgencmd get_throttled` after boot (`0x0` = clean; `0x5000x` bits =
+> undervoltage happened).
 
 Facts recovered from the v1 card that these spikes rely on:
 
@@ -31,7 +39,9 @@ Record: `uname -a`, `cat /etc/os-release | head -2`, `bluetoothctl --version`.
 
 ### 1a. Enable the panel
 
-Bookworm's config lives at `/boot/firmware/config.txt`. Append:
+The config lives at `/boot/firmware/config.txt` (editable from a laptop by
+mounting the card's `bootfs` FAT partition — handy since the panel is dark
+until this is done). Append:
 
 ```
 dtoverlay=vc4-kms-dpi-hyperpixel4
@@ -39,7 +49,8 @@ dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
 ```
 
 `sudo reboot`. The Linux console should appear on the HyperPixel, in
-landscape (header at top).
+landscape (header at top). ✔ *Verified working on the 2026-06-18 Trixie
+image — console renders rotated on the panel.*
 
 ### 1b. Verify KMS + touch at the OS level
 
@@ -155,15 +166,17 @@ Play music on the phone. Checks:
   xxd /tmp/cap.raw | grep -v "0000 0000 0000 0000" | head -3   # non-silence
   ```
 - [ ] Crackle test: pause music ~30 s, resume — listen for pops as the sink
-      suspends/resumes. Then disable suspend (WirePlumber 0.4 / Lua config
-      on Bookworm) and retest:
+      suspends/resumes. Then disable suspend (WirePlumber ≥0.5 `.conf`
+      format on Trixie) and retest:
   ```sh
-  mkdir -p ~/.config/wireplumber/main.lua.d
-  cat > ~/.config/wireplumber/main.lua.d/51-disable-suspend.lua <<'EOF'
-  table.insert(alsa_monitor.rules, {
-    matches = { { { "node.name", "matches", "alsa_output.*" } } },
-    apply_properties = { ["session.suspend-timeout-seconds"] = 0 },
-  })
+  mkdir -p ~/.config/wireplumber/wireplumber.conf.d
+  cat > ~/.config/wireplumber/wireplumber.conf.d/51-disable-suspend.conf <<'EOF'
+  monitor.alsa.rules = [
+    {
+      matches = [ { node.name = "~alsa_output.*" } ]
+      actions = { update-props = { session.suspend-timeout-seconds = 0 } }
+    }
+  ]
   EOF
   systemctl --user restart wireplumber
   ```
@@ -171,29 +184,29 @@ Play music on the phone. Checks:
 **Go/no-go**: streaming + metadata + monitor capture all working = PipeWire
 architecture confirmed (and the `ffplay /dev/zero` hack is officially dead).
 
-## 3. Spike C — AVRCP cover art (needs recent BlueZ)
+## 3. Spike C — AVRCP cover art
 
-Bookworm ships BlueZ 5.66; cover art needs ≥ ~5.79 with `--experimental`.
-Build from source (~20–40 min on the Pi 3):
+Cover art needs BlueZ ≥ ~5.79. **Trixie ships 5.82 — no source build
+needed.** Two pieces:
 
-```sh
-sudo apt install -y libglib2.0-dev libdbus-1-dev libudev-dev libical-dev libreadline-dev
-wget https://www.kernel.org/pub/linux/bluetooth/bluez-5.79.tar.xz
-tar xf bluez-5.79.tar.xz && cd bluez-5.79
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var \
-    --enable-experimental --disable-manpages --disable-mesh
-make -j2
-```
+1. `bluetoothd` must run with experimental D-Bus interfaces (that's what
+   gates `MediaPlayer1.ObexPort` and `Track.ImgHandle`):
 
-Run the freshly built daemons (don't install; keep the system clean):
+   ```sh
+   # set Experimental = true under [General] in /etc/bluetooth/main.conf
+   sudo sed -i 's/^#\?\s*Experimental *=.*/Experimental = true/' /etc/bluetooth/main.conf
+   grep -n "Experimental" /etc/bluetooth/main.conf   # verify exactly one, = true
+   sudo systemctl restart bluetooth
+   ```
 
-```sh
-sudo systemctl stop bluetooth
-sudo ./src/bluetoothd -E -n -d 2>/tmp/bluetoothd.log &   # -E = experimental
+2. `obexd` (the OBEX/BIP client) — separate package, runs on the user
+   session bus via D-Bus activation, needs **no flag** (the BIP client is a
+   compiled-in plugin):
 
-systemctl --user stop obex 2>/dev/null                    # if present
-./obexd/src/obexd -n -d 2>/tmp/obexd.log &                # session-bus daemon, run as pi
-```
+   ```sh
+   sudo apt install -y bluez-obexd
+   busctl --user introspect org.bluez.obex /org/bluez/obex   # activates it; expect Client1
+   ```
 
 Reconnect the phone (re-pair via `bluetoothctl` if needed), play music, then:
 
@@ -221,6 +234,11 @@ sleep 2 && file /tmp/cover.jpg   # expect JPEG image data
 
 Record per phone (iPhone / Android): ObexPort present? ImgHandle present?
 Image retrieved? Notes in the results table below.
+
+> Fallback if `ObexPort`/`ImgHandle` never appear despite
+> `Experimental = true` and an iPhone sender: build BlueZ master from
+> source (instructions were in this file's git history) — but with 5.82
+> packaged this should not be needed.
 
 **Fallback if no cover art**: the online-lookup fallback (Settings-gated)
 covers these senders — this spike determines how often it will be needed.
