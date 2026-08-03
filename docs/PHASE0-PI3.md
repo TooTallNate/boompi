@@ -276,7 +276,7 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 | B: A2DP + metadata | ✔ pass | iPhone streams to USB sink; track metadata + bidirectional AVRCP absolute volume verified **through the real boompid BlueZ source** (not just busctl). See gotchas below — four independent blockers. |
 | B: monitor capture | | |
 | B: crackle fix | | |
-| C: cover art (iPhone) | | ObexPort / ImgHandle / image |
+| C: cover art (iPhone) | ◐ partial | `Experimental = true` works: `ObexPort` (PSM 4105) exposed ✔. But `Track.ImgHandle` never appears and the iPhone **refuses the BIP L2CAP connect** (obexd: `Connection refused (111)`), even fresh-PSM/fresh-connection. iOS exposes no browsing channel (no `Browsable`/`MediaFolder1`). **Resume**: btmon capture of the refused connect to read the L2CAP reject reason (phone must be physically present). |
 | C: cover art (Android) | | |
 | D: INA260 | ✔ pass | `i2c-11` on Trixie (same as v1); 0x40 responds, touch shows `UU` at 0x5d on same bus |
 
