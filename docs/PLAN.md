@@ -68,7 +68,9 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
   - *bluetooth*: zbus proxies for `org.bluez.Device1`, `MediaTransport1`
     (absolute volume 0–127), `MediaPlayer1` (transport + `Track` metadata),
     `Adapter1` (discoverable), `Agent1`/`AgentManager1` (pairing flow).
-    Handles devices paired at runtime (v1 TODO).
+    Handles devices paired at runtime (v1 TODO). Register the agent with
+    `DisplayYesNo` capability to drive the on-screen confirm; v1 ran
+    bluez-tools `bt-agent -c NoInputNoOutput` (auto-accept everything).
   - *spotify*: librespot (subprocess with event hooks first; embed-as-crate
     is a later option). Art via metadata CDN URLs.
   - *airplay*: shairport-sync metadata (D-Bus/MPRIS or metadata pipe,
@@ -239,10 +241,11 @@ CI image builds with ccache. Tag v2.0.
       it to `/dev/i2c-1` in kiosk.sh). v2: seed `battery.i2c_bus = 11` for the
       Pi 3 image + implement find-adapter-by-name in Phase 1 for robustness.
 - [x] HyperPixel touch variant: touch (Goodix GT911, per KMS overlay)
-- [x] v1 pairing mechanism: a `bt-agent.service` (bluez-tools) ran a
-      NoInputNoOutput-style agent on the box — replaced by boompid's own
-      `Agent1` implementation in Phase 3. (Deployed kiosk.sh/units drifted
-      from git; the v1 image dump is the authoritative reference.)
+- [x] v1 pairing mechanism confirmed: `bt-agent.service` ran
+      `/usr/bin/bt-agent -c NoInputNoOutput` (bluez-tools) — auto-accepts
+      all pairing. Replaced by boompid's own `Agent1` (`DisplayYesNo`) in
+      Phase 3. (Deployed kiosk.sh/units drifted from git; the v1 image dump
+      is the authoritative reference.)
 - [ ] AirPlay 2 vs classic decision after Buildroot packaging check
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
 - [ ] v2 must handle display rotation on the Pi 3 (panel is `rotate=270`):
