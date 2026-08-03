@@ -1,0 +1,156 @@
+// Boompi UI skeleton (Phase 2 will flesh this out to full parity:
+// marquee, track position, battery panel, settings, setup wizard).
+//
+// Sized for the boombox displays (HyperPixel 4.0 is 800×480; the HDMI box
+// renders the same layout).
+
+import { Slider, Button } from "std-widgets.slint";
+
+export component AppWindow inherits Window {
+    title: "Boompi";
+    width: 800px;
+    height: 480px;
+    background: #0b0b10;
+    default-font-size: 18px;
+
+    in property <bool> connected: false;
+    in property <string> speaker-name: "boompi";
+    in property <string> track-title;
+    in property <string> track-artist;
+    in property <string> track-album;
+    in property <bool> playing: false;
+    in property <bool> has-track: false;
+    in-out property <float> volume: 0;
+    /// Visualizer bar levels, 0.0–1.0.
+    in property <[float]> bars: [];
+
+    callback toggle-play();
+    callback next();
+    callback previous();
+    callback volume-edited(float);
+
+    // --- Background: visualizer bars ------------------------------------
+    HorizontalLayout {
+        spacing: 6px;
+        for level in root.bars: Rectangle {
+            Rectangle {
+                y: parent.height - self.height;
+                height: parent.height * level;
+                background: #1c1c30;
+            }
+        }
+    }
+
+    // --- Main content ----------------------------------------------------
+    VerticalLayout {
+        alignment: center;
+        spacing: 14px;
+        padding: 24px;
+
+        if !root.connected: Text {
+            text: "Connecting to backend…";
+            color: #777;
+            font-size: 22px;
+            horizontal-alignment: center;
+        }
+
+        if root.connected && !root.has-track: VerticalLayout {
+            spacing: 10px;
+            Text {
+                text: "To play music, connect your device to:";
+                color: #999;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: root.speaker-name;
+                color: white;
+                font-size: 36px;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+        }
+
+        if root.connected && root.has-track: VerticalLayout {
+            spacing: 10px;
+            Text {
+                text: root.track-title;
+                color: white;
+                font-size: 32px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                text: root.track-artist;
+                color: #ccc;
+                font-size: 22px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                text: root.track-album;
+                color: #888;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: 24px;
+                Button {
+                    text: "⏮";
+                    clicked => { root.previous(); }
+                }
+                Button {
+                    text: root.playing ? "⏸" : "▶";
+                    clicked => { root.toggle-play(); }
+                }
+                Button {
+                    text: "⏭";
+                    clicked => { root.next(); }
+                }
+            }
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: 12px;
+                Text {
+                    text: "🔈";
+                    vertical-alignment: center;
+                }
+                Slider {
+                    width: 320px;
+                    minimum: 0;
+                    maximum: 1;
+                    value <=> root.volume;
+                    changed(value) => { root.volume-edited(value); }
+                }
+                Text {
+                    text: "🔊";
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    // --- Footer ------------------------------------------------------------
+    HorizontalLayout {
+        x: 0;
+        y: root.height - 44px;
+        width: root.width;
+        height: 44px;
+        padding-left: 16px;
+        padding-right: 16px;
+        Text {
+            text: root.speaker-name;
+            color: #555;
+            vertical-alignment: center;
+        }
+        Rectangle { } // spacer
+        Text {
+            text: root.connected ? "● connected" : "○ offline";
+            color: root.connected ? #4b4 : #b44;
+            vertical-alignment: center;
+        }
+    }
+}

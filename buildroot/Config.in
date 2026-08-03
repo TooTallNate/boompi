@@ -1,0 +1,2 @@
+source "$BR2_EXTERNAL_BOOMPI_PATH/package/boompid/Config.in"
+source "$BR2_EXTERNAL_BOOMPI_PATH/package/boompi-ui/Config.in"

@@ -1,0 +1,10 @@
+[package]
+name = "ina260"
+description = "TI INA260 current/voltage/power monitor driver (embedded-hal)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+embedded-hal = "1"

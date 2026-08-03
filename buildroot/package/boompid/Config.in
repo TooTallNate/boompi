@@ -1,0 +1,10 @@
+config BR2_PACKAGE_BOOMPID
+	bool "boompid"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Boompi v2 backend daemon: bridges BlueZ, librespot,
+	  shairport-sync, PipeWire, and the INA260 battery monitor to UI
+	  clients over WebSocket/HTTP.
+
+	  https://github.com/TooTallNate/boompi

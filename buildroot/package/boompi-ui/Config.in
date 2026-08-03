@@ -1,0 +1,9 @@
+config BR2_PACKAGE_BOOMPI_UI
+	bool "boompi-ui"
+	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
+	select BR2_PACKAGE_HOST_RUSTC
+	help
+	  Boompi v2 touchscreen UI (Slint), rendering directly on DRM/KMS
+	  with libinput touch input via Slint's linuxkms backend.
+
+	  https://github.com/TooTallNate/boompi

@@ -1,0 +1,23 @@
+[package]
+name = "boompi-ui"
+description = "Boompi touchscreen UI (Slint)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+boompi-proto = { path = "../boompi-proto" }
+
+anyhow = { workspace = true }
+clap = { workspace = true }
+futures-util = "0.3"
+serde_json = { workspace = true }
+# Default backend: winit (laptop dev). The Buildroot package enables the
+# `backend-linuxkms` feature for direct DRM/KMS rendering on the Pi.
+slint = "1"
+tokio = { workspace = true, features = ["rt", "macros", "net", "sync", "time"] }
+tokio-tungstenite = "0.24"
+
+[build-dependencies]
+slint-build = "1"
