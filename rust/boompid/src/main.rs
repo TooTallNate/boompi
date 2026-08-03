@@ -8,6 +8,12 @@
 //! Current status: server + protocol + `--sim` mode. Hardware sources land
 //! in Phase 1.
 
+#[cfg(target_os = "linux")]
+mod audio;
+#[cfg(target_os = "linux")]
+mod battery;
+#[cfg(target_os = "linux")]
+mod bluetooth;
 mod config;
 mod server;
 mod sim;
@@ -53,11 +59,23 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!("simulation mode: fake sources, battery, and visualizer");
         sim::spawn(app.clone());
     } else {
-        // TODO(Phase 1): BlueZ source, PipeWire volume/visualizer, INA260.
-        tracing::warn!(
-            "hardware sources are not implemented yet (Phase 1); \
-             serving with no active sources — try --sim"
-        );
+        #[cfg(target_os = "linux")]
+        {
+            tracing::info!("hardware mode: BlueZ source + INA260 battery");
+            bluetooth::spawn(app.clone());
+            battery::spawn(app.clone());
+            // Seed the volume from the current system state.
+            let app = app.clone();
+            tokio::spawn(async move {
+                match audio::get_system_volume().await {
+                    Ok(level) => app.shared.write().await.volume = level,
+                    Err(err) => tracing::warn!(%err, "could not read system volume"),
+                }
+            });
+            // TODO(Phase 1, next): visualizer via PipeWire monitor capture.
+        }
+        #[cfg(not(target_os = "linux"))]
+        tracing::warn!("hardware sources are Linux-only; try --sim");
     }
 
     server::serve(app, cli.listen).await

@@ -43,11 +43,12 @@ pub enum SourceKind {
 
 /// Playback status, normalized across sources.
 /// (BlueZ `forward-seek`/`reverse-seek` map to the seek variants.)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PlaybackStatus {
     Playing,
     Paused,
+    #[default]
     Stopped,
     ForwardSeek,
     ReverseSeek,

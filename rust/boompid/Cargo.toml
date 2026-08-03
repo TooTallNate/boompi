@@ -27,6 +27,10 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Linux-only hardware integrations (BlueZ via zbus, PipeWire, I2C) land in
-# Phase 1 behind cfg(target_os = "linux") so the workspace stays
-# cross-platform for laptop UI development.
+# Linux-only hardware integrations, cfg-gated so the workspace stays
+# cross-platform for laptop development (verify with `make cross-boompid`).
+[target.'cfg(target_os = "linux")'.dependencies]
+futures-util = "0.3"
+ina260 = { path = "../ina260" }
+linux-embedded-hal = "0.4"
+zbus = { version = "5", default-features = false, features = ["tokio"] }

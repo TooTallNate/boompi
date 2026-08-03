@@ -21,6 +21,19 @@ pub enum Outbound {
     Frame(Bytes),
 }
 
+/// Transport/volume commands routed to the active hardware source
+/// (BlueZ today; librespot/shairport arbitration lands in Phase 3).
+/// Only constructed/consumed on Linux (hardware sources are cfg-gated).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Debug, Clone, Copy)]
+pub enum SourceCommand {
+    Play,
+    Pause,
+    Next,
+    Previous,
+    SetVolume(f32),
+}
+
 pub type SharedApp = Arc<App>;
 
 pub struct App {
@@ -31,6 +44,9 @@ pub struct App {
     /// Signalled by Next/Previous; the sim track loop (and later, sources
     /// without native skip) listens on this.
     pub sim_skip: Notify,
+    /// When a hardware source is running, transport/volume commands are
+    /// forwarded here instead of being applied to shared state directly.
+    source_cmds: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<SourceCommand>>>,
 }
 
 /// Mutable state mirrored to clients (see [`boompi_proto::State`]).
@@ -63,7 +79,23 @@ impl App {
             }),
             tx,
             sim_skip: Notify::new(),
+            source_cmds: std::sync::Mutex::new(None),
         })
+    }
+
+    /// Register the hardware source command channel (takes over transport
+    /// and volume handling from the built-in/sim path).
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn register_source(&self, tx: tokio::sync::mpsc::UnboundedSender<SourceCommand>) {
+        *self.source_cmds.lock().unwrap() = Some(tx);
+    }
+
+    fn forward_to_source(&self, cmd: SourceCommand) -> bool {
+        let guard = self.source_cmds.lock().unwrap();
+        match guard.as_ref() {
+            Some(tx) => tx.send(cmd).is_ok(),
+            None => false,
+        }
     }
 
     pub async fn snapshot(&self) -> State {
@@ -104,18 +136,32 @@ impl App {
     pub async fn handle_client_message(&self, msg: ClientMessage) {
         tracing::debug!(?msg, "client message");
         match msg {
-            ClientMessage::Play => self.set_playback(PlaybackStatus::Playing).await,
-            ClientMessage::Pause => self.set_playback(PlaybackStatus::Paused).await,
-            ClientMessage::Next | ClientMessage::Previous => {
-                // Sim treats both as "skip to next".
-                self.sim_skip.notify_waiters();
+            ClientMessage::Play => {
+                if !self.forward_to_source(SourceCommand::Play) {
+                    self.set_playback(PlaybackStatus::Playing).await;
+                }
+            }
+            ClientMessage::Pause => {
+                if !self.forward_to_source(SourceCommand::Pause) {
+                    self.set_playback(PlaybackStatus::Paused).await;
+                }
+            }
+            ClientMessage::Next => {
+                if !self.forward_to_source(SourceCommand::Next) {
+                    self.sim_skip.notify_waiters();
+                }
+            }
+            ClientMessage::Previous => {
+                if !self.forward_to_source(SourceCommand::Previous) {
+                    self.sim_skip.notify_waiters();
+                }
             }
             ClientMessage::SetVolume { level } => {
                 let level = level.clamp(0.0, 1.0);
-                self.shared.write().await.volume = level;
-                // TODO(Phase 1): set PipeWire sink volume + AVRCP absolute
-                // volume on the connected device.
-                self.broadcast(ServerMessage::Volume { level });
+                if !self.forward_to_source(SourceCommand::SetVolume(level)) {
+                    self.shared.write().await.volume = level;
+                    self.broadcast(ServerMessage::Volume { level });
+                }
             }
             ClientMessage::BatteryFastPoll { .. } => {
                 // Handled per-connection in server.rs so a client's fast-poll
