@@ -22,8 +22,9 @@ set -euo pipefail
 
 SYSROOT="${BOOMPI_SYSROOT:-$HOME/boompi-sysroot}"
 TARGET="aarch64-unknown-linux-gnu"
-# Target a glibc no newer than the Pi's (Trixie ships 2.41; 2.36 is safe).
-GLIBC="${BOOMPI_GLIBC:-2.36}"
+# Match the Pi's glibc (`ldd --version` on the Pi; Trixie ships 2.41).
+# Sysroot libs use C23 symbols (@GLIBC_2.38), so don't target older than that.
+GLIBC="${BOOMPI_GLIBC:-2.41}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PKG="${1:?usage: cross-build.sh <package> [cargo args...]}"

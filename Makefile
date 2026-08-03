@@ -34,8 +34,8 @@ SYSROOT ?= $(HOME)/boompi-sysroot
 # Pull headers + libs from the running Pi (the C deps Slint links against).
 sysroot:
 	mkdir -p $(SYSROOT)/usr/lib $(SYSROOT)/usr/share
-	rsync -a --info=progress2 $(PI):/usr/include $(SYSROOT)/usr/
-	rsync -a --info=progress2 $(PI):/usr/lib/aarch64-linux-gnu $(SYSROOT)/usr/lib/
+	rsync -a $(PI):/usr/include $(SYSROOT)/usr/
+	rsync -a $(PI):/usr/lib/aarch64-linux-gnu $(SYSROOT)/usr/lib/
 	rsync -a $(PI):/usr/share/pkgconfig $(SYSROOT)/usr/share/
 
 cross-kms-test:
