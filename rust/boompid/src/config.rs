@@ -35,9 +35,12 @@ impl Default for Config {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BatteryConfig {
-    /// Linux I2C bus number. Bus 1 on plain wiring; the Pi 3 box reaches the
-    /// INA260 through the HyperPixel's bit-banged auxiliary bus (number TBD,
-    /// to be read from the v1 image dump).
+    /// Linux I2C bus number. The Pi 3 box reaches the INA260 through the
+    /// HyperPixel overlay's bit-banged i2c-gpio bus, which is dynamically
+    /// numbered `/dev/i2c-11` (v1 worked around this with an
+    /// `ln -sf /dev/i2c-11 /dev/i2c-1` in kiosk.sh).
+    /// TODO(Phase 1): optionally locate the adapter by name via
+    /// /sys/class/i2c-adapter/*/name instead of a fixed number.
     pub i2c_bus: u8,
     /// 7-bit I2C address.
     pub address: u8,

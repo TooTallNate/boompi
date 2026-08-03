@@ -153,7 +153,7 @@ and UI.
 | Display | HDMI monitor (KMS trivial) | Pimoroni HyperPixel 4.0 800×480, 18-bit DPI (`dpi_18bit_cpadhi_gpio0`), `dtoverlay=vc4-kms-dpi-hyperpixel4` + `dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x` ✔ confirmed from v1 card |
 | Touch | USB HID (from monitor) — libinput, no extra work | Goodix GT911 on overlay-created `i2c-gpio` bus (GPIO 10=SDA / 11=SCL, ~100 kHz) ✔ |
 | Audio | I2S DAC HAT — **model/overlay TBD** (read from Pi 4 v1 image dump) | USB audio |
-| INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | On the HyperPixel rear breakout = the overlay's `i2c-gpio` bus (GPIO 10/11). Bus number is dynamically assigned (likely `/dev/i2c-3`); **confirm exact number from deployed code in the v1 rootfs dump** — git main opens bus 1, which cannot be right for this box, so the deployed code was likely patched on-device. |
+| INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | ✔ On the overlay's `i2c-gpio` bus (GPIO 10/11) = `/dev/i2c-11` (dynamic: DTB aliases reserve 0–10). v1's deployed `kiosk.sh` ran `ln -sf /dev/i2c-11 /dev/i2c-1` at boot so its hardcoded bus 1 worked. v2: config takes the real bus, and boompid should optionally locate the adapter **by name** (`/sys/class/i2c-adapter/*/name`) since i2c-gpio numbering is dynamic. |
 | v1 OS | (dump pending) | Raspberry Pi OS Bullseye 2022-04-04 (pi-gen stage4), kernel 5.15 ✔ |
 
 > The Pi 3's KMS status is a major Phase 0 de-risk: the panel already runs
@@ -235,9 +235,14 @@ CI image builds with ccache. Tag v2.0.
 ## Open items
 
 - [ ] DAC HAT model on Pi 4 (→ dtoverlay) — from Pi 4 v1 image dump
-- [ ] INA260 I2C bus number on Pi 3 — likely `/dev/i2c-3` (overlay's dynamic
-      `i2c-gpio`); confirm from deployed backend code in the v1 rootfs dump
+- [x] INA260 I2C bus on Pi 3: `/dev/i2c-11` (overlay's i2c-gpio; v1 symlinked
+      it to `/dev/i2c-1` in kiosk.sh). v2: seed `battery.i2c_bus = 11` for the
+      Pi 3 image + implement find-adapter-by-name in Phase 1 for robustness.
 - [x] HyperPixel touch variant: touch (Goodix GT911, per KMS overlay)
+- [x] v1 pairing mechanism: a `bt-agent.service` (bluez-tools) ran a
+      NoInputNoOutput-style agent on the box — replaced by boompid's own
+      `Agent1` implementation in Phase 3. (Deployed kiosk.sh/units drifted
+      from git; the v1 image dump is the authoritative reference.)
 - [ ] AirPlay 2 vs classic decision after Buildroot packaging check
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
 - [ ] v2 must handle display rotation on the Pi 3 (panel is `rotate=270`):
