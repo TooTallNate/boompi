@@ -1,0 +1,40 @@
+// Track progress bar with elapsed/remaining labels.
+// Position interpolation happens in Rust (see main.rs); this just renders.
+
+import { Theme } from "theme.slint";
+
+export component TrackPosition inherits VerticalLayout {
+    in property <float> progress; // 0.0–1.0
+    in property <string> elapsed;
+    in property <string> remaining;
+
+    spacing: 5px;
+
+    Rectangle {
+        height: 6px;
+        border-radius: 3px;
+        background: Theme.faint;
+        Rectangle {
+            x: 0;
+            y: 0;
+            width: parent.width * min(1.0, max(0.0, root.progress));
+            height: parent.height;
+            border-radius: 3px;
+            background: Theme.accent;
+        }
+    }
+
+    HorizontalLayout {
+        Text {
+            text: root.elapsed;
+            color: Theme.dim;
+            font-size: 14px;
+        }
+        Rectangle { }
+        Text {
+            text: root.remaining;
+            color: Theme.dim;
+            font-size: 14px;
+        }
+    }
+}

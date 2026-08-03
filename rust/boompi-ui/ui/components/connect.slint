@@ -1,0 +1,49 @@
+// "Connect your device" screen, shown when no source is active.
+
+import { Button } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+export component ConnectScreen inherits VerticalLayout {
+    in property <string> speaker-name;
+    in property <string> pairing-state;
+    callback pairing-enable();
+    callback pairing-cancel();
+
+    alignment: center;
+    spacing: 14px;
+    padding: 24px;
+
+    Text {
+        text: "To play music, connect your device to:";
+        color: Theme.dim;
+        horizontal-alignment: center;
+    }
+    Text {
+        text: root.speaker-name;
+        color: Theme.fg;
+        font-size: 38px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        overflow: elide;
+    }
+
+    if root.pairing-state == "discoverable": Text {
+        text: "Discoverable — check your phone's Bluetooth list…";
+        color: Theme.accent;
+        horizontal-alignment: center;
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        Button {
+            text: root.pairing-state == "idle" ? "Pair a new device" : "Cancel pairing";
+            clicked => {
+                if (root.pairing-state == "idle") {
+                    root.pairing-enable();
+                } else {
+                    root.pairing-cancel();
+                }
+            }
+        }
+    }
+}

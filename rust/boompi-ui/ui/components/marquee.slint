@@ -1,0 +1,26 @@
+// Horizontally centered text that ping-pong scrolls when it overflows.
+
+export component Marquee inherits Rectangle {
+    in property <string> text;
+    in property <length> font-size: 20px;
+    in property <color> text-color: white;
+    in property <int> font-weight: 400;
+
+    clip: true;
+    height: t.preferred-height;
+
+    property <length> overflow: max(0px, t.preferred-width - root.width);
+    // 0 → 1 → 0 sweep; slow enough to read while moving.
+    property <float> phase: (sin(animation-tick() / 9s * 360deg) + 1) / 2;
+
+    t := Text {
+        x: root.overflow > 0px
+            ? -root.overflow * root.phase
+            : (root.width - self.preferred-width) / 2;
+        width: self.preferred-width;
+        text: root.text;
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        color: root.text-color;
+    }
+}

@@ -1,0 +1,128 @@
+// Settings screen: speaker info, online album-art fallback toggle,
+// Bluetooth pairing controls.
+
+import { Switch, Button } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+
+component Row inherits Rectangle {
+    in property <string> label;
+    in property <string> sublabel;
+    background: Theme.panel;
+    border-radius: 8px;
+    height: 64px;
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 14px;
+        spacing: 10px;
+        VerticalLayout {
+            alignment: center;
+            spacing: 2px;
+            Text {
+                text: root.label;
+                color: Theme.fg;
+                font-size: 17px;
+            }
+            if root.sublabel != "": Text {
+                text: root.sublabel;
+                color: Theme.dimmer;
+                font-size: 13px;
+            }
+        }
+        Rectangle { }
+        @children
+    }
+}
+
+export component SettingsPanel inherits Rectangle {
+    in property <string> speaker-name;
+    in property <string> version-line;
+    in-out property <bool> online-art;
+    in property <string> pairing-state; // "idle" | "discoverable" | "confirm"
+    callback close();
+    callback online-art-toggled(bool);
+    callback pairing-enable();
+    callback pairing-cancel();
+
+    background: Theme.bg;
+
+    VerticalLayout {
+        padding: 14px;
+        padding-bottom: Theme.footer-height + 8px;
+        spacing: 10px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            TouchArea {
+                width: 44px;
+                clicked => {
+                    root.close();
+                }
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    text: "←";
+                    font-size: 26px;
+                    color: Theme.dim;
+                    vertical-alignment: center;
+                }
+            }
+            Text {
+                text: "Settings";
+                font-size: 22px;
+                color: Theme.fg;
+                vertical-alignment: center;
+            }
+            Rectangle { }
+        }
+
+        Row {
+            label: "Speaker name";
+            sublabel: "Renaming lands with the setup flow";
+            Text {
+                text: root.speaker-name;
+                color: Theme.dim;
+                font-size: 17px;
+                vertical-alignment: center;
+            }
+        }
+
+        Row {
+            label: "Fetch album art online";
+            sublabel: "When a source sends no artwork (needs Wi-Fi)";
+            Switch {
+                checked <=> root.online-art;
+                toggled => {
+                    root.online-art-toggled(self.checked);
+                }
+            }
+        }
+
+        Row {
+            label: "Bluetooth pairing";
+            sublabel: root.pairing-state == "discoverable"
+                ? "Discoverable — check your phone's Bluetooth list"
+                : root.pairing-state == "confirm"
+                ? "Pairing request pending…"
+                : "Allow a new device to pair";
+            Button {
+                text: root.pairing-state == "idle" ? "Pair device" : "Cancel";
+                clicked => {
+                    if (root.pairing-state == "idle") {
+                        root.pairing-enable();
+                    } else {
+                        root.pairing-cancel();
+                    }
+                }
+            }
+        }
+
+        Rectangle { } // spacer
+
+        Text {
+            text: root.version-line;
+            color: Theme.faint;
+            font-size: 13px;
+            horizontal-alignment: center;
+        }
+    }
+}

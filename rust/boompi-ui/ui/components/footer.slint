@@ -1,0 +1,137 @@
+// Persistent bottom bar: clock (blinking colon), connected device,
+// volume level, Bluetooth indicator, battery icon, settings.
+//
+// TODO(Phase 4): the emoji/rune glyphs assume a font that has them; the
+// Buildroot image must ship one (or these become drawn/SVG icons).
+
+import { Theme } from "theme.slint";
+
+export component Footer inherits Rectangle {
+    in property <string> clock-day;
+    in property <string> clock-h;
+    in property <string> clock-m;
+    in property <bool> colon-on: true;
+    in property <string> device-name;
+    in property <float> volume;
+    in property <bool> bt-connected;
+    in property <bool> battery-present;
+    in property <float> battery-percentage;
+    in property <bool> battery-charging;
+
+    callback open-battery();
+    callback open-settings();
+
+    height: Theme.footer-height;
+    background: #000000aa;
+
+    HorizontalLayout {
+        padding-left: 14px;
+        padding-right: 8px;
+        spacing: 14px;
+
+        // Clock: "Mon 4:32" with a blinking colon.
+        HorizontalLayout {
+            spacing: 0;
+            Text {
+                text: root.clock-day + "  ";
+                color: Theme.dimmer;
+                vertical-alignment: center;
+            }
+            Text {
+                text: root.clock-h;
+                color: Theme.dim;
+                vertical-alignment: center;
+            }
+            Text {
+                text: ":";
+                color: Theme.dim;
+                vertical-alignment: center;
+                opacity: root.colon-on ? 1.0 : 0.15;
+            }
+            Text {
+                text: root.clock-m;
+                color: Theme.dim;
+                vertical-alignment: center;
+            }
+        }
+
+        Rectangle { } // spacer
+
+        Text {
+            text: root.device-name;
+            color: Theme.dimmer;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.volume <= 0.001 ? "🔇"
+                : root.volume < 0.33 ? "🔈"
+                : root.volume < 0.66 ? "🔉"
+                : "🔊";
+            vertical-alignment: center;
+        }
+
+        // Bluetooth rune.
+        Text {
+            text: "ᛒ";
+            color: root.bt-connected ? Theme.accent : Theme.faint;
+            font-size: 20px;
+            vertical-alignment: center;
+        }
+
+        // Battery icon (tap → diagnostics panel).
+        if root.battery-present: TouchArea {
+            width: 36px;
+            clicked => {
+                root.open-battery();
+            }
+            Rectangle {
+                // body
+                x: 0;
+                y: (parent.height - 14px) / 2;
+                width: 28px;
+                height: 14px;
+                border-width: 1px;
+                border-color: Theme.dim;
+                border-radius: 3px;
+                Rectangle {
+                    // fill level
+                    x: 2px;
+                    y: 2px;
+                    width: (parent.width - 4px) * max(0.04, min(1.0, root.battery-percentage));
+                    height: parent.height - 4px;
+                    border-radius: 2px;
+                    background: root.battery-charging ? Theme.good
+                        : root.battery-percentage < 0.2 ? Theme.bad
+                        : Theme.dim;
+                }
+            }
+            Rectangle {
+                // tip
+                x: 28px;
+                y: (parent.height - 6px) / 2;
+                width: 3px;
+                height: 6px;
+                border-radius: 1px;
+                background: Theme.dim;
+            }
+        }
+
+        TouchArea {
+            width: 34px;
+            clicked => {
+                root.open-settings();
+            }
+            Text {
+                width: 100%;
+                height: 100%;
+                text: "⚙";
+                color: Theme.dimmer;
+                font-size: 20px;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+        }
+    }
+}

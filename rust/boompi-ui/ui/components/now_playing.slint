@@ -1,0 +1,120 @@
+// Now Playing: album art (placeholder until Phase 3), track metadata
+// marquees, position bar, transport controls, volume slider.
+
+import { Slider, Button } from "std-widgets.slint";
+import { Theme } from "theme.slint";
+import { Marquee } from "marquee.slint";
+import { TrackPosition } from "track_position.slint";
+
+export component NowPlaying inherits VerticalLayout {
+    in property <string> track-title;
+    in property <string> track-artist;
+    in property <string> track-album;
+    in property <bool> playing;
+    in property <float> progress;
+    in property <string> elapsed;
+    in property <string> remaining;
+    in-out property <float> volume;
+
+    callback toggle-play();
+    callback next();
+    callback previous();
+    callback volume-edited(float);
+
+    alignment: center;
+    spacing: 16px;
+    padding: 26px;
+    padding-bottom: Theme.footer-height + 12px;
+
+    HorizontalLayout {
+        spacing: 24px;
+
+        // Album art (placeholder; wired to GET /art/{id} in Phase 3).
+        Rectangle {
+            width: 180px;
+            height: 180px;
+            border-radius: 12px;
+            background: #16161f;
+            Text {
+                width: 100%;
+                height: 100%;
+                text: "♪";
+                font-size: 64px;
+                color: Theme.faint;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 8px;
+            Marquee {
+                text: root.track-title;
+                font-size: 30px;
+                font-weight: 700;
+                text-color: Theme.fg;
+            }
+            Marquee {
+                text: root.track-artist;
+                font-size: 21px;
+                text-color: #ccccdd;
+            }
+            Marquee {
+                text: root.track-album;
+                font-size: 17px;
+                text-color: #8888a0;
+            }
+            TrackPosition {
+                progress: root.progress;
+                elapsed: root.elapsed;
+                remaining: root.remaining;
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 28px;
+        Button {
+            text: "⏮";
+            clicked => {
+                root.previous();
+            }
+        }
+        Button {
+            text: root.playing ? "⏸" : "▶";
+            clicked => {
+                root.toggle-play();
+            }
+        }
+        Button {
+            text: "⏭";
+            clicked => {
+                root.next();
+            }
+        }
+    }
+
+    HorizontalLayout {
+        alignment: center;
+        spacing: 12px;
+        Text {
+            text: "🔈";
+            vertical-alignment: center;
+        }
+        Slider {
+            width: 360px;
+            minimum: 0;
+            maximum: 1;
+            value <=> root.volume;
+            changed(value) => {
+                root.volume-edited(value);
+            }
+        }
+        Text {
+            text: "🔊";
+            vertical-alignment: center;
+        }
+    }
+}

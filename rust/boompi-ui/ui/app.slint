@@ -1,156 +1,186 @@
-// Boompi UI skeleton (Phase 2 will flesh this out to full parity:
-// marquee, track position, battery panel, settings, setup wizard).
-//
-// Sized for the boombox displays (HyperPixel 4.0 is 800×480; the HDMI box
-// renders the same layout).
+// Boompi UI root window. Sized for the boombox displays (800×480).
+// Screens: main (connect / now-playing), battery, settings — with the
+// visualizer behind everything and the footer always on top.
 
-import { Slider, Button } from "std-widgets.slint";
+import { Theme } from "components/theme.slint";
+import { Footer } from "components/footer.slint";
+import { NowPlaying } from "components/now_playing.slint";
+import { ConnectScreen } from "components/connect.slint";
+import { BatteryPanel } from "components/battery_panel.slint";
+import { SettingsPanel } from "components/settings.slint";
 
 export component AppWindow inherits Window {
     title: "Boompi";
     width: 800px;
     height: 480px;
-    background: #0b0b10;
+    background: Theme.bg;
     default-font-size: 18px;
 
+    // --- connection / identity ---
     in property <bool> connected: false;
     in property <string> speaker-name: "boompi";
+    in property <string> version-line: "";
+
+    // --- source / track ---
+    in property <string> device-name: "";
+    in property <bool> has-track: false;
     in property <string> track-title;
     in property <string> track-artist;
     in property <string> track-album;
     in property <bool> playing: false;
-    in property <bool> has-track: false;
+    in property <float> progress: 0.0;
+    in property <string> elapsed: "--:--";
+    in property <string> remaining: "--:--";
     in-out property <float> volume: 0;
-    /// Visualizer bar levels, 0.0–1.0.
     in property <[float]> bars: [];
+
+    // --- battery ---
+    in property <bool> battery-present: false;
+    in property <float> battery-percentage: 0;
+    in property <bool> battery-charging: false;
+    in property <string> battery-voltage-path: "";
+    in property <string> battery-current-path: "";
+    in property <string> stat-volts: "—";
+    in property <string> stat-amps: "—";
+    in property <string> stat-watts: "—";
+    in property <string> stat-percent: "—";
+
+    // --- pairing / settings ---
+    in property <string> pairing-state: "idle";
+    in-out property <bool> online-art: false;
+
+    // --- clock ---
+    in property <string> clock-day: "";
+    in property <string> clock-h: "";
+    in property <string> clock-m: "";
+    in property <bool> colon-on: true;
+
+    // --- navigation ---
+    in-out property <string> screen: "main"; // main | battery | settings
 
     callback toggle-play();
     callback next();
     callback previous();
     callback volume-edited(float);
+    callback screen-changed();
+    callback online-art-toggled(bool);
+    callback pairing-enable();
+    callback pairing-cancel();
 
-    // --- Background: visualizer bars ------------------------------------
+    // ---- background visualizer --------------------------------------------
     HorizontalLayout {
         spacing: 6px;
         for level in root.bars: Rectangle {
             Rectangle {
                 y: parent.height - self.height;
                 height: parent.height * level;
-                background: #1c1c30;
+                background: Theme.bar;
             }
         }
     }
 
-    // --- Main content ----------------------------------------------------
-    VerticalLayout {
+    // ---- main screen -------------------------------------------------------
+    if !root.connected: VerticalLayout {
         alignment: center;
-        spacing: 14px;
-        padding: 24px;
-
-        if !root.connected: Text {
+        Text {
             text: "Connecting to backend…";
-            color: #777;
+            color: Theme.dimmer;
             font-size: 22px;
             horizontal-alignment: center;
         }
+    }
 
-        if root.connected && !root.has-track: VerticalLayout {
-            spacing: 10px;
-            Text {
-                text: "To play music, connect your device to:";
-                color: #999;
-                horizontal-alignment: center;
-            }
-            Text {
-                text: root.speaker-name;
-                color: white;
-                font-size: 36px;
-                font-weight: 700;
-                horizontal-alignment: center;
-            }
+    if root.connected && root.screen == "main" && !root.has-track: ConnectScreen {
+        speaker-name: root.speaker-name;
+        pairing-state: root.pairing-state;
+        pairing-enable => {
+            root.pairing-enable();
         }
-
-        if root.connected && root.has-track: VerticalLayout {
-            spacing: 10px;
-            Text {
-                text: root.track-title;
-                color: white;
-                font-size: 32px;
-                font-weight: 700;
-                horizontal-alignment: center;
-                overflow: elide;
-            }
-            Text {
-                text: root.track-artist;
-                color: #ccc;
-                font-size: 22px;
-                horizontal-alignment: center;
-                overflow: elide;
-            }
-            Text {
-                text: root.track-album;
-                color: #888;
-                horizontal-alignment: center;
-                overflow: elide;
-            }
-
-            HorizontalLayout {
-                alignment: center;
-                spacing: 24px;
-                Button {
-                    text: "⏮";
-                    clicked => { root.previous(); }
-                }
-                Button {
-                    text: root.playing ? "⏸" : "▶";
-                    clicked => { root.toggle-play(); }
-                }
-                Button {
-                    text: "⏭";
-                    clicked => { root.next(); }
-                }
-            }
-
-            HorizontalLayout {
-                alignment: center;
-                spacing: 12px;
-                Text {
-                    text: "🔈";
-                    vertical-alignment: center;
-                }
-                Slider {
-                    width: 320px;
-                    minimum: 0;
-                    maximum: 1;
-                    value <=> root.volume;
-                    changed(value) => { root.volume-edited(value); }
-                }
-                Text {
-                    text: "🔊";
-                    vertical-alignment: center;
-                }
-            }
+        pairing-cancel => {
+            root.pairing-cancel();
         }
     }
 
-    // --- Footer ------------------------------------------------------------
-    HorizontalLayout {
-        x: 0;
-        y: root.height - 44px;
-        width: root.width;
-        height: 44px;
-        padding-left: 16px;
-        padding-right: 16px;
-        Text {
-            text: root.speaker-name;
-            color: #555;
-            vertical-alignment: center;
+    if root.connected && root.screen == "main" && root.has-track: NowPlaying {
+        track-title: root.track-title;
+        track-artist: root.track-artist;
+        track-album: root.track-album;
+        playing: root.playing;
+        progress: root.progress;
+        elapsed: root.elapsed;
+        remaining: root.remaining;
+        volume <=> root.volume;
+        toggle-play => {
+            root.toggle-play();
         }
-        Rectangle { } // spacer
-        Text {
-            text: root.connected ? "● connected" : "○ offline";
-            color: root.connected ? #4b4 : #b44;
-            vertical-alignment: center;
+        next => {
+            root.next();
+        }
+        previous => {
+            root.previous();
+        }
+        volume-edited(level) => {
+            root.volume-edited(level);
+        }
+    }
+
+    // ---- overlay screens ----------------------------------------------------
+    if root.screen == "battery": BatteryPanel {
+        voltage-path: root.battery-voltage-path;
+        current-path: root.battery-current-path;
+        stat-volts: root.stat-volts;
+        stat-amps: root.stat-amps;
+        stat-watts: root.stat-watts;
+        stat-percent: root.stat-percent;
+        charging: root.battery-charging;
+        close => {
+            root.screen = "main";
+            root.screen-changed();
+        }
+    }
+
+    if root.screen == "settings": SettingsPanel {
+        speaker-name: root.speaker-name;
+        version-line: root.version-line;
+        online-art <=> root.online-art;
+        pairing-state: root.pairing-state;
+        close => {
+            root.screen = "main";
+            root.screen-changed();
+        }
+        online-art-toggled(enabled) => {
+            root.online-art-toggled(enabled);
+        }
+        pairing-enable => {
+            root.pairing-enable();
+        }
+        pairing-cancel => {
+            root.pairing-cancel();
+        }
+    }
+
+    // ---- footer (always on top) ---------------------------------------------
+    Footer {
+        x: 0;
+        y: root.height - self.height;
+        width: root.width;
+        clock-day: root.clock-day;
+        clock-h: root.clock-h;
+        clock-m: root.clock-m;
+        colon-on: root.colon-on;
+        device-name: root.device-name;
+        volume: root.volume;
+        bt-connected: root.has-track || root.device-name != "";
+        battery-present: root.battery-present;
+        battery-percentage: root.battery-percentage;
+        battery-charging: root.battery-charging;
+        open-battery => {
+            root.screen = root.screen == "battery" ? "main" : "battery";
+            root.screen-changed();
+        }
+        open-settings => {
+            root.screen = root.screen == "settings" ? "main" : "settings";
+            root.screen-changed();
         }
     }
 }

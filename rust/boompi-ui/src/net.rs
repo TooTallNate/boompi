@@ -1,0 +1,249 @@
+//! WebSocket client: connects to boompid, applies server messages to the UI,
+//! forwards user commands.
+
+use crate::util::BatteryHistory;
+use crate::AppWindow;
+use boompi_proto::{
+    decode_visualizer_frame, Battery, ClientMessage, PairingState, PlaybackStatus, ServerMessage,
+    SourceInfo, Track,
+};
+use futures_util::{SinkExt, StreamExt};
+use slint::{ModelRc, VecModel, Weak};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::net::TcpStream;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
+
+type WsStream = WebSocketStream<MaybeTlsStream<TcpStream>>;
+
+/// Latest track snapshot for client-side position interpolation
+/// (read by a UI timer in main.rs).
+#[derive(Debug, Clone, Copy)]
+pub struct TrackSnap {
+    pub position_ms: u32,
+    pub duration_ms: Option<u32>,
+    pub updated_at: u64,
+    pub playing: bool,
+}
+
+pub struct NetCtx {
+    pub weak: Weak<AppWindow>,
+    pub track: Arc<Mutex<Option<TrackSnap>>>,
+    pub fast_poll: Arc<AtomicBool>,
+}
+
+/// Connect (and reconnect forever) to the backend.
+pub async fn network_loop(
+    url: String,
+    ctx: NetCtx,
+    mut rx: mpsc::UnboundedReceiver<ClientMessage>,
+) {
+    let mut history = BatteryHistory::new();
+    loop {
+        set_connected(&ctx, false);
+        match connect_async(url.as_str()).await {
+            Ok((stream, _)) => {
+                eprintln!("connected to {url}");
+                set_connected(&ctx, true);
+                session(stream, &ctx, &mut history, &mut rx).await;
+                eprintln!("disconnected from {url}");
+            }
+            Err(err) => eprintln!("connect {url}: {err}"),
+        }
+        tokio::time::sleep(Duration::from_secs(2)).await;
+    }
+}
+
+async fn session(
+    stream: WsStream,
+    ctx: &NetCtx,
+    history: &mut BatteryHistory,
+    rx: &mut mpsc::UnboundedReceiver<ClientMessage>,
+) {
+    let (mut sink, mut source) = stream.split();
+
+    // Re-assert fast polling if the battery screen is open across a reconnect.
+    if ctx.fast_poll.load(Ordering::Relaxed) {
+        let msg = ClientMessage::BatteryFastPoll { enabled: true };
+        let json = serde_json::to_string(&msg).expect("serialize");
+        if sink.send(Message::Text(json)).await.is_err() {
+            return;
+        }
+    }
+
+    loop {
+        tokio::select! {
+            incoming = source.next() => match incoming {
+                Some(Ok(Message::Text(text))) => {
+                    match serde_json::from_str::<ServerMessage>(&text) {
+                        Ok(msg) => apply(ctx, history, msg),
+                        Err(err) => eprintln!("unparseable server message: {err}"),
+                    }
+                }
+                Some(Ok(Message::Binary(data))) => {
+                    if let Some(bars) = decode_visualizer_frame(&data) {
+                        let bars: Vec<f32> = bars
+                            .iter()
+                            .map(|&b| b as f32 / u16::MAX as f32)
+                            .collect();
+                        let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                            ui.set_bars(ModelRc::new(VecModel::from(bars)));
+                        });
+                    }
+                }
+                Some(Ok(Message::Close(_))) | None => return,
+                Some(Ok(_)) => {} // ping/pong
+                Some(Err(err)) => {
+                    eprintln!("websocket error: {err}");
+                    return;
+                }
+            },
+            outgoing = rx.recv() => match outgoing {
+                Some(cmd) => {
+                    let json = serde_json::to_string(&cmd).expect("serialize command");
+                    if sink.send(Message::Text(json)).await.is_err() {
+                        return;
+                    }
+                }
+                None => return,
+            },
+        }
+    }
+}
+
+fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
+    match msg {
+        ServerMessage::Hello(hello) => {
+            let version_line = format!(
+                "boompid v{} · protocol v{}",
+                hello.version, hello.proto_version
+            );
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_speaker_name(hello.name.into());
+                ui.set_version_line(version_line.into());
+            });
+        }
+        ServerMessage::State(state) => {
+            apply_source(ctx, &state.source);
+            match state.track {
+                Some(track) => apply_track(ctx, track),
+                None => clear_track(ctx),
+            }
+            if let Some(battery) = state.battery {
+                apply_battery(ctx, history, battery);
+            }
+            let pairing = pairing_str(state.pairing.state);
+            let online_art = state.settings.online_art_fallback;
+            let volume = state.volume;
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_volume(volume);
+                ui.set_pairing_state(pairing.into());
+                ui.set_online_art(online_art);
+            });
+        }
+        ServerMessage::Track(track) => apply_track(ctx, track),
+        ServerMessage::Source(source) => apply_source(ctx, &source),
+        ServerMessage::Volume { level } => {
+            let _ = ctx
+                .weak
+                .upgrade_in_event_loop(move |ui| ui.set_volume(level));
+        }
+        ServerMessage::Battery(battery) => apply_battery(ctx, history, battery),
+        ServerMessage::Pairing(pairing) => {
+            let state = pairing_str(pairing.state);
+            let _ = ctx
+                .weak
+                .upgrade_in_event_loop(move |ui| ui.set_pairing_state(state.into()));
+        }
+        ServerMessage::Settings(settings) => {
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_online_art(settings.online_art_fallback);
+            });
+        }
+        ServerMessage::Setup(_) => {} // Phase 5
+    }
+}
+
+fn apply_track(ctx: &NetCtx, track: Track) {
+    let playing = track.status == PlaybackStatus::Playing;
+    *ctx.track.lock().unwrap() = Some(TrackSnap {
+        position_ms: track.position_ms.unwrap_or(0),
+        duration_ms: track.duration_ms,
+        updated_at: track.updated_at,
+        playing,
+    });
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_has_track(true);
+        ui.set_track_title(track.title.unwrap_or_default().into());
+        ui.set_track_artist(track.artist.unwrap_or_default().into());
+        ui.set_track_album(track.album.unwrap_or_default().into());
+        ui.set_playing(playing);
+    });
+}
+
+fn clear_track(ctx: &NetCtx) {
+    *ctx.track.lock().unwrap() = None;
+    let _ = ctx.weak.upgrade_in_event_loop(|ui| {
+        ui.set_has_track(false);
+        ui.set_track_title("".into());
+        ui.set_track_artist("".into());
+        ui.set_track_album("".into());
+        ui.set_playing(false);
+    });
+}
+
+fn apply_source(ctx: &NetCtx, source: &SourceInfo) {
+    let device = source.device_name.clone().unwrap_or_default();
+    let inactive = source.active.is_none();
+    if inactive {
+        clear_track(ctx);
+    }
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_device_name(device.into());
+    });
+}
+
+fn apply_battery(ctx: &NetCtx, history: &mut BatteryHistory, battery: Battery) {
+    history.push(battery.ts, battery.voltage, battery.current);
+    let (volts_path, amps_path) = history.paths();
+    let stat_volts = format!("{:.2}", battery.voltage);
+    let stat_amps = format!("{:+.2}", battery.current);
+    let stat_watts = format!("{:.1}", battery.power);
+    let stat_percent = format!("{:.0}%", battery.percentage * 100.0);
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_battery_present(true);
+        ui.set_battery_percentage(battery.percentage);
+        ui.set_battery_charging(battery.charging);
+        ui.set_battery_voltage_path(volts_path.into());
+        ui.set_battery_current_path(amps_path.into());
+        ui.set_stat_volts(stat_volts.into());
+        ui.set_stat_amps(stat_amps.into());
+        ui.set_stat_watts(stat_watts.into());
+        ui.set_stat_percent(stat_percent.into());
+    });
+}
+
+fn pairing_str(state: PairingState) -> &'static str {
+    match state {
+        PairingState::Idle => "idle",
+        PairingState::Discoverable => "discoverable",
+        PairingState::Confirm => "confirm",
+    }
+}
+
+fn set_connected(ctx: &NetCtx, connected: bool) {
+    if !connected {
+        *ctx.track.lock().unwrap() = None;
+    }
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_connected(connected);
+        if !connected {
+            ui.set_has_track(false);
+            ui.set_device_name("".into());
+            ui.set_bars(ModelRc::new(VecModel::from(Vec::<f32>::new())));
+        }
+    });
+}
