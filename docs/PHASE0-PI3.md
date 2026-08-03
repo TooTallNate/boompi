@@ -263,6 +263,8 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 
 | Spike | Result | Notes / versions |
 |---|---|---|
+| A: console on panel | ✔ pass | Trixie 2026-06-18: console renders rotated on HyperPixel |
+| A: touch driver | ✔ pass | GT911 at `11-005d` (ID 911 v1060), input device registered; 0x14 probe fail is normal (dual-address overlay) |
 | A: Slint KMS render | | renderer (sw/GL), rotation method, CPU % |
 | A: touch mapping | | |
 | B: A2DP + metadata | | |
@@ -270,6 +272,10 @@ Example: `0x2f4d` → swap → `0x4d2f` = 19759 × 1.25 mV ≈ 24.7 V.
 | B: crackle fix | | |
 | C: cover art (iPhone) | | ObexPort / ImgHandle / image |
 | C: cover art (Android) | | |
-| D: INA260 | | bus number |
+| D: INA260 | ✔ pass | `i2c-11` on Trixie (same as v1); 0x40 responds, touch shows `UU` at 0x5d on same bus |
+
+Environment: Debian 13 (Trixie), BlueZ 5.82, `throttled=0x0` on wall power
+(the boombox pack is deeply discharged and browned out the Pi — do not run
+spikes from the pack until it's charged/inspected).
 
 When filled in, update `docs/PLAN.md` (risks + open items) accordingly.
