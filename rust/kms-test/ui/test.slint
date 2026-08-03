@@ -62,6 +62,15 @@ export component TestWindow inherits Window {
             font-size: 18px;
             text: "taps: \{root.taps}   touch: \{root.touch-x / 1px}, \{root.touch-y / 1px}";
         }
+        Text {
+            // Font/renderer validation: color emoji only render under Skia
+            // (with a color emoji font installed); monochrome outlines under
+            // the software renderer (with monochrome Noto Emoji).
+            horizontal-alignment: center;
+            color: white;
+            font-size: 26px;
+            text: "emoji: 🔊 🎵 🔋 ❤️ 🍕";
+        }
     }
 
     // Touch input check: crosshair follows the finger.

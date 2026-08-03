@@ -45,6 +45,13 @@ export PKG_CONFIG_LIBDIR="$LIBDIR/pkgconfig:$SYSROOT/usr/share/pkgconfig"
 # Let the linker find the Pi's shared libraries.
 export RUSTFLAGS="-L $LIBDIR ${RUSTFLAGS:-}"
 
+# C++ deps (Skia prebuilt binaries) are built against GNU libstdc++, but zig
+# substitutes its own libc++ for `-lstdc++` — link the Pi's real libstdc++
+# by path instead. (--as-needed drops it for pure-Rust binaries.)
+if [ -e "$LIBDIR/libstdc++.so.6" ]; then
+    export RUSTFLAGS="$RUSTFLAGS -C link-arg=$LIBDIR/libstdc++.so.6"
+fi
+
 exec cargo zigbuild \
     --manifest-path "$REPO_ROOT/rust/Cargo.toml" \
     --target "$TARGET.$GLIBC" \

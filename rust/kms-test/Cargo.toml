@@ -23,3 +23,6 @@ desktop = ["slint/backend-winit", "slint/renderer-femtovg"]
 kms = ["slint/backend-linuxkms-noseat", "slint/renderer-software"]
 # On the Pi: direct DRM/KMS + libinput, OpenGL ES rendering (vc4).
 kms-gl = ["slint/backend-linuxkms-noseat", "slint/renderer-femtovg"]
+# On the Pi: direct DRM/KMS + libinput, Skia (GLES via EGL/GBM).
+# The only Slint renderer with color emoji support.
+kms-skia = ["slint/backend-linuxkms-noseat", "slint/renderer-skia"]
