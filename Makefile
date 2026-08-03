@@ -47,7 +47,12 @@ cross-kms-test-gl:
 cross-boompid:
 	scripts/cross-build.sh boompid
 
+# Skia renderer: GPU (GLES/EGL) + color emoji. Needs mesa on the box.
 cross-ui:
+	scripts/cross-build.sh boompi-ui --no-default-features --features kms-skia
+
+# Software-renderer fallback variant (no GL, monochrome emoji only).
+cross-ui-soft:
 	scripts/cross-build.sh boompi-ui --no-default-features --features kms
 
 deploy:

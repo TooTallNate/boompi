@@ -218,25 +218,22 @@ BR2_EXTERNAL tree fleshed out: both defconfigs, custom packages, rootfs
 overlay, RO rootfs + `/data`, genimage SD layout, Wi-Fi/BT firmware, recent
 BlueZ pinned with experimental flags, obexd service wiring, SSH for dev.
 
+**Renderer** (decided in Phase 0): the Pi UI uses **Skia OpenGL** on
+linuxkms (`kms-skia` feature) — verified on the Pi 3: vc4 GLES via
+EGL/GBM works, and Skia is the only Slint renderer that rasterizes color
+emoji (software renderer is outline/alpha-only per
+`i-slint-renderer-software/fonts/vectorfont.rs`; FemtoVG is monochrome —
+upstream gaps slint-ui/slint#8646, #5171). The image therefore ships the
+mesa GL stack: `libegl` (glvnd + mesa vendor), `libgles`,
+mesa vc4 DRI driver. The software-renderer build (`kms` feature,
+monochrome Noto Emoji) remains as a fallback variant.
+
 **Fonts** (recipe validated in Phase 0): UI chrome uses drawn vector icons
 (`icons.slint`, zero font dependency); Slint 1.17 embeds Inter for regular
-text. For arbitrary user content (speaker name, track/device names) the
-image ships exactly two things:
-1. **Monochrome** Noto Emoji (`NotoEmoji[wght].ttf`) in a fontconfig font dir
-2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Emoji`
-
-Do **not** ship color emoji fonts: Slint's software renderer silently
-renders nothing for color-bitmap (CBDT) fonts — fallback finds the glyph
-but rasterizes empty. (Verified with `George's 🔊` on the panel.)
-
-Root cause confirmed in Slint 1.17.1 source: the software renderer
-requests outline-only alpha rendering from swash
-(`i-slint-renderer-software/fonts/vectorfont.rs`, `Source::Outline` +
-`Format::Alpha`; glyph cache is single-channel). Known upstream gaps:
-slint-ui/slint#8646 (missing emoji support, open) and #5171 (FemtoVG
-renders emoji monochrome, open). Only the Skia renderer does color emoji.
-If color emoji ever matters: try Skia+linuxkms on the Pi, or contribute
-an RGBA glyph path upstream. Monochrome is the v2 recipe.
+text. For arbitrary user content (speaker name `George's 🔊`, track/device
+names) the image ships:
+1. Noto **Color** Emoji (CBDT)
+2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Color Emoji`
 
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
