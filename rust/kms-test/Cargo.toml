@@ -1,0 +1,25 @@
+[package]
+name = "kms-test"
+description = "Phase 0 display/touch spike: minimal Slint app for validating DRM/KMS rendering and touch input on the boombox hardware"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+slint = { version = "1", default-features = false, features = [
+    "compat-1-2",
+    "std",
+] }
+
+[build-dependencies]
+slint-build = "1"
+
+[features]
+default = ["desktop"]
+# Laptop preview (winit window).
+desktop = ["slint/backend-winit", "slint/renderer-femtovg"]
+# On the Pi: direct DRM/KMS + libinput, CPU rendering (no GL needed).
+kms = ["slint/backend-linuxkms-noseat", "slint/renderer-software"]
+# On the Pi: direct DRM/KMS + libinput, OpenGL ES rendering (vc4).
+kms-gl = ["slint/backend-linuxkms-noseat", "slint/renderer-femtovg"]

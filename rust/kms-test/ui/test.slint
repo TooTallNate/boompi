@@ -1,0 +1,91 @@
+// Phase 0 display/touch spike. See src/main.rs for what to verify.
+
+export component TestWindow inherits Window {
+    title: "boompi kms-test";
+    preferred-width: 800px;
+    preferred-height: 480px;
+    background: #101018;
+
+    in-out property <length> touch-x: -100px;
+    in-out property <length> touch-y: -100px;
+    in-out property <int> taps: 0;
+    in property <string> info: "starting…";
+    // Set from Rust (window().size()) to avoid a text→layout binding loop.
+    in property <string> resolution: "—";
+
+    // Animation smoothness check: bar sweeping back and forth.
+    Rectangle {
+        y: parent.height * 70%;
+        height: 28px;
+        width: parent.width / 4;
+        x: (parent.width - self.width) / 2
+            + (parent.width - self.width) / 2
+                * sin(animation-tick() / 2.5s * 360deg);
+        background: @linear-gradient(90deg, #ff2d95, #00d4ff);
+        border-radius: 14px;
+    }
+
+    // Orientation markers.
+    Text { x: 10px; y: 6px; text: "TL"; color: #55ff88; font-size: 26px; }
+    Text {
+        x: parent.width - self.width - 10px; y: 6px;
+        text: "TR"; color: #55ff88; font-size: 26px;
+    }
+    Text {
+        x: 10px; y: parent.height - self.height - 6px;
+        text: "BL"; color: #55ff88; font-size: 26px;
+    }
+    Text {
+        x: parent.width - self.width - 10px;
+        y: parent.height - self.height - 6px;
+        text: "BR"; color: #55ff88; font-size: 26px;
+    }
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 6px;
+        Text {
+            horizontal-alignment: center;
+            color: white;
+            font-size: 30px;
+            text: root.resolution;
+        }
+        Text {
+            horizontal-alignment: center;
+            color: #9999aa;
+            font-size: 18px;
+            text: root.info;
+        }
+        Text {
+            horizontal-alignment: center;
+            color: #777788;
+            font-size: 18px;
+            text: "taps: \{root.taps}   touch: \{root.touch-x / 1px}, \{root.touch-y / 1px}";
+        }
+    }
+
+    // Touch input check: crosshair follows the finger.
+    TouchArea {
+        moved => {
+            root.touch-x = self.mouse-x;
+            root.touch-y = self.mouse-y;
+        }
+        pointer-event(event) => {
+            root.touch-x = self.mouse-x;
+            root.touch-y = self.mouse-y;
+            if (event.kind == PointerEventKind.down) {
+                root.taps += 1;
+            }
+        }
+    }
+    Rectangle {
+        x: root.touch-x - 1px; y: 0;
+        width: 2px; height: 100%;
+        background: #55ff8899;
+    }
+    Rectangle {
+        x: 0; y: root.touch-y - 1px;
+        width: 100%; height: 2px;
+        background: #55ff8899;
+    }
+}

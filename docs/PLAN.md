@@ -184,7 +184,9 @@ Makefile                dev loop: check/build/deploy-over-ssh/image targets
 ## Phases
 
 ### Phase 0 — Validation spikes (gate for everything else)
-On stock RPi OS Lite first (fast iteration, no Buildroot yet):
+On stock RPi OS Lite first (fast iteration, no Buildroot yet).
+**Pi 3 runbook with exact commands: [`docs/PHASE0-PI3.md`](PHASE0-PI3.md)**
+(spike app: `rust/kms-test`).
 1. **Slint on KMS**: hello-world with `linuxkms` backend on Pi 3 + HyperPixel
    (`vc4-kms-dpi-hyperpixel4`) and Pi 4 + HDMI, touch included.
    Fallback: Slint software renderer.
