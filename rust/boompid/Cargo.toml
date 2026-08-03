@@ -12,6 +12,7 @@ boompi-proto = { path = "../boompi-proto" }
 anyhow = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
 bytes = "1"
+realfft = "3"
 clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

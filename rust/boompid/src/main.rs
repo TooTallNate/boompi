@@ -15,9 +15,15 @@ mod battery;
 #[cfg(target_os = "linux")]
 mod bluetooth;
 mod config;
+// DSP is platform-independent (unit-tested everywhere) but only consumed by
+// the Linux-only visualizer.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod dsp;
 mod server;
 mod sim;
 mod state;
+#[cfg(target_os = "linux")]
+mod visualizer;
 
 use clap::Parser;
 use std::net::SocketAddr;
@@ -61,9 +67,10 @@ async fn main() -> anyhow::Result<()> {
     } else {
         #[cfg(target_os = "linux")]
         {
-            tracing::info!("hardware mode: BlueZ source + INA260 battery");
+            tracing::info!("hardware mode: BlueZ source + INA260 battery + visualizer");
             bluetooth::spawn(app.clone());
             battery::spawn(app.clone());
+            visualizer::spawn(app.clone());
             // Seed the volume from the current system state.
             let app = app.clone();
             tokio::spawn(async move {
