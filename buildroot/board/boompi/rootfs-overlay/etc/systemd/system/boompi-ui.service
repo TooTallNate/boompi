@@ -1,0 +1,18 @@
+[Unit]
+Description=Boompi touchscreen UI (Slint on DRM/KMS)
+After=boompid.service systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/boompi-ui
+# Panel orientation: HyperPixel is portrait-native, mounted landscape
+# (Phase 0 finding: the DRM panel-orientation hint is not auto-applied).
+Environment=SLINT_KMS_ROTATION=270
+Environment=XDG_CACHE_HOME=/var/cache/boompi
+CacheDirectory=boompi
+Environment=HOME=/root
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Boompi backend daemon
+After=pipewire.service wireplumber.service bluetooth.service network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/boompid --config /etc/boompi/boompi.toml
+Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+Environment=XDG_RUNTIME_DIR=/run/pipewire
+Environment=RUST_LOG=boompid=info
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+# Boompi device configuration — Pi 3 box.
+# Hardware facts from the v1 SD card + Phase 0 (docs/PHASE0-PI3.md).
+
+name = "Boompi"
+model = "pi3"
+
+[battery]
+# INA260 on the HyperPixel's bit-banged i2c-gpio bus.
+i2c_bus = 11

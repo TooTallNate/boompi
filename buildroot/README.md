@@ -1,8 +1,21 @@
 # Boompi Buildroot external tree
 
 `BR2_EXTERNAL` tree for building the Boompi appliance SD card images.
-Fleshed out in **Phase 4** of `docs/PLAN.md`; the structure here is the
-skeleton the phases build into.
+
+**CI**: `.github/workflows/image.yml` builds the Pi 3 image on every commit
+and uploads `sdcard.img.xz` as an artifact. The system layer comes from
+Buildroot (pinned release, Bootlin external toolchain, dl+ccache cached);
+the Rust binaries are cross-built with cargo-zigbuild against the build's
+own staging sysroot and injected via `board/boompi/rootfs-overlay-ci/`
+(gitignored, populated by CI — the `package/boompid` etc. stubs remain for
+a future in-Buildroot build).
+
+The rootfs overlay encodes the Phase 0 findings: root system services
+(pipewire/wireplumber/boompid/boompi-ui/bt-agent) sharing
+`PIPEWIRE_RUNTIME_DIR=/run/pipewire`, WirePlumber seat-monitoring disabled
++ ALSA suspend off, BlueZ `Experimental = true` + `DiscoverableTimeout=0`,
+HyperPixel KMS overlay + `SLINT_KMS_ROTATION=270`, `disable-bt` (USB dongle
+only), and no pre-seeded rfkill blocks. Dev login: `root` / `boompi`.
 
 ## Intended layout
 

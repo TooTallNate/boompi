@@ -1,0 +1,126 @@
+# Build the Boompi Pi 3 Buildroot SD card image on every commit.
+#
+# Strategy: Buildroot builds the system layer (kernel, systemd, BlueZ,
+# PipeWire, UI runtime libs) with dl/ccache caching; the Rust binaries are
+# cross-built with cargo-zigbuild against Buildroot's *staging* sysroot
+# (same technique as the local `make cross-*` dev loop) and injected via
+# the rootfs-overlay-ci directory before the image is assembled. This keeps
+# per-commit Rust builds to minutes (GH cache) instead of uncached
+# buildroot-cargo builds.
+#
+# First run (cold caches): ~2-3 h. Warm runs: much faster.
+
+name: image
+
+on:
+  push:
+  workflow_dispatch:
+
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BR_VERSION: "2025.02"
+  # Zig cross-glibc floor; must be <= the Bootlin toolchain's glibc.
+  ZIG_GLIBC: "2.31"
+
+jobs:
+  pi3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    env:
+      BR2_DL_DIR: /home/runner/br-dl
+      OUTPUT: /home/runner/br-output
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison flex libssl-dev libncurses-dev \
+            rsync cpio file wget unzip ccache
+
+      - name: Cache Buildroot downloads
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/br-dl
+          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
+          restore-keys: |
+            br-dl-${{ env.BR_VERSION }}-
+
+      - name: Cache ccache
+        uses: actions/cache@v4
+        with:
+          path: /home/runner/.buildroot-ccache
+          key: br-ccache-pi3-${{ github.sha }}
+          restore-keys: |
+            br-ccache-pi3-
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            rust/target
+          key: cargo-image-${{ hashFiles('rust/Cargo.lock') }}
+          restore-keys: |
+            cargo-image-
+
+      - name: Fetch Buildroot ${{ env.BR_VERSION }}
+        run: |
+          curl -fsSL "https://buildroot.org/downloads/buildroot-${BR_VERSION}.tar.xz" | tar -xJ -C "$HOME"
+          mv "$HOME/buildroot-${BR_VERSION}" "$HOME/buildroot"
+
+      - name: Configure
+        run: |
+          make -C "$HOME/buildroot" O="$OUTPUT" \
+            BR2_EXTERNAL="$GITHUB_WORKSPACE/buildroot" \
+            boompi_pi3_defconfig
+
+      - name: Build system (pass 1)
+        run: make -C "$OUTPUT" -j"$(nproc)"
+
+      - name: Install Rust cross tooling
+        run: |
+          rustup target add aarch64-unknown-linux-gnu
+          pipx install cargo-zigbuild
+
+      - name: Cross-build boompid + boompi-ui against staging
+        run: |
+          STAGING="$OUTPUT/staging"
+          export PKG_CONFIG_ALLOW_CROSS=1
+          export PKG_CONFIG_SYSROOT_DIR="$STAGING"
+          export PKG_CONFIG_LIBDIR="$STAGING/usr/lib/pkgconfig:$STAGING/usr/share/pkgconfig"
+          export RUSTFLAGS="-L $STAGING/usr/lib"
+          cargo zigbuild --manifest-path rust/Cargo.toml --release \
+            --target "aarch64-unknown-linux-gnu.$ZIG_GLIBC" -p boompid
+          cargo zigbuild --manifest-path rust/Cargo.toml --release \
+            --target "aarch64-unknown-linux-gnu.$ZIG_GLIBC" \
+            -p boompi-ui --no-default-features --features kms
+
+      - name: Inject binaries + emoji font into the image overlay
+        run: |
+          OVL="buildroot/board/boompi/rootfs-overlay-ci"
+          install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
+          install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
+          # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
+          curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \
+            "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+
+      - name: Build image (pass 2, picks up the overlay)
+        run: make -C "$OUTPUT" -j"$(nproc)"
+
+      - name: Compress image
+        run: |
+          ls -la "$OUTPUT/images/"
+          xz -T0 -f "$OUTPUT/images/sdcard.img"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: boompi-pi3-sdcard
+          path: /home/runner/br-output/images/sdcard.img.xz
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,17 @@
+[Unit]
+Description=WirePlumber session manager (system)
+After=pipewire.service dbus.service bluetooth.service
+Requires=pipewire.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/wireplumber
+Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+Environment=XDG_RUNTIME_DIR=/run/pipewire
+Environment=HOME=/var/lib/wireplumber
+StateDirectory=wireplumber
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

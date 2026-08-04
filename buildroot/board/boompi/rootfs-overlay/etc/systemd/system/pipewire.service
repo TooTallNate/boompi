@@ -1,0 +1,18 @@
+# Appliance topology: PipeWire runs as a root system service (no logind
+# user sessions on the image). Clients find it via PIPEWIRE_RUNTIME_DIR.
+[Unit]
+Description=PipeWire multimedia service (system)
+After=systemd-udevd.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/pipewire
+RuntimeDirectory=pipewire
+Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
+Environment=XDG_RUNTIME_DIR=/run/pipewire
+Environment=HOME=/root
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

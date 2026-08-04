@@ -1,0 +1,26 @@
+# Boompi Pi 3 box boot configuration.
+# Hardware facts recovered from the v1 SD card + Phase 0 spikes
+# (docs/PHASE0-PI3.md).
+
+start_file=start.elf
+fixup_file=fixup.dat
+kernel=Image
+arm_64bit=1
+
+disable_overscan=1
+disable_splash=1
+boot_delay=0
+
+# KMS graphics
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# HyperPixel 4.0 panel + GT911 touch, rotated (matches v1; Slint adds
+# SLINT_KMS_ROTATION=270 on top — see boompi-ui.service)
+dtoverlay=vc4-kms-dpi-hyperpixel4
+dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
+
+# USB Bluetooth dongle only; onboard radio disabled (stutters, shares
+# antenna/UART). Audio out is the USB adapter, not onboard analog.
+dtoverlay=disable-bt
+dtparam=audio=off

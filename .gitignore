@@ -1,5 +1,7 @@
 /rust/target
 /buildroot/output*
 /buildroot/dl
+/buildroot/board/boompi/rootfs-overlay-ci/*
+!/buildroot/board/boompi/rootfs-overlay-ci/.gitkeep
 *.log
 .DS_Store
