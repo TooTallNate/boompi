@@ -14,11 +14,19 @@ name: image
 
 on:
   push:
+    # Docs-only commits shouldn't trigger multi-hour image builds.
+    paths:
+      - "rust/**"
+      - "buildroot/**"
+      - "scripts/**"
+      - ".github/workflows/image.yml"
   workflow_dispatch:
 
+# Never cancel a running image build (they're long); the newest queued
+# run supersedes older queued ones and starts when the current finishes.
 concurrency:
   group: image-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   BR_VERSION: "2025.02"
@@ -91,7 +99,6 @@ jobs:
           # The pip package pulls in `ziglang` (zig itself) as a dependency;
           # pipx isolation would hide it from cargo-zigbuild's discovery.
           pip install --break-system-packages cargo-zigbuild
-          cargo zigbuild --version
 
       - name: Cross-build boompid + boompi-ui against staging
         run: |
