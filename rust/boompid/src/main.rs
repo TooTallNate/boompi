@@ -20,6 +20,8 @@ mod battery;
 mod bluetooth;
 #[cfg(target_os = "linux")]
 mod bt_agent;
+#[cfg(target_os = "linux")]
+mod clock;
 mod config;
 // DSP is platform-independent (unit-tested everywhere) but only consumed by
 // the Linux-only visualizer.

@@ -9,6 +9,8 @@
 import "fonts/Geist.ttf";
 
 import { Theme } from "components/theme.slint";
+// Re-export for Rust access (net.rs drives Theme.light from settings).
+export { Theme }
 import { Footer } from "components/footer.slint";
 import { NowPlaying } from "components/now_playing.slint";
 import { ConnectScreen } from "components/connect.slint";

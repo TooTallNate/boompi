@@ -29,6 +29,7 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/state", get(api_state))
         .route("/api/settings", post(api_settings))
         .route("/api/command", post(api_command))
+        .route("/api/clock", get(api_clock).post(api_clock_set))
         .fallback(get(static_asset))
         .with_state(app);
 
@@ -117,6 +118,56 @@ async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
     };
     let state = app.snapshot().await;
     Json(serde_json::json!({ "hello": hello, "state": state }))
+}
+
+#[derive(serde::Deserialize)]
+struct ClockPatch {
+    timezone: Option<String>,
+    ntp: Option<bool>,
+}
+
+async fn api_clock() -> axum::response::Response {
+    #[cfg(target_os = "linux")]
+    match crate::clock::status().await {
+        Ok(status) => return Json(status).into_response(),
+        Err(err) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response();
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({ "error": "clock control is Linux-only" })),
+    )
+        .into_response()
+}
+
+async fn api_clock_set(Json(patch): Json<ClockPatch>) -> axum::response::Response {
+    #[cfg(target_os = "linux")]
+    match crate::clock::set(patch.timezone.as_deref(), patch.ntp).await {
+        Ok(()) => return api_clock().await,
+        Err(err) => {
+            tracing::warn!(%err, "clock change failed");
+            return (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response();
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = patch;
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({ "error": "clock control is Linux-only" })),
+        )
+            .into_response()
+    }
 }
 
 /// Accept any [`ClientMessage`] over plain HTTP — same dispatch as the

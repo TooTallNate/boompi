@@ -8,7 +8,7 @@ use boompi_proto::{
     PlaybackStatus, ServerMessage, SourceInfo, SourceKind, Track,
 };
 use futures_util::{SinkExt, StreamExt};
-use slint::{ModelRc, VecModel, Weak};
+use slint::{ComponentHandle, ModelRc, VecModel, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -145,11 +145,13 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             }
             let pairing = pairing_str(state.pairing.state);
             let online_art = state.settings.online_art_fallback;
+            let light = state.settings.theme == boompi_proto::Theme::Light;
             let volume = state.volume;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
+                ui.global::<crate::Theme>().set_light(light);
             });
         }
         ServerMessage::Track(track) => apply_track(ctx, track),
@@ -167,10 +169,13 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 .upgrade_in_event_loop(move |ui| ui.set_pairing_state(state.into()));
         }
         ServerMessage::Settings(settings) => {
+            let light = settings.theme == boompi_proto::Theme::Light;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_online_art(settings.online_art_fallback);
+                ui.global::<crate::Theme>().set_light(light);
             });
         }
+        ServerMessage::BtDevices { .. } => {} // panel device list lands in step 4
         ServerMessage::Setup(_) => {} // Phase 5
     }
 }

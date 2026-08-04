@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { patchSettings } from "./api";
+import { fetchClock, patchClock, patchSettings } from "./api";
+import type { ClockStatus } from "./api";
 import { useBoompi } from "./useBoompi";
 import type {
   BtDevice,
@@ -54,11 +55,85 @@ export default function App() {
         <Section title="Wi-Fi">
           <p className="text-sm text-dim">Coming soon.</p>
         </Section>
-        <Section title="Clock & timezone">
-          <p className="text-sm text-dim">Coming soon.</p>
-        </Section>
+        <ClockSection />
       </main>
     </div>
+  );
+}
+
+function ClockSection() {
+  const [clock, setClock] = useState<ClockStatus | null>(null);
+  const [offset, setOffset] = useState(0); // device clock − browser clock
+  const [now, setNow] = useState(Date.now());
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchClock()
+      .then((c) => {
+        setClock(c);
+        setOffset(c.now_ms - Date.now());
+      })
+      .catch((e) => setError(String(e)));
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  async function apply(patch: { timezone?: string; ntp?: boolean }) {
+    setError(null);
+    try {
+      const c = await patchClock(patch);
+      setClock(c);
+      setOffset(c.now_ms - Date.now());
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  const deviceTime = clock
+    ? new Intl.DateTimeFormat(undefined, {
+        dateStyle: "medium",
+        timeStyle: "medium",
+        timeZone: clock.timezone || undefined,
+      }).format(new Date(now + offset))
+    : null;
+
+  return (
+    <Section title="Clock & timezone">
+      {!clock ? (
+        <p className="text-sm text-dim">{error ?? "loading…"}</p>
+      ) : (
+        <>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <span className="text-lg tabular-nums">{deviceTime}</span>
+            <span className="text-[12px] text-dim">
+              {clock.synchronized ? "NTP synced" : "not synced"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span>Timezone</span>
+            <select
+              className="max-w-[240px] rounded-lg border border-line bg-bg px-2 py-2 text-sm"
+              value={clock.timezone}
+              onChange={(e) => apply({ timezone: e.target.value })}
+            >
+              {!clock.timezones.includes(clock.timezone) && (
+                <option value={clock.timezone}>{clock.timezone}</option>
+              )}
+              {clock.timezones.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-line py-1.5">
+            <span>Set time automatically (NTP)</span>
+            <Toggle checked={clock.ntp} onChange={(v) => apply({ ntp: v })} />
+          </div>
+          {error && <p className="mt-2 text-[13px] text-err">{error}</p>}
+        </>
+      )}
+    </Section>
   );
 }
 

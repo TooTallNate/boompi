@@ -1,16 +1,21 @@
 // Shared colors/sizes for the Boompi UI.
+//
+// `light` is driven from boompid's settings (web UI / panel toggle);
+// every color derives from it so the whole panel restyles live.
 
 export global Theme {
-    out property <color> bg: #0b0b10;
-    out property <color> panel: #12121c;
-    out property <color> fg: white;
-    out property <color> dim: #9999aa;
-    out property <color> dimmer: #666677;
-    out property <color> faint: #333344;
-    out property <color> accent: #00d4ff;
-    out property <color> accent2: #ff2d95;
-    out property <color> bar: #1c1c30;
-    out property <color> good: #55bb66;
-    out property <color> bad: #bb5555;
+    in-out property <bool> light: false;
+
+    out property <color> bg: light ? #f2f2f7 : #0b0b10;
+    out property <color> panel: light ? #ffffff : #12121c;
+    out property <color> fg: light ? #1a1a22 : white;
+    out property <color> dim: light ? #6e6e7a : #9999aa;
+    out property <color> dimmer: light ? #9a9aa6 : #666677;
+    out property <color> faint: light ? #d4d4de : #333344;
+    out property <color> accent: light ? #007aad : #00d4ff;
+    out property <color> accent2: light ? #d61f7d : #ff2d95;
+    out property <color> bar: light ? #e4e4ec : #1c1c30;
+    out property <color> good: light ? #2e9e44 : #55bb66;
+    out property <color> bad: light ? #c23b3b : #bb5555;
     out property <length> footer-height: 44px;
 }
