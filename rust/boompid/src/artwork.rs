@@ -37,8 +37,11 @@ pub struct ArtRequest {
     pub address: String,
     /// BIP OBEX L2CAP PSM (`MediaPlayer1.ObexPort`; iOS uses 4105).
     pub psm: u16,
-    /// `Track.ImgHandle` (7-digit string).
-    pub handle: String,
+    /// `Track.ImgHandle` (7-digit string). `None` just primes the OBEX
+    /// session: phones only include `ImgHandle` in track metadata while a
+    /// BIP connection is alive, so the session must be established eagerly
+    /// on `ObexPort` discovery (mpris-proxy does the same).
+    pub handle: Option<String>,
 }
 
 #[zbus::proxy(
@@ -80,18 +83,22 @@ pub fn spawn(app: SharedApp, resolved: ResolvedArt) -> mpsc::UnboundedSender<Art
         let mut sessions: HashMap<String, OwnedObjectPath> = HashMap::new();
         let mut counter = 0u64;
         while let Some(req) = rx.recv().await {
+            let Some(handle) = req.handle.clone() else {
+                // Prime the session so the phone starts including ImgHandle
+                // in track metadata.
+                if let Err(err) = ensure_session(&conn, &mut sessions, &req).await {
+                    tracing::warn!(%err, address = %req.address, "BIP session prime failed");
+                }
+                continue;
+            };
             counter += 1;
             match fetch(&conn, &mut sessions, &req, counter).await {
                 Ok(bytes) => {
-                    tracing::info!(
-                        handle = %req.handle,
-                        size = bytes.len(),
-                        "cover art fetched"
-                    );
-                    publish(&app, &resolved, &req.handle, bytes).await;
+                    tracing::info!(%handle, size = bytes.len(), "cover art fetched");
+                    publish(&app, &resolved, &handle, bytes).await;
                 }
                 Err(err) => {
-                    tracing::warn!(%err, handle = %req.handle, "cover art fetch failed")
+                    tracing::warn!(%err, %handle, "cover art fetch failed")
                 }
             }
         }
@@ -121,7 +128,8 @@ async fn fetch(
             .path(session.clone())?
             .build()
             .await?;
-        match image.get_thumbnail(&file, &req.handle).await {
+        let handle = req.handle.as_deref().unwrap_or_default();
+        match image.get_thumbnail(&file, handle).await {
             Ok(_transfer) => {
                 let result = wait_for_file(&file).await;
                 let _ = tokio::fs::remove_file(&file).await;

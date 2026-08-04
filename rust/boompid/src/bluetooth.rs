@@ -253,6 +253,7 @@ async fn handle_interface_added(
             };
             if let Some(port) = session.obex_port {
                 tracing::info!(port, "player supports AVRCP cover art");
+                prime_art_session(ctx, session);
             }
             publish_track(ctx, session).await;
         }
@@ -343,6 +344,7 @@ async fn handle_properties_changed(
             if let Some(port) = changed.get("ObexPort").and_then(u16_from_value_ref) {
                 tracing::info!(port, "player supports AVRCP cover art");
                 session.obex_port = Some(port);
+                prime_art_session(ctx, session);
                 dirty = true;
             }
             if dirty {
@@ -472,7 +474,20 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
     let _ = ctx.art_tx.send(crate::artwork::ArtRequest {
         address,
         psm: port,
-        handle,
+        handle: Some(handle),
+    });
+}
+
+/// Eagerly establish the BIP session as soon as cover-art support is seen —
+/// phones only include `ImgHandle` in metadata while the session is alive.
+fn prime_art_session(ctx: &Ctx, session: &Session) {
+    let (Some(port), Some(address)) = (session.obex_port, session.address()) else {
+        return;
+    };
+    let _ = ctx.art_tx.send(crate::artwork::ArtRequest {
+        address,
+        psm: port,
+        handle: None,
     });
 }
 
