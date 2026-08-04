@@ -1,0 +1,70 @@
+// First-boot onboarding screen. Shown while `SetupState.required`; all the
+// actual input happens in the web wizard (phones have keyboards), reached
+// via the onboarding hotspot's captive portal or the QR/URL shown here.
+
+import { Theme } from "theme.slint";
+
+export component SetupScreen inherits Rectangle {
+    in property <string> speaker-name;
+    in property <string> settings-url;
+    in property <image> settings-qr;
+
+    background: Theme.bg;
+
+    HorizontalLayout {
+        padding: 40px;
+        padding-bottom: Theme.footer-height + 20px;
+        spacing: 36px;
+
+        VerticalLayout {
+            alignment: center;
+            spacing: 14px;
+            Text {
+                text: "Hi, I'm " + root.speaker-name + ".";
+                color: Theme.fg;
+                font-size: 34px;
+                font-weight: 600;
+            }
+            Text {
+                text: "Let's get set up — takes about a minute.";
+                color: Theme.dim;
+                font-size: 20px;
+            }
+            Rectangle { height: 10px; }
+            Text {
+                text: "1.  On your phone, join the Wi-Fi network\n     “" + root.speaker-name + "”  —  a setup page opens.";
+                color: Theme.fg;
+                font-size: 18px;
+            }
+            Text {
+                text: "2.  Give the speaker a name, and connect it\n     to your Wi-Fi if you like (optional).";
+                color: Theme.fg;
+                font-size: 18px;
+            }
+            Rectangle { height: 6px; }
+            if root.settings-url != "": Text {
+                text: "Already on the same network? Just open\n" + root.settings-url;
+                color: Theme.dimmer;
+                font-size: 15px;
+            }
+        }
+
+        if root.settings-url != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 190px;
+                height: 190px;
+                background: white;
+                border-radius: 10px;
+                Image {
+                    x: 10px;
+                    y: 10px;
+                    width: 170px;
+                    height: 170px;
+                    source: root.settings-qr;
+                    image-rendering: pixelated;
+                }
+            }
+        }
+    }
+}

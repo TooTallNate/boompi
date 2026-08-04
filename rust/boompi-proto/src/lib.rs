@@ -176,18 +176,26 @@ pub struct SettingsPatch {
     pub theme: Option<Theme>,
 }
 
-/// First-boot setup state. Expanded in Phase 5.
+/// First-boot setup state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SetupState {
-    /// True until initial configuration has been completed.
+    /// True until initial configuration has been completed. While set, the
+    /// panel shows the onboarding screen and (when Wi-Fi hardware exists
+    /// and nothing is connected) the speaker broadcasts its own hotspot.
     pub required: bool,
 }
 
-/// First-boot setup commands. Expanded in Phase 5.
+/// First-boot setup commands (sent by the web wizard).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SetupCommand {
+    /// Set the speaker name (required before completing).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker_name: Option<String>,
+    /// Finish setup: clears `required`, persists, and tears the
+    /// onboarding hotspot down. Wi-Fi is optional — completing without
+    /// ever configuring it is fine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub complete: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

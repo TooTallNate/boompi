@@ -86,13 +86,37 @@ async fn main() -> anyhow::Result<()> {
             spotify::spawn(app.clone());
             airplay::spawn(app.clone());
             // Seed the volume from the current system state.
-            let app = app.clone();
-            tokio::spawn(async move {
-                match audio::get_system_volume().await {
-                    Ok(level) => app.shared.write().await.volume = level,
-                    Err(err) => tracing::warn!(%err, "could not read system volume"),
-                }
-            });
+            {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    match audio::get_system_volume().await {
+                        Ok(level) => app.shared.write().await.volume = level,
+                        Err(err) => tracing::warn!(%err, "could not read system volume"),
+                    }
+                });
+            }
+            // First boot: broadcast the onboarding hotspot when nothing
+            // else provides a way to reach the setup page.
+            {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    if !app.shared.read().await.setup.required {
+                        return;
+                    }
+                    // Give NetworkManager a moment to settle after boot.
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    match wifi::status(false).await {
+                        Ok(st) if st.supported && st.connected.is_none() && !st.ap_active => {
+                            let name = app.speaker_name().await;
+                            if let Err(err) = wifi::start_ap(&name).await {
+                                tracing::warn!(%err, "onboarding AP failed to start");
+                            }
+                        }
+                        Ok(_) => tracing::info!("setup pending; network already available"),
+                        Err(err) => tracing::warn!(%err, "wifi status unavailable for onboarding"),
+                    }
+                });
+            }
             // TODO(Phase 1, next): visualizer via PipeWire monitor capture.
         }
         #[cfg(not(target_os = "linux"))]

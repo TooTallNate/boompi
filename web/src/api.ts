@@ -6,6 +6,16 @@ export async function fetchState(): Promise<StateResponse> {
   return r.json();
 }
 
+/** POST any protocol ClientMessage over HTTP. */
+export async function sendCommand(msg: object): Promise<void> {
+  const r = await fetch("/api/command", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(msg),
+  });
+  if (!r.ok) throw new Error(`command failed: HTTP ${r.status}`);
+}
+
 export interface WifiNetwork {
   ssid: string;
   signal: number;

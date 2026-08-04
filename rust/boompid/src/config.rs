@@ -23,6 +23,10 @@ pub struct Config {
     pub airplay: AirplayConfig,
     /// User settings (mutated at runtime, persisted back to disk).
     pub settings: SettingsConfig,
+    /// First-boot setup finished? False → onboarding wizard + hotspot.
+    /// The appliance image ships a config without this flag; the setup
+    /// flow persists it. Dev boxes set it manually.
+    pub setup_complete: bool,
 }
 
 impl Default for Config {
@@ -34,6 +38,7 @@ impl Default for Config {
             spotify: SpotifyConfig::default(),
             airplay: AirplayConfig::default(),
             settings: SettingsConfig::default(),
+            setup_complete: false,
         }
     }
 }

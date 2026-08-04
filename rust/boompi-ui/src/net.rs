@@ -154,11 +154,13 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let pairing = pairing_str(state.pairing.state);
             let online_art = state.settings.online_art_fallback;
             let light = state.settings.theme == boompi_proto::Theme::Light;
+            let setup_required = state.setup.required;
             let volume = state.volume;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
+                ui.set_setup_required(setup_required);
                 ui.global::<crate::Theme>().set_light(light);
             });
         }
@@ -190,8 +192,12 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.global::<crate::Theme>().set_light(light);
             });
         }
-        ServerMessage::BtDevices { .. } => {} // panel device list lands in step 4
-        ServerMessage::Setup(_) => {} // Phase 5
+        ServerMessage::BtDevices { .. } => {} // panel device list: future work
+        ServerMessage::Setup(setup) => {
+            let _ = ctx
+                .weak
+                .upgrade_in_event_loop(move |ui| ui.set_setup_required(setup.required));
+        }
     }
 }
 

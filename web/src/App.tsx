@@ -5,6 +5,7 @@ import {
   fetchWifi,
   patchClock,
   patchSettings,
+  sendCommand,
   wifiAction,
 } from "./api";
 import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
@@ -27,6 +28,17 @@ type SaveStatus =
 export default function App() {
   const { hello, state, error, send, applySettings } = useBoompi();
   const settings = state?.settings ?? null;
+
+  if (state?.setup.required) {
+    return (
+      <SetupWizard
+        currentName={settings?.name ?? ""}
+        onRenamed={(name) =>
+          settings && applySettings({ ...settings, name })
+        }
+      />
+    );
+  }
 
   return (
     <div className="flex justify-center px-4 pt-6 pb-16">
@@ -418,6 +430,113 @@ function BluetoothSection({
         ))
       )}
     </Section>
+  );
+}
+
+function SetupWizard({
+  currentName,
+  onRenamed,
+}: {
+  currentName: string;
+  onRenamed: (name: string) => void;
+}) {
+  const [step, setStep] = useState<"name" | "wifi">("name");
+  const [name, setName] = useState(currentName);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const trimmed = name.trim();
+
+  async function submitName() {
+    setBusy(true);
+    setError(null);
+    try {
+      await sendCommand({ type: "setup", speaker_name: trimmed });
+      onRenamed(trimmed);
+      setStep("wifi");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finish() {
+    setBusy(true);
+    setError(null);
+    try {
+      // The setup broadcast flips `required` and this wizard unmounts
+      // into the regular settings page.
+      await sendCommand({ type: "setup", complete: true });
+    } catch (e) {
+      setError(String(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex justify-center px-4 pt-10 pb-16">
+      <main className="w-full max-w-lg">
+        <h1 className="text-[26px] font-semibold">Welcome 👋</h1>
+        <p className="mb-8 text-[14px] text-dim">
+          Let’s set up your speaker — takes about a minute.
+        </p>
+
+        {step === "name" && (
+          <Section title="Step 1 of 2 — Name your speaker">
+            <label className="mb-1.5 block text-sm text-dim" htmlFor="setup-name">
+              Shown for Bluetooth, AirPlay, and Spotify Connect
+            </label>
+            <input
+              id="setup-name"
+              type="text"
+              maxLength={48}
+              autoFocus
+              autoComplete="off"
+              placeholder="e.g. Porch Box"
+              className="w-full rounded-lg border border-line bg-bg px-3 py-2.5 text-base focus:border-accent focus:outline-none"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && trimmed) submitName();
+              }}
+            />
+            <div className="mt-3.5 flex items-center gap-3">
+              <button
+                className="rounded-lg bg-accent px-5 py-2.5 text-[15px] font-semibold text-accent-ink disabled:opacity-40"
+                disabled={!trimmed || busy}
+                onClick={submitName}
+              >
+                Continue
+              </button>
+              {error && <span className="text-[13px] text-err">{error}</span>}
+            </div>
+          </Section>
+        )}
+
+        {step === "wifi" && (
+          <>
+            <Section title="Step 2 of 2 — Wi-Fi (optional)">
+              <p className="mb-2 text-sm text-dim">
+                Connecting “{trimmed}” to your Wi-Fi enables Spotify Connect,
+                AirPlay, and online album art. You can skip this and set it
+                up later.
+              </p>
+            </Section>
+            <WifiSection />
+            <div className="flex items-center gap-3">
+              <button
+                className="rounded-lg bg-accent px-5 py-2.5 text-[15px] font-semibold text-accent-ink disabled:opacity-40"
+                disabled={busy}
+                onClick={finish}
+              >
+                Finish setup
+              </button>
+              {error && <span className="text-[13px] text-err">{error}</span>}
+            </div>
+          </>
+        )}
+      </main>
+    </div>
   );
 }
 

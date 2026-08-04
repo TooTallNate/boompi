@@ -117,6 +117,9 @@ impl App {
             theme: cfg.settings.theme,
             online_art_fallback: cfg.settings.online_art_fallback,
         };
+        let setup = SetupState {
+            required: !cfg.setup_complete,
+        };
         Arc::new(Self {
             cfg,
             config_path,
@@ -125,6 +128,7 @@ impl App {
             shared: RwLock::new(Shared {
                 volume: 0.5,
                 settings,
+                setup,
                 ..Shared::default()
             }),
             tx,
@@ -137,13 +141,17 @@ impl App {
     }
 
     /// Browser URL for the settings UI, from the LAN IP + bound port.
-    /// Recomputed per call — DHCP leases change.
+    /// Recomputed per call — DHCP leases change. With no route to the
+    /// internet (onboarding hotspot: NM shared mode, no uplink) fall back
+    /// to the AP gateway address.
     pub fn settings_url(&self) -> Option<String> {
         let port = self.settings_port.load(std::sync::atomic::Ordering::Relaxed);
         if port == 0 {
             return None;
         }
-        let ip = lan_ip()?;
+        let ip = lan_ip()
+            .map(|ip| ip.to_string())
+            .unwrap_or_else(|| "10.42.0.1".into());
         Some(if port == 80 {
             format!("http://{ip}/")
         } else {
@@ -189,11 +197,33 @@ impl App {
             cfg.name = s.settings.name.clone();
             cfg.settings.theme = s.settings.theme;
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
+            cfg.setup_complete = !s.setup.required;
         }
         match crate::config::save(&cfg, path) {
             Ok(()) => tracing::info!(path = %path.display(), "config persisted"),
             Err(err) => tracing::error!(%err, path = %path.display(), "config persist failed"),
         }
+    }
+
+    /// Apply a validated speaker rename to shared state. Returns true when
+    /// the name actually changed (caller persists + bumps the config
+    /// generation so sources re-announce).
+    async fn apply_rename(&self, name: String) -> bool {
+        let name = name.trim().chars().take(48).collect::<String>();
+        if name.is_empty() {
+            return false;
+        }
+        let settings = {
+            let mut s = self.shared.write().await;
+            if name == s.settings.name {
+                return false;
+            }
+            tracing::info!(%name, "speaker renamed");
+            s.settings.name = name;
+            s.settings.clone()
+        };
+        self.broadcast(ServerMessage::Settings(settings));
+        true
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -374,7 +404,6 @@ impl App {
                 }
             }
             ClientMessage::SetSettings(patch) => {
-                let mut renamed = false;
                 let settings = {
                     let mut s = self.shared.write().await;
                     if let Some(v) = patch.online_art_fallback {
@@ -383,19 +412,13 @@ impl App {
                     if let Some(theme) = patch.theme {
                         s.settings.theme = theme;
                     }
-                    if let Some(name) = patch.name {
-                        // Sanity limits: BT alias and mDNS instance names
-                        // both get unhappy with very long strings.
-                        let name = name.trim().chars().take(48).collect::<String>();
-                        if !name.is_empty() && name != s.settings.name {
-                            tracing::info!(%name, "speaker renamed");
-                            s.settings.name = name;
-                            renamed = true;
-                        }
-                    }
                     s.settings.clone()
                 };
                 self.broadcast(ServerMessage::Settings(settings));
+                let renamed = match patch.name {
+                    Some(name) => self.apply_rename(name).await,
+                    None => false,
+                };
                 self.persist_config().await;
                 if renamed {
                     // Sources re-announce under the new name (BT alias is
@@ -404,7 +427,33 @@ impl App {
                 }
             }
             ClientMessage::Setup(cmd) => {
-                tracing::info!(?cmd, "setup command (Phase 5)");
+                let renamed = match cmd.speaker_name {
+                    Some(name) => self.apply_rename(name).await,
+                    None => false,
+                };
+                let completed = cmd.complete == Some(true) && {
+                    let mut s = self.shared.write().await;
+                    let was = s.setup.required;
+                    s.setup.required = false;
+                    was
+                };
+                if completed {
+                    tracing::info!("first-boot setup completed");
+                    self.broadcast(ServerMessage::Setup(SetupState::default()));
+                    // The onboarding hotspot has served its purpose.
+                    #[cfg(target_os = "linux")]
+                    tokio::spawn(async {
+                        if let Err(err) = crate::wifi::stop_ap().await {
+                            tracing::debug!(%err, "onboarding AP teardown (may not be up)");
+                        }
+                    });
+                }
+                if renamed || completed {
+                    self.persist_config().await;
+                }
+                if renamed {
+                    self.cfg_generation.send_modify(|g| *g += 1);
+                }
             }
         }
     }

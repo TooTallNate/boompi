@@ -16,6 +16,7 @@ import { NowPlaying } from "components/now_playing.slint";
 import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
 import { SettingsPanel } from "components/settings.slint";
+import { SetupScreen } from "components/setup.slint";
 
 export component AppWindow inherits Window {
     title: "Boompi";
@@ -64,6 +65,7 @@ export component AppWindow inherits Window {
     in-out property <bool> online-art: false;
     in property <string> settings-url: "";
     in property <image> settings-qr;
+    in property <bool> setup-required: false;
 
     // --- clock ---
     in property <string> clock-day: "";
@@ -109,7 +111,14 @@ export component AppWindow inherits Window {
         }
     }
 
-    if root.connected && root.screen == "main" && !root.has-track: ConnectScreen {
+    // First-boot onboarding covers the main screen until completed.
+    if root.connected && root.setup-required && root.screen == "main": SetupScreen {
+        speaker-name: root.speaker-name;
+        settings-url: root.settings-url;
+        settings-qr: root.settings-qr;
+    }
+
+    if root.connected && !root.setup-required && root.screen == "main" && !root.has-track: ConnectScreen {
         speaker-name: root.speaker-name;
         pairing-state: root.pairing-state;
         pairing-enable => {
@@ -120,7 +129,7 @@ export component AppWindow inherits Window {
         }
     }
 
-    if root.connected && root.screen == "main" && root.has-track: NowPlaying {
+    if root.connected && !root.setup-required && root.screen == "main" && root.has-track: NowPlaying {
         track-title: root.track-title;
         track-artist: root.track-artist;
         track-album: root.track-album;

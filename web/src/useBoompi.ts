@@ -52,6 +52,12 @@ export function useBoompi() {
           case "volume":
             setState((s) => s && { ...s, volume: (msg as never)["level"] });
             break;
+          case "setup":
+            setState(
+              (s) =>
+                s && { ...s, setup: { required: (msg as never)["required"] } },
+            );
+            break;
         }
       };
       ws.onclose = () => {

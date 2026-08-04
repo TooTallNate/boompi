@@ -267,16 +267,23 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
    + embedded Vite/React/Tailwind SPA (`web/`, dist committed, rust-embed)
    + speaker rename end-to-end (BT `Adapter1.Alias` in place; AirPlay +
    Spotify restart discovery via a config-generation watch channel).
-2. BT device management + real pairing agent (`Agent1` `DisplayYesNo`,
-   list/disconnect/remove) replacing the auto-accept bt-agent.
-3. Theme (light palette) end-to-end + clock/timezone via
-   `org.freedesktop.timedate1` (tzdata + timesyncd in the image).
-4. Panel settings screen rework + QR code to the web UI.
-5. Wi-Fi client + AP mode ("Boompi-XXXX") + captive portal —
-   **NetworkManager on both boxes** (RPi OS ships it; Buildroot packages
-   it; `shared` connections give AP+DHCP) so dev and appliance share one
-   D-Bus code path.
-6. OOBE wizard on the `SetupState` machine: name required, Wi-Fi optional.
+2. ✅ BT device management + real pairing agent (`Agent1` `DisplayYesNo`,
+   passkey confirm on panel+web; list/disconnect/remove) replacing the
+   auto-accept bt-agent. *(Pairing confirm needs a hands-on phone test.)*
+3. ✅ Theme (light palette) end-to-end + clock/timezone via
+   `org.freedesktop.timedate1` (writes need root/polkit — see
+   scripts/dev-pi-polkit.rules for the dev box).
+4. ✅ Panel settings screen rework + QR code to the web UI
+   (`Hello.settings_url`; themed ActionButton replaces fluent Button).
+5. ✅ Wi-Fi via **NetworkManager/nmcli on both boxes**: status/scan/
+   connect/forget/radio + `boompi-ap` shared-mode hotspot + captive-portal
+   DNS & probe redirects. *(AP mode untested pending dev polkit rule /
+   first appliance image with NM.)*
+6. ✅ OOBE on the `SetupState` machine: panel onboarding screen (hotspot
+   instructions + QR), web wizard (name required → Wi-Fi optional →
+   complete), auto-hotspot on first boot, `setup_complete` persisted.
+   Remaining: `/data` writable partition for appliance config persistence
+   (Phase 4 image work), panel BT device list, richer wizard polish.
 
 ### Phase 6 — Boot polish + release
 Silent boot (`quiet loglevel=0`, `disable_splash=1`, no cursor/rainbow),
