@@ -771,7 +771,9 @@ dependencies = [
  "bytes",
  "clap",
  "futures-util",
+ "image",
  "ina260",
+ "libc",
  "librespot",
  "linux-embedded-hal",
  "realfft",
@@ -3670,11 +3672,13 @@ dependencies = [
  "librespot-core",
  "log",
  "rand 0.9.5",
+ "serde",
  "serde_json",
  "serde_repr",
  "sha1",
  "thiserror 2.0.19",
  "tokio",
+ "zbus",
 ]
 
 [[package]]

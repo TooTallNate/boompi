@@ -12,6 +12,9 @@ boompi-proto = { path = "../boompi-proto" }
 anyhow = { workspace = true }
 axum = { version = "0.8", features = ["ws"] }
 bytes = "1"
+# AirPlay cover art arrives as a raw buffer dump (valid image + garbage
+# tail, sometimes mid-write); decode-validate before publishing.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 libc = "0.2"
 realfft = "3"
 clap = { workspace = true }
@@ -34,10 +37,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 futures-util = "0.3"
 ina260 = { path = "../ina260" }
-# Spotify Connect, embedded (pure-Rust feature set: rustls TLS, libmdns
-# zeroconf, no audio backends — we provide a pw-cat sink).
+# Spotify Connect, embedded (pure-Rust feature set: rustls TLS, no audio
+# backends — we provide a pw-cat sink). Zeroconf: avahi when the daemon is
+# present (it owns UDP :5353 once shairport-sync/AirPlay is in the picture;
+# a second responder via libmdns dies with 'responder died' panics that take
+# the whole daemon down), libmdns as the avahi-less fallback.
 librespot = { version = "0.8", default-features = false, features = [
     "rustls-tls-webpki-roots",
+    "with-avahi",
     "with-libmdns",
 ] }
 linux-embedded-hal = "0.4"

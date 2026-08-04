@@ -67,6 +67,21 @@ BR2_PACKAGE_WIREPLUMBER=y
 BR2_PACKAGE_SBC=y
 BR2_PACKAGE_ALSA_UTILS=y
 
+# mDNS: avahi is the single owner of UDP :5353 — shairport-sync links
+# against it and librespot's discovery uses its D-Bus API. (Running a second
+# responder, e.g. librespot's libmdns, alongside a daemon on :5353 dies with
+# 'responder died' panics.)
+BR2_PACKAGE_AVAHI=y
+BR2_PACKAGE_AVAHI_DAEMON=y
+BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT=y
+
+# AirPlay classic: shairport-sync 3.3.9, spawned by boompid (pipe backend →
+# pw-cat; org.gnome.ShairportSync D-Bus control); the dbus policy file ships
+# with the package. AirPlay 2 would need shairport-sync 4.x + nqptp — not in
+# Buildroot 2025.02.
+BR2_PACKAGE_SHAIRPORT_SYNC=y
+BR2_PACKAGE_SHAIRPORT_SYNC_DBUS=y
+
 # UI runtime deps (Slint linuxkms, software renderer for now)
 BR2_PACKAGE_LIBINPUT=y
 BR2_PACKAGE_LIBXKBCOMMON=y

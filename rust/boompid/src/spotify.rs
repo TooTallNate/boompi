@@ -65,12 +65,25 @@ async fn run_once(
         ..SessionConfig::default()
     };
 
+    // Pick the zeroconf backend per run: avahi owns UDP :5353 whenever the
+    // daemon is around (AirPlay brings it in), and running libmdns next to
+    // it ends in 'responder died' panics. Re-probed on every restart.
+    let backend_name = if avahi_present().await {
+        "avahi"
+    } else {
+        "libmdns"
+    };
+    tracing::info!(backend = backend_name, "spotify zeroconf backend");
+    let backend = librespot::discovery::find(Some(backend_name))
+        .map_err(|e| anyhow::anyhow!("zeroconf backend {backend_name}: {e}"))?;
+
     let mut discovery = Discovery::builder(
         session_config.device_id.clone(),
         session_config.client_id.clone(),
     )
     .name(name.clone())
     .device_type(DeviceType::Speaker)
+    .zeroconf_backend(backend)
     .launch()?;
 
     let credentials = match cache.credentials() {
@@ -117,11 +130,14 @@ async fn run_once(
                 anyhow::bail!("spirc task ended");
             }
             creds = discovery.next() => {
-                // A (possibly different) account tapped us while a session is
-                // live. Session credentials are cached on connect, so a
-                // restart picks the freshest state up cleanly.
-                tracing::info!("new discovery credentials; restarting session");
-                let _ = creds;
+                // Some(_): a (possibly different) account tapped us while a
+                // session is live; credentials are cached on connect, so a
+                // restart picks the freshest state up cleanly. None: the
+                // zeroconf backend died — restart re-probes avahi/libmdns.
+                match creds {
+                    Some(_) => tracing::info!("new discovery credentials; restarting session"),
+                    None => tracing::warn!("discovery stream ended (zeroconf error?); restarting session"),
+                }
                 let _ = spirc.shutdown();
                 clear_if_active(app).await;
                 return Ok(());
@@ -276,13 +292,27 @@ fn fetch_cover(app: SharedApp, url: String) {
             Ok(response) => match response.bytes().await {
                 Ok(bytes) => {
                     tracing::info!(size = bytes.len(), "spotify cover fetched");
-                    crate::artwork::publish_current_art(&app, bytes).await;
+                    crate::artwork::publish_current_art(&app, bytes, SourceKind::Spotify).await;
                 }
                 Err(err) => tracing::warn!(%err, "spotify cover read failed"),
             },
             Err(err) => tracing::warn!(%err, %url, "spotify cover fetch failed"),
         }
     });
+}
+
+/// True when avahi-daemon owns its well-known name on the system bus.
+async fn avahi_present() -> bool {
+    let Ok(conn) = zbus::Connection::system().await else {
+        return false;
+    };
+    let Ok(dbus) = zbus::fdo::DBusProxy::new(&conn).await else {
+        return false;
+    };
+    let Ok(name) = "org.freedesktop.Avahi".try_into() else {
+        return false;
+    };
+    dbus.name_has_owner(name).await.unwrap_or(false)
 }
 
 fn cache_dir() -> String {
