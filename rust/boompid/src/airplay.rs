@@ -23,6 +23,7 @@
 
 use crate::state::{now_ms, SharedApp, SourceCommand};
 use boompi_proto::{PlaybackStatus, ServerMessage, SourceInfo, SourceKind, Track};
+use bytes::Bytes;
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -131,18 +132,18 @@ async fn run_once(
     let mut meta_stream = rc.receive_metadata_changed().await;
     let mut progress_stream = rc.receive_progress_string_changed().await;
 
+    let mut meta = MetaState::default();
+
     // Adopt an already-running session (e.g. boompid restarted mid-stream).
     if sps.active().await.unwrap_or(false) {
         claim_source(app, &rc).await;
         if let Ok(md) = rc.metadata().await {
-            apply_metadata(app, &md, &mut None).await;
+            apply_metadata(app, &md, &mut meta).await;
         }
         if let Ok(state) = rc.player_state().await {
             apply_player_state(app, &rc, &state).await;
         }
     }
-
-    let mut last_art_path: Option<String> = None;
     loop {
         tokio::select! {
             status = child.wait() => {
@@ -155,9 +156,15 @@ async fn run_once(
                 match active.get().await {
                     Ok(true) => claim_source(app, &rc).await,
                     Ok(false) => {
-                        tracing::info!("AirPlay client disconnected");
-                        clear_if_active(app).await;
-                        last_art_path = None;
+                        // NB: also fires once at startup when the property
+                        // cache primes with the initial `false`.
+                        let was_active = app.shared.read().await.source.active
+                            == Some(SourceKind::Airplay);
+                        if was_active {
+                            tracing::info!("AirPlay client disconnected");
+                            clear_if_active(app).await;
+                        }
+                        meta = MetaState::default();
                     }
                     Err(_) => {}
                 }
@@ -169,7 +176,7 @@ async fn run_once(
             }
             Some(md) = meta_stream.next() => {
                 if let Ok(md) = md.get().await {
-                    apply_metadata(app, &md, &mut last_art_path).await;
+                    apply_metadata(app, &md, &mut meta).await;
                 }
             }
             Some(progress) = progress_stream.next() => {
@@ -365,43 +372,88 @@ async fn apply_player_state(app: &SharedApp, rc: &RemoteControlProxy<'_>, state:
     }
 }
 
-async fn apply_metadata(
-    app: &SharedApp,
-    md: &HashMap<String, OwnedValue>,
-    last_art_path: &mut Option<String>,
-) {
+/// Per-session metadata bookkeeping for burst handling.
+#[derive(Default)]
+struct MetaState {
+    /// `mpris:trackid` of the current track (stable per track).
+    track_id: Option<String>,
+    /// Cover-art cache path most recently scheduled for publishing.
+    last_art_path: Option<String>,
+}
+
+/// Apply a `Metadata` property update.
+///
+/// shairport re-emits the dict several times per track and fills it in
+/// incrementally (title first, artist/length/artUrl trickle in), so track
+/// identity comes from `mpris:trackid` and absent fields merge with the
+/// previous state — naively rebuilding the track on each burst reset the
+/// position and wiped the artwork a few hundred ms after it was published.
+async fn apply_metadata(app: &SharedApp, md: &HashMap<String, OwnedValue>, ms: &mut MetaState) {
     let title = md_str(md, "xesam:title");
-    if title.is_none() {
+    let track_id = md_track_id(md);
+    if title.is_none() && track_id.is_none() {
         // shairport clears metadata between tracks; ignore empty dicts.
         return;
     }
-    let (status, artwork_id) = {
-        let s = app.shared.read().await;
-        (
-            s.track
+    let new_track = match (&track_id, &ms.track_id) {
+        (Some(new), Some(old)) => new != old,
+        (Some(_), None) => true,
+        // No trackid in this burst: assume same track unless the title says
+        // otherwise below.
+        (None, _) => false,
+    };
+    if track_id.is_some() {
+        ms.track_id = track_id;
+    }
+
+    let track = {
+        let mut s = app.shared.write().await;
+        // Symmetric arbitration guard: only write the display while the
+        // AirPlay session owns it (claimed on Active=true / Playing).
+        if s.source.active != Some(SourceKind::Airplay) {
+            return;
+        }
+        let prev = if new_track { None } else { s.track.take() };
+        // Title change without a trackid is still a track change.
+        let prev = match (&title, &prev) {
+            (Some(new), Some(t)) if t.title.as_deref() != Some(new.as_str()) => None,
+            _ => prev,
+        };
+        let fresh = prev.is_none();
+        let base = prev.unwrap_or(Track {
+            title: None,
+            artist: None,
+            album: None,
+            duration_ms: None,
+            position_ms: Some(0),
+            status: s
+                .track
                 .as_ref()
                 .map(|t| t.status)
                 .unwrap_or(PlaybackStatus::Playing),
-            None, // artwork republished below; ids are content-addressed
-        )
+            artwork_id: None,
+            updated_at: now_ms(),
+        });
+        let track = Track {
+            title: title.or(base.title),
+            artist: md_artist(md).or(base.artist),
+            album: md_str(md, "xesam:album").or(base.album),
+            duration_ms: md_length_ms(md).or(base.duration_ms),
+            ..base
+        };
+        if fresh {
+            // New track: the previous cover no longer applies.
+            ms.last_art_path = None;
+        }
+        s.track = Some(track.clone());
+        track
     };
-    let track = Track {
-        title,
-        artist: md_artist(md),
-        album: md_str(md, "xesam:album"),
-        duration_ms: md_length_ms(md),
-        position_ms: Some(0),
-        status,
-        artwork_id,
-        updated_at: now_ms(),
-    };
-    app.shared.write().await.track = Some(track.clone());
     app.broadcast(ServerMessage::Track(track));
 
     if let Some(art) = md_str(md, "mpris:artUrl") {
         let path = art.strip_prefix("file://").unwrap_or(&art).to_string();
-        if last_art_path.as_deref() != Some(&path) {
-            *last_art_path = Some(path.clone());
+        if ms.last_art_path.as_deref() != Some(&path) {
+            ms.last_art_path = Some(path.clone());
             publish_art_file(app.clone(), path);
         }
     }
@@ -433,18 +485,71 @@ async fn apply_progress(app: &SharedApp, progress: &str) {
     }
 }
 
-/// Read shairport's cover-art cache file and publish it.
+/// Read shairport's cover-art cache file and publish it once it's whole.
+///
+/// The cache file is a raw buffer dump: it can be caught mid-write (the UI
+/// was decoding truncated JPEGs) and even the finished file carries a
+/// garbage tail after the image data (which breaks content-addressed
+/// dedup). Poll until the bytes trim to a decodable image, then publish
+/// only the image itself.
 fn publish_art_file(app: SharedApp, path: String) {
     tokio::spawn(async move {
-        match tokio::fs::read(&path).await {
-            Ok(bytes) if !bytes.is_empty() => {
-                tracing::info!(size = bytes.len(), %path, "airplay cover art");
-                crate::artwork::publish_current_art(&app, bytes.into()).await;
+        for attempt in 0..12 {
+            if attempt > 0 {
+                tokio::time::sleep(Duration::from_millis(150)).await;
             }
-            Ok(_) => {}
-            Err(err) => tracing::warn!(%err, %path, "airplay cover art read failed"),
+            let Ok(bytes) = tokio::fs::read(&path).await else {
+                continue; // not written yet
+            };
+            let trimmed = trim_image(&bytes);
+            if trimmed.is_empty() {
+                continue;
+            }
+            // Decode (cheap at cover sizes) to reject partial writes; the
+            // trim alone can't tell a complete scan from a truncated one.
+            if image::load_from_memory(trimmed).is_err() {
+                continue;
+            }
+            tracing::info!(
+                size = trimmed.len(),
+                file = bytes.len(),
+                %path,
+                "airplay cover art"
+            );
+            crate::artwork::publish_current_art(
+                &app,
+                Bytes::copy_from_slice(trimmed),
+                SourceKind::Airplay,
+            )
+            .await;
+            return;
         }
+        tracing::warn!(%path, "airplay cover art never became decodable; skipping");
     });
+}
+
+/// Cut an image out of a buffer with a possible garbage tail. Returns an
+/// empty slice when no plausible image is present.
+fn trim_image(b: &[u8]) -> &[u8] {
+    const JPEG_SOI: [u8; 2] = [0xFF, 0xD8];
+    const PNG_MAGIC: [u8; 4] = [0x89, b'P', b'N', b'G'];
+    if b.starts_with(&JPEG_SOI) {
+        // Trim to the last EOI marker. If the tail garbage happens to
+        // contain FF D9 we trim long, which decoders tolerate (they stop at
+        // the real EOI).
+        if let Some(eoi) = b.windows(2).rposition(|w| w == [0xFF, 0xD9]) {
+            return &b[..eoi + 2];
+        }
+        return &[];
+    }
+    if b.starts_with(&PNG_MAGIC) {
+        // Trim to the end of the IEND chunk (type + 4-byte CRC).
+        if let Some(iend) = b.windows(4).rposition(|w| w == *b"IEND") {
+            return b.get(..iend + 8).unwrap_or(&[]);
+        }
+        return &[];
+    }
+    b // unknown format: publish as-is, the decode gate still applies
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +570,15 @@ fn md_artist(md: &HashMap<String, OwnedValue>) -> Option<String> {
         return (!joined.is_empty()).then_some(joined);
     }
     String::try_from(v.clone()).ok().filter(|s| !s.is_empty())
+}
+
+/// `mpris:trackid` is a D-Bus object path unique per track.
+fn md_track_id(md: &HashMap<String, OwnedValue>) -> Option<String> {
+    let v = md.get("mpris:trackid")?;
+    if let Ok(p) = zbus::zvariant::OwnedObjectPath::try_from(v.clone()) {
+        return Some(p.to_string());
+    }
+    String::try_from(v.clone()).ok()
 }
 
 /// `mpris:length` is int64 microseconds.
@@ -508,6 +622,24 @@ mod tests {
             start + 60 * FRAME_RATE
         );
         assert_eq!(parse_progress(&s), Some((15_000, 60_000)));
+    }
+
+    #[test]
+    fn trims_jpeg_garbage_tail() {
+        let mut buf = vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
+        buf.extend_from_slice(&[0xAA; 64]); // garbage tail
+        assert_eq!(trim_image(&buf), &buf[..9]);
+        // Truncated JPEG (no EOI) is rejected outright.
+        assert!(trim_image(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]).is_empty());
+    }
+
+    #[test]
+    fn trims_png_garbage_tail() {
+        let mut buf = b"\x89PNG\r\n\x1a\n....chunks....IEND\xaeB`\x82".to_vec();
+        let clean_len = buf.len();
+        buf.extend_from_slice(&[0x55; 32]);
+        assert_eq!(trim_image(&buf).len(), clean_len);
+        assert!(trim_image(b"\x89PNG\r\n\x1a\nno-end-chunk").is_empty());
     }
 
     #[test]

@@ -192,6 +192,12 @@ fn apply_track(ctx: &NetCtx, track: Track) {
         // Art arrives separately as a binary frame; a track without an
         // artwork_id has none (or none *yet*) — show the placeholder.
         if track.artwork_id.is_none() {
+            if ui.get_has_artwork() {
+                eprintln!(
+                    "artwork cleared by Track update without artwork_id (title={:?})",
+                    ui.get_track_title()
+                );
+            }
             ui.set_has_artwork(false);
         }
     });

@@ -408,6 +408,19 @@ async fn handle_command(ctx: &Ctx, session: &Session, cmd: SourceCommand) -> any
 
 /// Resolve and publish the device (phone) owning an object like
 /// `/org/bluez/hci0/dev_XX_.../player0`.
+/// Minimal source arbitration until the Phase-3 source manager lands:
+/// iOS keeps mirroring its now-playing state over AVRCP while the audio
+/// actually routes to AirPlay (or elsewhere), so while a non-Bluetooth
+/// source holds the display, the phone's AVRCP chatter must not clobber
+/// the track/source state. Session bookkeeping still runs; only the
+/// shared-state writes are gated.
+async fn bt_owns_display(app: &SharedApp) -> bool {
+    matches!(
+        app.shared.read().await.source.active,
+        None | Some(SourceKind::Bluetooth)
+    )
+}
+
 async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     let Some(device_path) = device_prefix(child_path) else {
         return;
@@ -425,6 +438,9 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     session.device_path = Some(device_path);
     session.device_alias = alias.clone();
 
+    if !bt_owns_display(&ctx.app).await {
+        return;
+    }
     let source = SourceInfo {
         active: Some(SourceKind::Bluetooth),
         device_name: alias,
@@ -442,6 +458,11 @@ async fn clear_session(ctx: &Ctx, session: &mut Session) {
     // Image handles are namespaced per device; drop stale mappings.
     ctx.resolved.lock().unwrap().clear();
     let mut s = ctx.app.shared.write().await;
+    // Only clear the display if Bluetooth owns it — a BT disconnect must
+    // not wipe another source's active session.
+    if !matches!(s.source.active, None | Some(SourceKind::Bluetooth)) {
+        return;
+    }
     s.track = None;
     s.source = SourceInfo::default();
     drop(s);
@@ -450,6 +471,9 @@ async fn clear_session(ctx: &Ctx, session: &mut Session) {
 }
 
 async fn publish_track(ctx: &Ctx, session: &mut Session) {
+    if !bt_owns_display(&ctx.app).await {
+        return;
+    }
     maybe_request_art(ctx, session);
     let track = session.to_track(&ctx.resolved);
     ctx.app.shared.write().await.track = Some(track.clone());

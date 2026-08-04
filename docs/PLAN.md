@@ -73,8 +73,13 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
     bluez-tools `bt-agent -c NoInputNoOutput` (auto-accept everything).
   - *spotify*: librespot (subprocess with event hooks first; embed-as-crate
     is a later option). Art via metadata CDN URLs.
-  - *airplay*: shairport-sync metadata (D-Bus/MPRIS or metadata pipe,
-    whichever proves more robust). Art arrives natively (PICT).
+  - *airplay*: shairport-sync spawned as a boompid child (generated config,
+    receiver name = speaker name), pipe backend → pw-cat for audio, native
+    `org.gnome.ShairportSync` D-Bus interface for metadata/progress/DACP
+    transport control. **Decided & shipped**: D-Bus beat the metadata pipe
+    (structured properties + free DACP remote). Cover art files are raw
+    buffer dumps — trim to the image (EOI/IEND) and decode-validate before
+    publishing. Classic AirPlay (AP2 needs nqptp; not in Buildroot 2025.02).
 - **artwork**: per-source art acquisition → decode → downscale (~480 px) →
   content-addressed LRU cache in `/data/art`. Track messages carry an
   `artwork_id`; clients fetch `GET /art/{id}`.
@@ -284,7 +289,16 @@ CI image builds with ccache. Tag v2.0.
       all pairing. Replaced by boompid's own `Agent1` (`DisplayYesNo`) in
       Phase 3. (Deployed kiosk.sh/units drifted from git; the v1 image dump
       is the authoritative reference.)
-- [ ] AirPlay 2 vs classic decision after Buildroot packaging check
+- [x] AirPlay 2 vs classic: **classic** (shairport-sync 3.3.9 in Buildroot
+      2025.02; no nqptp package). AP2 later via custom nqptp + shairport 4.x
+      packages in our BR2_EXTERNAL if wanted. Coded against the 3.3.9 D-Bus
+      property set; 4.x extras (ClientName) used opportunistically.
+- [ ] Full source-manager arbitration (pause-others, audio-flow-based claims
+      via MediaTransport1.State). Interim shipped with AirPlay: sources only
+      write track/source state while they own the display, and async art
+      publishes are origin-gated (a late BT BIP thumbnail must not stomp an
+      AirPlay cover). Note: iOS mirrors now-playing over AVRCP while
+      AirPlaying — the BT provider must never treat that chatter as a claim.
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
 - [ ] Low-battery safeguard (new, motivated by Phase 0: the deeply
       discharged pack browned out the Pi and corrupted the SD mid-boot).

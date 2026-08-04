@@ -101,6 +101,7 @@ pub fn spawn(app: SharedApp, resolved: ResolvedArt) -> mpsc::UnboundedSender<Art
                 continue;
             };
             counter += 1;
+            tracing::info!(target: "boompid::flow", %handle, address = %req.address, "BIP art fetch start");
             match fetch(&conn, &mut sessions, &req, counter).await {
                 Ok(bytes) => {
                     tracing::info!(%handle, size = bytes.len(), "cover art fetched");
@@ -212,20 +213,40 @@ async fn wait_for_file(path: &str) -> anyhow::Result<Bytes> {
 
 /// Cache the image, record the handle→id mapping, and notify clients.
 async fn publish(app: &SharedApp, resolved: &ResolvedArt, handle: &str, bytes: Bytes) {
-    let id = publish_current_art(app, bytes).await;
+    let id = publish_current_art(app, bytes, boompi_proto::SourceKind::Bluetooth).await;
     resolved.lock().unwrap().insert(handle.to_string(), id);
 }
 
 /// Publish image bytes as the current track's artwork: cache it, stamp the
 /// current track's `artwork_id`, and push both to clients. Shared by the
-/// Bluetooth BIP fetcher and other sources (Spotify cover URLs, and later
-/// AirPlay/online-fallback).
-pub async fn publish_current_art(app: &SharedApp, bytes: Bytes) -> String {
+/// Bluetooth BIP fetcher and other sources (Spotify cover URLs, AirPlay).
+///
+/// `origin` is the source the art belongs to: fetches complete
+/// asynchronously, so by the time bytes arrive another source may own the
+/// display — stamping regardless would overwrite *its* artwork (this is
+/// exactly how late BIP thumbnails were clobbering AirPlay covers). The
+/// bytes are still cached so an existing `artwork_id` reference resolves.
+pub async fn publish_current_art(
+    app: &SharedApp,
+    bytes: Bytes,
+    origin: boompi_proto::SourceKind,
+) -> String {
     let id = art_id(&bytes);
     app.insert_art(id.clone(), bytes.clone()).await;
 
     let track = {
         let mut s = app.shared.write().await;
+        if s.source.active != Some(origin) {
+            tracing::warn!(
+                target: "boompid::flow",
+                ?origin,
+                active = ?s.source.active,
+                %id,
+                size = bytes.len(),
+                "art publish rejected: source no longer owns the display"
+            );
+            return id;
+        }
         match s.track.as_mut() {
             Some(track) => {
                 track.artwork_id = Some(id.clone());
@@ -234,6 +255,7 @@ pub async fn publish_current_art(app: &SharedApp, bytes: Bytes) -> String {
             None => None,
         }
     };
+    tracing::info!(target: "boompid::flow", ?origin, %id, size = bytes.len(), stamped = track.is_some(), "art published");
     if let Some(track) = track {
         app.broadcast_frame(encode_artwork_frame(&bytes));
         app.broadcast(ServerMessage::Track(track));

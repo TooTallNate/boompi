@@ -162,7 +162,31 @@ impl App {
         }
     }
 
+    #[track_caller]
     pub fn broadcast(&self, msg: ServerMessage) {
+        // Flow tracing: every Track/Source mutation is attributed to its
+        // call site so display-state fights between sources show up
+        // directly in the logs.
+        let caller = std::panic::Location::caller();
+        match &msg {
+            ServerMessage::Track(t) => tracing::debug!(
+                target: "boompid::flow",
+                title = t.title.as_deref().unwrap_or("-"),
+                art = t.artwork_id.as_deref().unwrap_or("-"),
+                status = ?t.status,
+                pos = ?t.position_ms,
+                %caller,
+                "→ Track"
+            ),
+            ServerMessage::Source(s) => tracing::info!(
+                target: "boompid::flow",
+                active = ?s.active,
+                device = s.device_name.as_deref().unwrap_or("-"),
+                %caller,
+                "→ Source"
+            ),
+            _ => {}
+        }
         let json = match serde_json::to_string(&msg) {
             Ok(json) => json,
             Err(err) => {
@@ -174,7 +198,16 @@ impl App {
         let _ = self.tx.send(Outbound::Message(json.into()));
     }
 
+    #[track_caller]
     pub fn broadcast_frame(&self, frame: Vec<u8>) {
+        if frame.first() == Some(&boompi_proto::frame_tag::ARTWORK) {
+            tracing::debug!(
+                target: "boompid::flow",
+                len = frame.len(),
+                caller = %std::panic::Location::caller(),
+                "→ artwork frame"
+            );
+        }
         let _ = self.tx.send(Outbound::Frame(Bytes::from(frame)));
     }
 
