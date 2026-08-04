@@ -243,6 +243,16 @@ packages. For emoji in arbitrary user content (speaker name
 1. Noto **Color** Emoji (CBDT)
 2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Color Emoji`
 
+Emoji **cannot** be bundled into the binary like Geist: Slint's imported
+fonts are only used when named explicitly (`font-family` is
+single-valued), while emoji in mixed text resolve through fontique's
+*fallback* query, which is OS-backed (fontconfig on Linux, CoreText on
+macOS). Consequence: laptop dev shows Apple Color Emoji — a known,
+accepted, dev-only discrepancy; the appliance is deterministic because
+its fontconfig is ours. Possible upstream Slint PR: expose fontique's
+`set_generic_families(GenericFamily::Emoji, …)` for imported fonts
+(Slint already uses that API internally for its bundled Inter).
+
 ### Phase 5 — First-boot setup
 Setup state machine, Slint wizard, AP mode + captive portal, persistence.
 
