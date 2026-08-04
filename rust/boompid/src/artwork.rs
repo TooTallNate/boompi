@@ -59,6 +59,15 @@ trait ObexClient1 {
 }
 
 #[zbus::proxy(
+    interface = "org.bluez.obex.Session1",
+    default_service = "org.bluez.obex"
+)]
+trait ObexSession1 {
+    #[zbus(property)]
+    fn destination(&self) -> zbus::Result<String>;
+}
+
+#[zbus::proxy(
     interface = "org.bluez.obex.Image1",
     default_service = "org.bluez.obex"
 )]
@@ -151,8 +160,16 @@ async fn ensure_session(
     sessions: &mut HashMap<String, OwnedObjectPath>,
     req: &ArtRequest,
 ) -> anyhow::Result<OwnedObjectPath> {
+    // A cached session dies whenever the phone drops the link (disconnect,
+    // reconnect, idle) — obexd removes the object. Verify it still answers
+    // before trusting it, else the eager re-prime after reconnection would
+    // silently no-op and the phone would never mint ImgHandles again.
     if let Some(path) = sessions.get(&req.address) {
-        return Ok(path.clone());
+        if session_alive(conn, path).await {
+            return Ok(path.clone());
+        }
+        tracing::info!(address = %req.address, "cached BIP session is dead; reconnecting");
+        sessions.remove(&req.address);
     }
     let client = ObexClient1Proxy::new(conn).await?;
     let mut args: HashMap<&str, Value<'_>> = HashMap::new();
@@ -162,6 +179,16 @@ async fn ensure_session(
     tracing::info!(address = %req.address, session = %path, "BIP obex session established");
     sessions.insert(req.address.clone(), path.clone());
     Ok(path)
+}
+
+async fn session_alive(conn: &zbus::Connection, path: &OwnedObjectPath) -> bool {
+    match ObexSession1Proxy::builder(conn).path(path.clone()) {
+        Ok(builder) => match builder.build().await {
+            Ok(proxy) => proxy.destination().await.is_ok(),
+            Err(_) => false,
+        },
+        Err(_) => false,
+    }
 }
 
 /// Wait for obexd to finish writing the transfer target file. The Transfer1
