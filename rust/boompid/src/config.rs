@@ -19,6 +19,8 @@ pub struct Config {
     pub battery: Option<BatteryConfig>,
     /// Spotify Connect (librespot subprocess).
     pub spotify: SpotifyConfig,
+    /// AirPlay (shairport-sync child process).
+    pub airplay: AirplayConfig,
     /// User settings (mutated at runtime, persisted back to disk).
     pub settings: SettingsConfig,
 }
@@ -30,6 +32,7 @@ impl Default for Config {
             model: None,
             battery: None,
             spotify: SpotifyConfig::default(),
+            airplay: AirplayConfig::default(),
             settings: SettingsConfig::default(),
         }
     }
@@ -43,6 +46,20 @@ pub struct SpotifyConfig {
 }
 
 impl Default for SpotifyConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AirplayConfig {
+    /// AirPlay receiver (shairport-sync, spawned by boompid). On by default;
+    /// silently unavailable when shairport-sync is not installed.
+    pub enabled: bool,
+}
+
+impl Default for AirplayConfig {
     fn default() -> Self {
         Self { enabled: true }
     }

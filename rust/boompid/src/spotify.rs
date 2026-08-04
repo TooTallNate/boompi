@@ -21,7 +21,7 @@ use librespot::core::{cache::Cache, config::DeviceType, Session, SessionConfig};
 use librespot::discovery::Discovery;
 use librespot::metadata::audio::UniqueFields;
 use librespot::playback::audio_backend::{Sink, SinkError, SinkResult};
-use librespot::playback::config::{AudioFormat, Bitrate, PlayerConfig};
+use librespot::playback::config::{Bitrate, PlayerConfig};
 use librespot::playback::convert::Converter;
 use librespot::playback::decoder::AudioPacket;
 use librespot::playback::mixer::{self, MixerConfig};
