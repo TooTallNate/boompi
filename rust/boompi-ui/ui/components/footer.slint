@@ -3,7 +3,7 @@
 // All iconography is drawn (see icons.slint) — no font dependency.
 
 import { Theme } from "theme.slint";
-import { IconSpeaker, IconBluetooth, IconSliders, IconSpotify, IconAirplay } from "icons.slint";
+import { IconSpeaker, IconBluetooth, IconSettings, IconSpotify, IconAirplay } from "icons.slint";
 
 export component Footer inherits Rectangle {
     in property <string> clock-day;
@@ -149,7 +149,7 @@ export component Footer inherits Rectangle {
             clicked => {
                 root.open-settings();
             }
-            IconSliders {
+            IconSettings {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 width: 19px;

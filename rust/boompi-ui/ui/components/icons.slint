@@ -1,224 +1,101 @@
-// Drawn vector iconography — zero font dependency.
+// SVG iconography, tinted at runtime via `Image.colorize` (the SVG's own
+// fill is just an alpha mask).
 //
-// RPi OS Lite and the Buildroot image ship no emoji/symbol fonts, and glyph
-// coverage varies by renderer, so all icons are Slint Paths (viewbox
-// 100×100, scaled to the element size). Keep icon elements square —
-// Path viewbox scaling does not preserve aspect ratio.
+// Sources:
+//  - ../icons/*.svg from the Geist icon set (geist-icons npm package, MIT —
+//    see ../icons/LICENSE-geist-icons.txt), matching Vercel's geistcn icons.
+//  - spotify.svg + bluetooth.svg from SVG Repo (CC0 collections).
+//
+// Slint renders these with resvg at display resolution, so they stay crisp
+// at any size. Requires i-slint-core's `svg` feature, which both the winit
+// (desktop) and linuxkms (Pi) backends enable in our feature graph.
 
-export component IconPlay inherits Path {
+export component IconPlay inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 22 6 L 92 50 L 22 94 Z";
-    fill: root.icon-color;
+    source: @image-url("../icons/play-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconPause inherits Path {
+export component IconPause inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 20 10 H 42 V 90 H 20 Z M 58 10 H 80 V 90 H 58 Z";
-    fill: root.icon-color;
+    source: @image-url("../icons/pause.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconPrev inherits Path {
+export component IconPrev inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 12 10 H 26 V 90 H 12 Z M 90 10 L 34 50 L 90 90 Z";
-    fill: root.icon-color;
+    source: @image-url("../icons/skip-back-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconNext inherits Path {
+export component IconNext inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 88 10 H 74 V 90 H 88 Z M 10 10 L 66 50 L 10 90 Z";
-    fill: root.icon-color;
+    source: @image-url("../icons/skip-forward-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-// Speaker with mute-X (level 0) or 1–2 sound waves.
-export component IconSpeaker inherits Rectangle {
+export component IconSpeaker inherits Image {
     in property <color> icon-color: white;
     /// 0 = muted, 1 = quiet, 2 = loud.
     in property <int> level: 2;
-
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 4 35 H 28 L 58 10 V 90 L 28 65 H 4 Z";
-        fill: root.icon-color;
-    }
-    if root.level == 0: Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 68 36 L 94 64 M 94 36 L 68 64";
-        stroke: root.icon-color;
-        stroke-width: 8px;
-        fill: transparent;
-    }
-    if root.level >= 1: Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 68 36 Q 78 50 68 64";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
-    if root.level >= 2: Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 80 24 Q 96 50 80 76";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
+    source: root.level == 0 ? @image-url("../icons/speaker-off-fill.svg")
+        : root.level == 1 ? @image-url("../icons/speaker-volume-quiet-fill.svg")
+        : @image-url("../icons/speaker-volume-loud-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-// Spotify mark: circle ring + three ascending sound-wave arcs.
-export component IconSpotify inherits Rectangle {
+export component IconSpotify inherits Image {
     in property <color> icon-color: #1DB954;
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 26 42 Q 52 33 76 46";
-        stroke: root.icon-color;
-        stroke-width: 8px;
-        fill: transparent;
-    }
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 29 57 Q 51 49 72 60";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 32 71 Q 50 65 68 73";
-        stroke: root.icon-color;
-        stroke-width: 6px;
-        fill: transparent;
-    }
+    source: @image-url("../icons/spotify.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-// AirPlay: display outline with a triangle rising through its bottom edge.
-export component IconAirplay inherits Rectangle {
+// Geist "shareplay" glyph: display with a triangle rising through it.
+export component IconAirplay inherits Image {
     in property <color> icon-color: white;
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 32 76 H 12 V 20 H 88 V 76 H 68";
-        stroke: root.icon-color;
-        stroke-width: 8px;
-        fill: transparent;
-    }
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 50 52 L 80 94 H 20 Z";
-        fill: root.icon-color;
-    }
+    source: @image-url("../icons/shareplay.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconBluetooth inherits Path {
+export component IconBluetooth inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 24 30 L 76 72 L 50 93 L 50 7 L 76 28 L 24 70";
-    stroke: root.icon-color;
-    stroke-width: 8px;
-    fill: transparent;
+    source: @image-url("../icons/bluetooth.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-// Settings: three sliders with staggered knobs.
-export component IconSliders inherits Rectangle {
+export component IconSettings inherits Image {
     in property <color> icon-color: white;
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 8 25 H 92 M 8 50 H 92 M 8 75 H 92";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
-    Rectangle {
-        x: parent.width * 22% - self.width / 2;
-        y: parent.height * 25% - self.height / 2;
-        width: parent.width * 24%;
-        height: self.width;
-        border-radius: self.width / 2;
-        background: root.icon-color;
-    }
-    Rectangle {
-        x: parent.width * 68% - self.width / 2;
-        y: parent.height * 50% - self.height / 2;
-        width: parent.width * 24%;
-        height: self.width;
-        border-radius: self.width / 2;
-        background: root.icon-color;
-    }
-    Rectangle {
-        x: parent.width * 40% - self.width / 2;
-        y: parent.height * 75% - self.height / 2;
-        width: parent.width * 24%;
-        height: self.width;
-        border-radius: self.width / 2;
-        background: root.icon-color;
-    }
+    source: @image-url("../icons/settings-gear-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconBolt inherits Path {
+export component IconBolt inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 58 2 L 16 56 H 44 L 40 98 L 84 42 H 54 Z";
-    fill: root.icon-color;
+    source: @image-url("../icons/lightning.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-export component IconBack inherits Path {
+export component IconBack inherits Image {
     in property <color> icon-color: white;
-    viewbox-width: 100;
-    viewbox-height: 100;
-    commands: "M 64 10 L 24 50 L 64 90";
-    stroke: root.icon-color;
-    stroke-width: 10px;
-    fill: transparent;
+    source: @image-url("../icons/chevron-left.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }
 
-// Eighth note for the album-art placeholder.
-export component IconNote inherits Rectangle {
+// Album-art placeholder.
+export component IconNote inherits Image {
     in property <color> icon-color: white;
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 60 14 V 74";
-        stroke: root.icon-color;
-        stroke-width: 7px;
-        fill: transparent;
-    }
-    Path {
-        viewbox-width: 100;
-        viewbox-height: 100;
-        commands: "M 60 12 Q 84 18 88 40 Q 76 30 60 32 Z";
-        fill: root.icon-color;
-    }
-    Rectangle {
-        x: parent.width * 40% - self.width / 2;
-        y: parent.height * 74% - self.height / 2;
-        width: parent.width * 30%;
-        height: parent.height * 22%;
-        border-radius: self.height / 2;
-        background: root.icon-color;
-    }
+    source: @image-url("../icons/musical-notes.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
 }

@@ -126,8 +126,7 @@ export component NowPlaying inherits VerticalLayout {
                 icon-color: Theme.fg;
             }
             if !root.playing: IconPlay {
-                // Nudge right: play triangles look centered slightly off-axis.
-                x: (parent.width - self.width) / 2 + 3px;
+                x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 width: 42%;
                 height: 42%;
