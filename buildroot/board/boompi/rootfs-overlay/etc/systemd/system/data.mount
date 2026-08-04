@@ -1,0 +1,13 @@
+# Persistent device state — third SD partition, survives OS reflashes.
+# systemd creates the /data mountpoint automatically.
+[Unit]
+Description=Persistent device state (/data)
+
+[Mount]
+What=/dev/mmcblk0p3
+Where=/data
+Type=ext4
+Options=noatime
+
+[Install]
+WantedBy=local-fs.target

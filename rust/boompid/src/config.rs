@@ -111,6 +111,29 @@ pub struct SettingsConfig {
     pub theme: boompi_proto::Theme,
 }
 
+/// Load config from `path`, falling back to a read-only `seed` when the
+/// primary file doesn't exist yet.
+///
+/// The appliance splits config in two: `/etc/boompi/boompi.toml` (image-
+/// baked hardware facts: model, battery bus) seeds the very first boot,
+/// after which everything persists to `/data/boompi.toml` — which survives
+/// OS reflashes.
+pub fn load_with_seed(path: Option<&Path>, seed: Option<&Path>) -> anyhow::Result<Config> {
+    if let Some(p) = path {
+        if p.exists() {
+            return load(Some(p));
+        }
+        if let Some(s) = seed {
+            if s.exists() {
+                tracing::info!(seed = %s.display(), target = %p.display(),
+                    "primary config missing; seeding from image defaults");
+                return load(Some(s));
+            }
+        }
+    }
+    load(path)
+}
+
 /// Load config from `path`, or defaults when `None`.
 ///
 /// A missing file is not an error when the path was given explicitly: the
@@ -201,5 +224,31 @@ mod tests {
     fn missing_explicit_path_is_defaults() {
         let cfg = load(Some(Path::new("/nonexistent/boompi.toml"))).unwrap();
         assert_eq!(cfg.name, "Boompi");
+    }
+
+    #[test]
+    fn seed_used_only_when_primary_missing() {
+        let dir = std::env::temp_dir().join(format!("boompi-seed-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let primary = dir.join("data.toml");
+        let seed = dir.join("seed.toml");
+        std::fs::write(&seed, "name = \"Seeded\"\nmodel = \"pi3\"\n").unwrap();
+
+        // Primary missing → seed wins.
+        let cfg = load_with_seed(Some(&primary), Some(&seed)).unwrap();
+        assert_eq!(cfg.name, "Seeded");
+        assert_eq!(cfg.model.as_deref(), Some("pi3"));
+
+        // Primary present → seed ignored.
+        std::fs::write(&primary, "name = \"Configured\"\n").unwrap();
+        let cfg = load_with_seed(Some(&primary), Some(&seed)).unwrap();
+        assert_eq!(cfg.name, "Configured");
+
+        // Neither exists → defaults.
+        std::fs::remove_file(&primary).unwrap();
+        std::fs::remove_file(&seed).unwrap();
+        let cfg = load_with_seed(Some(&primary), Some(&seed)).unwrap();
+        assert_eq!(cfg.name, "Boompi");
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -54,8 +54,14 @@ struct Cli {
     sim: bool,
 
     /// Path to the device config TOML (default: built-in defaults).
+    /// Settings changes persist back to this file.
     #[arg(long)]
     config: Option<PathBuf>,
+
+    /// Read-only seed config used when --config doesn't exist yet
+    /// (appliance: image-baked hardware facts seeding /data on first boot).
+    #[arg(long)]
+    config_seed: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -68,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let cfg = config::load(cli.config.as_deref())?;
+    let cfg = config::load_with_seed(cli.config.as_deref(), cli.config_seed.as_deref())?;
     tracing::info!(name = %cfg.name, "starting boompid v{}", state::VERSION);
 
     let app = state::App::new(cfg, cli.config.clone());

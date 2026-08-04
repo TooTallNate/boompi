@@ -287,7 +287,23 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
    Remaining: `/data` writable partition for appliance config persistence
    (Phase 4 image work), panel BT device list, richer wizard polish.
 
-### Phase 6 — Boot polish + release
+### Phase 6 — Boot polish, updates + release
+
+**Software updates** (design settled; builds on the `/data` partition):
+- Partition layout grows to boot / rootfs-A / rootfs-B / data; the Pi
+  bootloader's native `tryboot` mechanism gives atomic A/B switching with
+  automatic fallback when the new slot fails to mark itself healthy.
+- boompid gains an updater module + Settings section (web + panel):
+  "check for updates" hits a release feed — GitHub Releases once tagging
+  starts (CI artifacts as the interim nightly channel) — compares
+  versions, downloads the rootfs image into the inactive slot, verifies
+  (hash from the feed), sets the tryboot flag, reboots. An auto-update
+  toggle (default off) lives in Settings and persists like everything
+  else. RAUC (packaged in Buildroot, documented Pi tryboot support) is
+  the fallback if hand-rolling slot management proves annoying.
+- `/data` is never touched by updates — state and OS lifecycles stay
+  decoupled (same property that makes reflash-during-dev painless).
+
 Silent boot (`quiet loglevel=0`, `disable_splash=1`, no cursor/rainbow),
 boot-time tuning to < 10 s, service hardening (`Restart=always`, watchdog),
 CI image builds with ccache. Tag v2.0.

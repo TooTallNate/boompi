@@ -1,12 +1,17 @@
 [Unit]
 Description=Boompi backend daemon
-After=pipewire.service wireplumber.service bluetooth.service network.target
+After=pipewire.service wireplumber.service bluetooth.service network.target systemd-tmpfiles-setup.service
+RequiresMountsFor=/data
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/boompid --config /etc/boompi/boompi.toml
+# Runtime config lives on /data (survives reflashes); the image-baked
+# /etc file only seeds the very first boot (hardware facts: model,
+# battery bus). Streaming credential caches land in /data/cache.
+ExecStart=/usr/bin/boompid --config /data/boompi.toml --config-seed /etc/boompi/boompi.toml
 Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
 Environment=XDG_RUNTIME_DIR=/run/pipewire
+Environment=XDG_CACHE_HOME=/data/cache
 Environment=RUST_LOG=boompid=info
 Restart=always
 RestartSec=2
