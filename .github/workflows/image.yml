@@ -22,7 +22,7 @@ concurrency:
 
 env:
   BR_VERSION: "2025.02"
-  # Zig cross-glibc floor; must be <= the Bootlin toolchain's glibc.
+  # Fallback zig glibc target if detection from staging libc fails.
   ZIG_GLIBC: "2.31"
 
 jobs:
@@ -42,24 +42,27 @@ jobs:
             build-essential bc bison flex libssl-dev libncurses-dev \
             rsync cpio file wget unzip ccache
 
-      - name: Cache Buildroot downloads
-        uses: actions/cache@v4
+# Caches are split into restore/save pairs with `if: always()` so a failed
+      # build still persists its progress (kernel/toolchain objects, downloads)
+      # — otherwise every red run repeats the full ~80 min pass 1.
+      - name: Restore Buildroot downloads
+        uses: actions/cache/restore@v4
         with:
           path: /home/runner/br-dl
           key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
           restore-keys: |
             br-dl-${{ env.BR_VERSION }}-
 
-      - name: Cache ccache
-        uses: actions/cache@v4
+      - name: Restore ccache
+        uses: actions/cache/restore@v4
         with:
           path: /home/runner/.buildroot-ccache
           key: br-ccache-pi3-${{ github.sha }}
           restore-keys: |
             br-ccache-pi3-
 
-      - name: Cache cargo
-        uses: actions/cache@v4
+      - name: Restore cargo cache
+        uses: actions/cache/restore@v4
         with:
           path: |
             ~/.cargo/registry
@@ -85,19 +88,28 @@ jobs:
       - name: Install Rust cross tooling
         run: |
           rustup target add aarch64-unknown-linux-gnu
-          pipx install cargo-zigbuild
+          # The pip package pulls in `ziglang` (zig itself) as a dependency;
+          # pipx isolation would hide it from cargo-zigbuild's discovery.
+          pip install --break-system-packages cargo-zigbuild
+          cargo zigbuild --version
 
       - name: Cross-build boompid + boompi-ui against staging
         run: |
           STAGING="$OUTPUT/staging"
+          # Target exactly the image's glibc so linking against staging .so
+          # files never references newer symbol versions than zig provides.
+          LIBC="$(find "$STAGING" -name 'libc.so.6' | head -1)"
+          GLIBC="$(grep -aoE 'release version [0-9]+\.[0-9]+' "$LIBC" | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)"
+          GLIBC="${GLIBC:-$ZIG_GLIBC}"
+          echo "staging glibc: $GLIBC"
           export PKG_CONFIG_ALLOW_CROSS=1
           export PKG_CONFIG_SYSROOT_DIR="$STAGING"
           export PKG_CONFIG_LIBDIR="$STAGING/usr/lib/pkgconfig:$STAGING/usr/share/pkgconfig"
           export RUSTFLAGS="-L $STAGING/usr/lib"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
-            --target "aarch64-unknown-linux-gnu.$ZIG_GLIBC" -p boompid
+            --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
-            --target "aarch64-unknown-linux-gnu.$ZIG_GLIBC" \
+            --target "aarch64-unknown-linux-gnu.$GLIBC" \
             -p boompi-ui --no-default-features --features kms
 
       - name: Inject binaries + emoji font into the image overlay
@@ -124,3 +136,26 @@ jobs:
           path: /home/runner/br-output/images/sdcard.img.xz
           if-no-files-found: error
           retention-days: 14
+
+      - name: Save Buildroot downloads
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/br-dl
+          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
+
+      - name: Save ccache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.buildroot-ccache
+          key: br-ccache-pi3-${{ github.sha }}
+
+      - name: Save cargo cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            rust/target
+          key: cargo-image-${{ hashFiles('rust/Cargo.lock') }}
