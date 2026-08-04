@@ -92,7 +92,7 @@ fn main() -> anyhow::Result<()> {
         ui.on_online_art_toggled(move |enabled| {
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
                 online_art_fallback: Some(enabled),
-                name: None,
+                ..SettingsPatch::default()
             }));
         });
     }

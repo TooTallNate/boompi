@@ -41,11 +41,15 @@ pub fn spawn(app: SharedApp) {
     app.register_source(SourceKind::Spotify, tx);
     tokio::spawn(async move {
         loop {
+            // Clean exits (rename, fresh discovery credentials) restart
+            // almost immediately; failures back off.
             match run_once(&app, &mut rx).await {
-                Ok(()) => tracing::warn!("spotify session ended; restarting in 10s"),
-                Err(err) => tracing::warn!(%err, "spotify source failed; restarting in 10s"),
+                Ok(()) => tokio::time::sleep(Duration::from_secs(1)).await,
+                Err(err) => {
+                    tracing::warn!(%err, "spotify source failed; restarting in 10s");
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
             }
-            tokio::time::sleep(Duration::from_secs(10)).await;
         }
     });
 }
@@ -54,7 +58,9 @@ async fn run_once(
     app: &SharedApp,
     cmds: &mut mpsc::UnboundedReceiver<SourceCommand>,
 ) -> anyhow::Result<()> {
-    let name = app.cfg.name.clone();
+    let name = app.speaker_name().await;
+    let mut cfg_watch = app.subscribe_cfg();
+    cfg_watch.mark_unchanged();
     let cache_dir = cache_dir();
     tokio::fs::create_dir_all(&cache_dir).await.ok();
     // Credentials + remembered volume persist; no audio cache (SD wear).
@@ -128,6 +134,12 @@ async fn run_once(
             _ = &mut spirc_task => {
                 clear_if_active(app).await;
                 anyhow::bail!("spirc task ended");
+            }
+            _ = cfg_watch.changed() => {
+                tracing::info!("speaker renamed; restarting Spotify Connect");
+                let _ = spirc.shutdown();
+                clear_if_active(app).await;
+                return Ok(());
             }
             creds = discovery.next() => {
                 // Some(_): a (possibly different) account tapped us while a

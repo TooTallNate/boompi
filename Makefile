@@ -3,7 +3,7 @@ MANIFEST := rust/Cargo.toml
 #   make ui BACKEND=ws://boombox.local:3001/ws
 BACKEND ?= ws://127.0.0.1:3001/ws
 
-.PHONY: check test fmt clippy sim ui deploy image-pi3 image-pi4
+.PHONY: check test fmt clippy sim ui web deploy image-pi3 image-pi4
 
 check:
 	cargo check --manifest-path $(MANIFEST) --workspace
@@ -25,6 +25,11 @@ sim:
 # BACKEND at a real boombox.
 ui:
 	cargo run --manifest-path $(MANIFEST) -p boompi-ui -- --backend $(BACKEND)
+
+# Rebuild the settings web UI (web/dist is committed and embedded into
+# boompid, so this only needs to run when web/src changes).
+web:
+	cd web && pnpm install --frozen-lockfile && pnpm build
 
 # ---- cross-compilation for the Pi (see scripts/cross-build.sh) ------------
 # One-time: brew install zig cargo-zigbuild && rustup target add aarch64-unknown-linux-gnu

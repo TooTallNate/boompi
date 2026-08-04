@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let cfg = config::load(cli.config.as_deref())?;
     tracing::info!(name = %cfg.name, "starting boompid v{}", state::VERSION);
 
-    let app = state::App::new(cfg);
+    let app = state::App::new(cfg, cli.config.clone());
 
     if cli.sim {
         tracing::info!("simulation mode: fake sources, battery, and visualizer");

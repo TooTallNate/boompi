@@ -1,31 +1,132 @@
 //! axum HTTP + WebSocket server.
+//!
+//! One router, up to two listeners: the protocol port (default :3001,
+//! WebSocket + art + JSON API) and — for the browser settings UI — plain
+//! HTTP on :80 when we can bind it (root on the appliance), falling back
+//! to :8080 for unprivileged dev runs.
 
 use crate::state::{Outbound, SharedApp};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::get;
-use axum::Router;
-use boompi_proto::{ClientMessage, Hello, ServerMessage, PROTO_VERSION};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use boompi_proto::{ClientMessage, Hello, ServerMessage, SettingsPatch, PROTO_VERSION};
 use std::net::SocketAddr;
+
+/// The Vite/React settings SPA (`web/dist`, committed prebuilt so cargo
+/// and Buildroot builds don't need a Node toolchain; `make web` refreshes).
+#[derive(rust_embed::Embed)]
+#[folder = "../../web/dist"]
+struct WebAssets;
 
 pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
     let router = Router::new()
         .route("/ws", get(ws_upgrade))
         .route("/healthz", get(|| async { "ok" }))
         .route("/art/{id}", get(artwork))
+        .route("/api/state", get(api_state))
+        .route("/api/settings", post(api_settings))
+        .fallback(get(static_asset))
         .with_state(app);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on http://{addr} (WebSocket at /ws)");
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("shutting down");
-        })
-        .await?;
+
+    // Second listener for the settings web UI on a browser-friendly port.
+    let ui_listener = if addr.port() == 80 {
+        None
+    } else {
+        match tokio::net::TcpListener::bind(("0.0.0.0", 80)).await {
+            Ok(l) => {
+                tracing::info!("settings UI on http://0.0.0.0:80");
+                Some(l)
+            }
+            Err(err) => match tokio::net::TcpListener::bind(("0.0.0.0", 8080)).await {
+                Ok(l) => {
+                    tracing::info!(%err, "port 80 unavailable; settings UI on http://0.0.0.0:8080");
+                    Some(l)
+                }
+                Err(err8080) => {
+                    tracing::warn!(%err, %err8080, "no settings UI port available");
+                    None
+                }
+            },
+        }
+    };
+
+    let shutdown = || async {
+        let _ = tokio::signal::ctrl_c().await;
+        tracing::info!("shutting down");
+    };
+    match ui_listener {
+        Some(ui) => {
+            let (a, b) = tokio::join!(
+                axum::serve(listener, router.clone()).with_graceful_shutdown(shutdown()),
+                axum::serve(ui, router).with_graceful_shutdown(shutdown()),
+            );
+            a?;
+            b?;
+        }
+        None => axum::serve(listener, router)
+            .with_graceful_shutdown(shutdown())
+            .await?,
+    }
     Ok(())
+}
+
+/// Embedded SPA assets; unknown paths fall back to index.html so client-side
+/// routes survive a refresh. Hashed assets get immutable caching.
+async fn static_asset(uri: axum::http::Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
+    let path = if path.is_empty() { "index.html" } else { path };
+    let (file, cache) = match WebAssets::get(path) {
+        Some(f) => (
+            f,
+            if path.starts_with("assets/") {
+                "public, max-age=31536000, immutable"
+            } else {
+                "no-cache"
+            },
+        ),
+        None => match WebAssets::get("index.html") {
+            Some(f) => (f, "no-cache"),
+            None => return StatusCode::NOT_FOUND.into_response(),
+        },
+    };
+    (
+        [
+            ("content-type", file.metadata.mimetype().to_string()),
+            ("cache-control", cache.to_string()),
+        ],
+        file.data.into_owned(),
+    )
+        .into_response()
+}
+
+/// Combined hello + state snapshot for the settings web UI.
+async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
+    let hello = Hello {
+        proto_version: PROTO_VERSION,
+        name: app.speaker_name().await,
+        model: app.cfg.model.clone(),
+        version: crate::state::VERSION.into(),
+        uptime_secs: app.started.elapsed().as_secs(),
+    };
+    let state = app.snapshot().await;
+    Json(serde_json::json!({ "hello": hello, "state": state }))
+}
+
+/// Apply a settings patch (same semantics as the WebSocket message) and
+/// return the resulting settings.
+async fn api_settings(
+    State(app): State<SharedApp>,
+    Json(patch): Json<SettingsPatch>,
+) -> impl IntoResponse {
+    app.handle_client_message(ClientMessage::SetSettings(patch))
+        .await;
+    Json(app.snapshot().await.settings)
 }
 
 async fn ws_upgrade(State(app): State<SharedApp>, ws: WebSocketUpgrade) -> impl IntoResponse {
@@ -58,7 +159,7 @@ async fn client_session(app: SharedApp, mut socket: WebSocket) -> anyhow::Result
     // Greeting: hello + full state snapshot.
     let hello = ServerMessage::Hello(Hello {
         proto_version: PROTO_VERSION,
-        name: app.cfg.name.clone(),
+        name: app.speaker_name().await,
         model: app.cfg.model.clone(),
         version: crate::state::VERSION.into(),
         uptime_secs: app.started.elapsed().as_secs(),

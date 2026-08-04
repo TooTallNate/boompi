@@ -38,7 +38,16 @@ pub enum SourceCommand {
 pub type SharedApp = Arc<App>;
 
 pub struct App {
+    /// Boot-time config. Runtime-mutable values (name, theme, ...) live in
+    /// `shared.settings` — read those, not this, for anything a user can
+    /// change; `cfg` remains for boot-time facts (battery bus, model, ...).
     pub cfg: crate::config::Config,
+    /// Where to persist config changes (None = --config not given).
+    config_path: Option<std::path::PathBuf>,
+    /// Bumped whenever runtime config changes in a way that requires
+    /// sources to re-announce (speaker rename). Sources watch this and
+    /// restart their sessions with the fresh name.
+    cfg_generation: tokio::sync::watch::Sender<u64>,
     pub started: Instant,
     pub shared: RwLock<Shared>,
     pub tx: broadcast::Sender<Outbound>,
@@ -82,13 +91,17 @@ pub struct Shared {
 }
 
 impl App {
-    pub fn new(cfg: crate::config::Config) -> SharedApp {
+    pub fn new(cfg: crate::config::Config, config_path: Option<std::path::PathBuf>) -> SharedApp {
         let (tx, _) = broadcast::channel(256);
         let settings = Settings {
+            name: cfg.name.clone(),
+            theme: cfg.settings.theme,
             online_art_fallback: cfg.settings.online_art_fallback,
         };
         Arc::new(Self {
             cfg,
+            config_path,
+            cfg_generation: tokio::sync::watch::channel(0).0,
             started: Instant::now(),
             shared: RwLock::new(Shared {
                 volume: 0.5,
@@ -100,6 +113,38 @@ impl App {
             source_cmds: std::sync::Mutex::new(HashMap::new()),
             art: RwLock::new(ArtCache::default()),
         })
+    }
+
+    /// Current speaker name (runtime truth; may differ from boot config
+    /// after a rename).
+    pub async fn speaker_name(&self) -> String {
+        self.shared.read().await.settings.name.clone()
+    }
+
+    /// Subscribe to config-generation bumps (speaker rename → sources
+    /// restart their announcements). Only hardware sources listen today.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn subscribe_cfg(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.cfg_generation.subscribe()
+    }
+
+    /// Persist the current runtime settings back to the config file.
+    async fn persist_config(&self) {
+        let Some(path) = &self.config_path else {
+            tracing::warn!("no --config path; settings change not persisted");
+            return;
+        };
+        let mut cfg = self.cfg.clone();
+        {
+            let s = self.shared.read().await;
+            cfg.name = s.settings.name.clone();
+            cfg.settings.theme = s.settings.theme;
+            cfg.settings.online_art_fallback = s.settings.online_art_fallback;
+        }
+        match crate::config::save(&cfg, path) {
+            Ok(()) => tracing::info!(path = %path.display(), "config persisted"),
+            Err(err) => tracing::error!(%err, path = %path.display(), "config persist failed"),
+        }
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -273,18 +318,34 @@ impl App {
                 self.broadcast(ServerMessage::Pairing(pairing));
             }
             ClientMessage::SetSettings(patch) => {
-                let mut s = self.shared.write().await;
-                if let Some(v) = patch.online_art_fallback {
-                    s.settings.online_art_fallback = v;
-                }
-                if let Some(name) = patch.name {
-                    // TODO(Phase 3): update BT alias + persist to config.
-                    tracing::info!(%name, "speaker rename requested (not yet persisted)");
-                }
-                let settings = s.settings.clone();
-                drop(s);
-                // TODO(Phase 3): persist settings to /data/boompi.toml.
+                let mut renamed = false;
+                let settings = {
+                    let mut s = self.shared.write().await;
+                    if let Some(v) = patch.online_art_fallback {
+                        s.settings.online_art_fallback = v;
+                    }
+                    if let Some(theme) = patch.theme {
+                        s.settings.theme = theme;
+                    }
+                    if let Some(name) = patch.name {
+                        // Sanity limits: BT alias and mDNS instance names
+                        // both get unhappy with very long strings.
+                        let name = name.trim().chars().take(48).collect::<String>();
+                        if !name.is_empty() && name != s.settings.name {
+                            tracing::info!(%name, "speaker renamed");
+                            s.settings.name = name;
+                            renamed = true;
+                        }
+                    }
+                    s.settings.clone()
+                };
                 self.broadcast(ServerMessage::Settings(settings));
+                self.persist_config().await;
+                if renamed {
+                    // Sources re-announce under the new name (BT alias is
+                    // updated in place; AirPlay/Spotify restart discovery).
+                    self.cfg_generation.send_modify(|g| *g += 1);
+                }
             }
             ClientMessage::Setup(cmd) => {
                 tracing::info!(?cmd, "setup command (Phase 5)");

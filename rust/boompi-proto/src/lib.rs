@@ -122,9 +122,25 @@ pub struct Pairing {
     pub passkey: Option<u32>,
 }
 
+/// UI theme.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Theme {
+    #[default]
+    Dark,
+    Light,
+}
+
 /// User-adjustable settings, mirrored to all clients.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
+    /// Speaker name: Bluetooth alias + AirPlay receiver + Spotify Connect
+    /// device, all at once.
+    #[serde(default)]
+    pub name: String,
+    /// Panel UI theme.
+    #[serde(default)]
+    pub theme: Theme,
     /// When a source provides no album art, look it up online
     /// (iTunes Search / Cover Art Archive) by artist+album.
     pub online_art_fallback: bool,
@@ -135,9 +151,11 @@ pub struct Settings {
 pub struct SettingsPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub online_art_fallback: Option<bool>,
-    /// Rename the speaker (Bluetooth alias + advertised name).
+    /// Rename the speaker (Bluetooth alias + AirPlay + Spotify Connect).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme: Option<Theme>,
 }
 
 /// First-boot setup state. Expanded in Phase 5.

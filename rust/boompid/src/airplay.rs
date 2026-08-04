@@ -90,12 +90,16 @@ pub fn spawn(app: SharedApp) {
     app.register_source(SourceKind::Airplay, tx);
     tokio::spawn(async move {
         loop {
-            match run_once(&app, &mut rx).await {
-                Ok(()) => tracing::warn!("airplay session ended; restarting in 10s"),
-                Err(err) => tracing::warn!(%err, "airplay source failed; restarting in 10s"),
-            }
+            let result = run_once(&app, &mut rx).await;
             clear_if_active(&app).await;
-            tokio::time::sleep(Duration::from_secs(10)).await;
+            match result {
+                // Clean exits (speaker rename) restart almost immediately.
+                Ok(()) => tokio::time::sleep(Duration::from_secs(1)).await,
+                Err(err) => {
+                    tracing::warn!(%err, "airplay source failed; restarting in 10s");
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
+            }
         }
     });
 }
@@ -104,7 +108,10 @@ async fn run_once(
     app: &SharedApp,
     cmds: &mut mpsc::UnboundedReceiver<SourceCommand>,
 ) -> anyhow::Result<()> {
-    write_config(&app.cfg.name)?;
+    let name = app.speaker_name().await;
+    let mut cfg_watch = app.subscribe_cfg();
+    cfg_watch.mark_unchanged();
+    write_config(&name)?;
     make_fifo(Path::new(FIFO_PATH))?;
 
     let mut child = tokio::process::Command::new("shairport-sync")
@@ -125,7 +132,7 @@ async fn run_once(
     wait_for_bus_name(&conn).await?;
     let sps = ShairportSyncProxy::new(&conn).await?;
     let rc = RemoteControlProxy::new(&conn).await?;
-    tracing::info!(name = %app.cfg.name, "AirPlay receiver active (shairport-sync child)");
+    tracing::info!(%name, "AirPlay receiver active (shairport-sync child)");
 
     let mut active_stream = sps.receive_active_changed().await;
     let mut state_stream = rc.receive_player_state_changed().await;
@@ -183,6 +190,11 @@ async fn run_once(
                 if let Ok(progress) = progress.get().await {
                     apply_progress(app, &progress).await;
                 }
+            }
+            _ = cfg_watch.changed() => {
+                tracing::info!("speaker renamed; restarting AirPlay receiver");
+                // kill_on_drop tears the shairport child down with us.
+                return Ok(());
             }
             cmd = cmds.recv() => {
                 let Some(cmd) = cmd else { anyhow::bail!("command channel closed") };

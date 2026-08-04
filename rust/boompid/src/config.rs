@@ -5,10 +5,10 @@
 //! settings are written by the setup flow / Settings screen.
 
 use anyhow::Context;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
     /// Speaker name (Bluetooth alias, shown on the Connect screen).
@@ -38,7 +38,7 @@ impl Default for Config {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SpotifyConfig {
     /// Spotify Connect (embedded librespot). On by default.
@@ -51,7 +51,7 @@ impl Default for SpotifyConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct AirplayConfig {
     /// AirPlay receiver (shairport-sync, spawned by boompid). On by default;
@@ -65,7 +65,7 @@ impl Default for AirplayConfig {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct BatteryConfig {
     /// Linux I2C bus number. The Pi 3 box reaches the INA260 through the
@@ -98,22 +98,45 @@ const fn ina260_default_address() -> u8 {
     0x40
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SettingsConfig {
     pub online_art_fallback: bool,
+    /// Panel UI theme ("dark" / "light").
+    pub theme: boompi_proto::Theme,
 }
 
 /// Load config from `path`, or defaults when `None`.
+///
+/// A missing file is not an error when the path was given explicitly: the
+/// appliance points at `/data/boompi.toml` before first-boot setup has
+/// written it.
 pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
     match path {
         None => Ok(Config::default()),
-        Some(p) => {
-            let raw = std::fs::read_to_string(p)
-                .with_context(|| format!("reading config {}", p.display()))?;
-            toml::from_str(&raw).with_context(|| format!("parsing config {}", p.display()))
-        }
+        Some(p) => match std::fs::read_to_string(p) {
+            Ok(raw) => {
+                toml::from_str(&raw).with_context(|| format!("parsing config {}", p.display()))
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                tracing::info!(path = %p.display(), "config not found; using defaults");
+                Ok(Config::default())
+            }
+            Err(err) => {
+                Err(err).with_context(|| format!("reading config {}", p.display()))
+            }
+        },
     }
+}
+
+/// Persist config to `path` atomically (write sibling temp file + rename).
+pub fn save(cfg: &Config, path: &Path) -> anyhow::Result<()> {
+    let toml = toml::to_string_pretty(cfg).context("serializing config")?;
+    let toml = format!("# Boompi device configuration — managed by boompid.\n{toml}");
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, &toml).with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -149,5 +172,29 @@ mod tests {
         assert_eq!(cfg.name, "Boompi");
         assert!(cfg.battery.is_none());
         assert!(!cfg.settings.online_art_fallback);
+        assert_eq!(cfg.settings.theme, boompi_proto::Theme::Dark);
+    }
+
+    #[test]
+    fn save_load_round_trip() {
+        let dir = std::env::temp_dir().join(format!("boompi-cfg-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("boompi.toml");
+        let mut cfg = Config::default();
+        cfg.name = "Porch Box 📻".into();
+        cfg.settings.theme = boompi_proto::Theme::Light;
+        cfg.settings.online_art_fallback = true;
+        save(&cfg, &path).unwrap();
+        let loaded = load(Some(&path)).unwrap();
+        assert_eq!(loaded.name, "Porch Box 📻");
+        assert_eq!(loaded.settings.theme, boompi_proto::Theme::Light);
+        assert!(loaded.settings.online_art_fallback);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn missing_explicit_path_is_defaults() {
+        let cfg = load(Some(Path::new("/nonexistent/boompi.toml"))).unwrap();
+        assert_eq!(cfg.name, "Boompi");
     }
 }

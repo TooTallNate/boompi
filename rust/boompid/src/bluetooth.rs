@@ -21,6 +21,13 @@ use zbus::fdo::ObjectManagerProxy;
 use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
 use zbus::{MatchRule, MessageStream};
 
+#[zbus::proxy(interface = "org.bluez.Adapter1", default_service = "org.bluez")]
+trait Adapter1 {
+    /// Controller alias — the name phones see when pairing/connecting.
+    #[zbus(property)]
+    fn set_alias(&self, alias: &str) -> zbus::Result<()>;
+}
+
 #[zbus::proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
 trait Device1 {
     #[zbus(property)]
@@ -61,6 +68,8 @@ const AVRCP_MAX: f32 = 127.0;
 /// Mutable view of the currently connected phone/player.
 #[derive(Default)]
 struct Session {
+    /// Local controller (survives phone disconnects).
+    adapter_path: Option<OwnedObjectPath>,
     device_path: Option<String>,
     device_alias: Option<String>,
     player_path: Option<OwnedObjectPath>,
@@ -163,6 +172,8 @@ async fn run(
     let mut removed_stream = om.receive_interfaces_removed().await?;
 
     let mut session = Session::default();
+    let mut cfg_watch = app.subscribe_cfg();
+    cfg_watch.mark_unchanged();
 
     // Adopt whatever is already connected (e.g. phone paired+connected
     // before boompid started).
@@ -171,9 +182,14 @@ async fn run(
             handle_interface_added(&ctx, &mut session, &path, iface.as_str(), props).await;
         }
     }
+    // The name phones see: keep the controller alias in sync with config.
+    apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
 
     loop {
         tokio::select! {
+            _ = cfg_watch.changed() => {
+                apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
+            }
             msg = props_stream.next() => {
                 let Some(Ok(msg)) = msg else { anyhow::bail!("D-Bus signal stream ended") };
                 let Some(path) = msg.header().path().map(|p| p.to_string()) else { continue };
@@ -224,6 +240,9 @@ async fn handle_interface_added(
     props: &HashMap<String, OwnedValue>,
 ) {
     match iface {
+        "org.bluez.Adapter1" => {
+            session.adapter_path = Some(path.clone());
+        }
         "org.bluez.MediaPlayer1" => {
             tracing::info!(%path, "media player appeared");
             session.player_path = Some(path.clone());
@@ -449,8 +468,30 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     ctx.app.broadcast(ServerMessage::Source(source));
 }
 
+/// Set the BlueZ controller alias — the advertised speaker name.
+async fn apply_adapter_alias(ctx: &Ctx, session: &Session, name: &str) {
+    let Some(path) = &session.adapter_path else {
+        tracing::debug!("no BT adapter yet; alias not set");
+        return;
+    };
+    let result = async {
+        Adapter1Proxy::builder(&ctx.conn)
+            .path(path.clone())?
+            .build()
+            .await?
+            .set_alias(name)
+            .await
+    }
+    .await;
+    match result {
+        Ok(()) => tracing::info!(%name, "BT adapter alias set"),
+        Err(err) => tracing::warn!(%err, %name, "failed to set BT adapter alias"),
+    }
+}
+
 async fn clear_session(ctx: &Ctx, session: &mut Session) {
     *session = Session {
+        adapter_path: session.adapter_path.clone(),
         device_path: session.device_path.clone(),
         device_alias: session.device_alias.clone(),
         ..Session::default()

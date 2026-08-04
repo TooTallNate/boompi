@@ -16,6 +16,8 @@ bytes = "1"
 # tail, sometimes mid-write); decode-validate before publishing.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 libc = "0.2"
+# Settings web UI (web/dist, committed prebuilt — regenerate via `make web`).
+rust-embed = { version = "8", features = ["mime-guess"] }
 realfft = "3"
 clap = { workspace = true }
 serde = { workspace = true }
