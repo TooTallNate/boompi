@@ -234,9 +234,12 @@ mesa vc4 DRI driver. The software-renderer build (`kms` feature,
 monochrome Noto Emoji) remains as a fallback variant.
 
 **Fonts** (recipe validated in Phase 0): UI chrome uses drawn vector icons
-(`icons.slint`, zero font dependency); Slint 1.17 embeds Inter for regular
-text. For arbitrary user content (speaker name `George's 🔊`, track/device
-names) the image ships:
+(`icons.slint`, zero font dependency). Regular text is **Geist Sans**
+(vendored at `rust/boompi-ui/ui/fonts/`, OFL license alongside), embedded
+into the binary via Slint's font import + `default-font-family` — so text
+renders identically on the laptop, dev Pi, and appliance with no OS font
+packages. For emoji in arbitrary user content (speaker name
+`George's 🔊`, track/device names) the image additionally ships:
 1. Noto **Color** Emoji (CBDT)
 2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Color Emoji`
 

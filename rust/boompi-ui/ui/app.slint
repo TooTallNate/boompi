@@ -2,6 +2,12 @@
 // Screens: main (connect / now-playing), battery, settings — with the
 // visualizer behind everything and the footer always on top.
 
+// Geist Sans (vendored, OFL — see fonts/OFL.txt) is embedded into the
+// binary, so every platform renders identically with no OS font setup.
+// Emoji fallback still comes from the system (fontconfig) — see
+// docs/PLAN.md fonts section.
+import "fonts/Geist.ttf";
+
 import { Theme } from "components/theme.slint";
 import { Footer } from "components/footer.slint";
 import { NowPlaying } from "components/now_playing.slint";
@@ -14,6 +20,7 @@ export component AppWindow inherits Window {
     width: 800px;
     height: 480px;
     background: Theme.bg;
+    default-font-family: "Geist";
     default-font-size: 18px;
 
     // --- connection / identity ---
