@@ -30,8 +30,6 @@ concurrency:
 
 env:
   BR_VERSION: "2025.02"
-  # Fallback zig glibc target if detection from staging libc fails.
-  ZIG_GLIBC: "2.31"
 
 jobs:
   pi3:
@@ -105,9 +103,16 @@ jobs:
           STAGING="$OUTPUT/staging"
           # Target exactly the image's glibc so linking against staging .so
           # files never references newer symbol versions than zig provides.
-          LIBC="$(find "$STAGING" -name 'libc.so.6' | head -1)"
-          GLIBC="$(grep -aoE 'release version [0-9]+\.[0-9]+' "$LIBC" | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)"
-          GLIBC="${GLIBC:-$ZIG_GLIBC}"
+          # NB: `$OUTPUT/staging` is a symlink into host/<tuple>/sysroot, so
+          # `find` needs -L to descend into it (without it, detection came up
+          # empty and we silently linked against an ancient fallback glibc,
+          # which blew up much later with undefined GLIBC_2.3x references).
+          LIBC="$(find -L "$STAGING" -name 'libc.so.6' -type f | head -1)"
+          GLIBC="$(grep -aoE 'release version [0-9]+\.[0-9]+' "$LIBC" 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)"
+          if [ -z "$GLIBC" ]; then
+            echo "::error::failed to detect glibc version from staging sysroot (libc: '${LIBC:-not found}')"
+            exit 1
+          fi
           echo "staging glibc: $GLIBC"
           export PKG_CONFIG_ALLOW_CROSS=1
           export PKG_CONFIG_SYSROOT_DIR="$STAGING"
