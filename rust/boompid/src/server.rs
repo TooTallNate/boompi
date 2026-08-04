@@ -28,6 +28,7 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/art/{id}", get(artwork))
         .route("/api/state", get(api_state))
         .route("/api/settings", post(api_settings))
+        .route("/api/command", post(api_command))
         .fallback(get(static_asset))
         .with_state(app);
 
@@ -116,6 +117,17 @@ async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
     };
     let state = app.snapshot().await;
     Json(serde_json::json!({ "hello": hello, "state": state }))
+}
+
+/// Accept any [`ClientMessage`] over plain HTTP — same dispatch as the
+/// WebSocket path. Lets the web UI (and curl) drive pairing/device actions
+/// without holding a socket open.
+async fn api_command(
+    State(app): State<SharedApp>,
+    Json(msg): Json<ClientMessage>,
+) -> impl IntoResponse {
+    app.handle_client_message(msg).await;
+    StatusCode::NO_CONTENT
 }
 
 /// Apply a settings patch (same semantics as the WebSocket message) and

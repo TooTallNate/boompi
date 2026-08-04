@@ -1,8 +1,8 @@
 //! Shared daemon state and client command handling.
 
 use boompi_proto::{
-    Battery, ClientMessage, Pairing, PairingAction, PairingState, PlaybackStatus, ServerMessage,
-    Settings, SetupState, SourceInfo, SourceKind, State, Track,
+    Battery, BtDevice, BtDeviceAction, ClientMessage, Pairing, PairingAction, PairingState,
+    PlaybackStatus, ServerMessage, Settings, SetupState, SourceInfo, SourceKind, State, Track,
 };
 use bytes::Bytes;
 use std::collections::HashMap;
@@ -35,6 +35,18 @@ pub enum SourceCommand {
     SetVolume(f32),
 }
 
+/// Bluetooth control commands routed to the bluetooth task (pairing agent
+/// decisions, discoverable toggling, device management).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Debug, Clone)]
+pub enum BtCommand {
+    Pairing(PairingAction),
+    Device {
+        address: String,
+        action: BtDeviceAction,
+    },
+}
+
 pub type SharedApp = Arc<App>;
 
 pub struct App {
@@ -59,6 +71,9 @@ pub struct App {
     /// registered the built-in/sim path applies commands directly.
     source_cmds:
         std::sync::Mutex<HashMap<SourceKind, tokio::sync::mpsc::UnboundedSender<SourceCommand>>>,
+    /// Bluetooth control channel (pairing + device management), registered
+    /// by the bluetooth task when it starts.
+    bt_ctl: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<BtCommand>>>,
     /// Small LRU cache of album artwork, keyed by `artwork_id`
     /// (served via `GET /art/{id}` and pushed as binary frames).
     art: RwLock<ArtCache>,
@@ -84,6 +99,7 @@ pub struct Shared {
     pub volume: f32,
     pub battery: Option<Battery>,
     pub pairing: Pairing,
+    pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
     /// Number of clients currently requesting fast battery polling.
@@ -111,8 +127,22 @@ impl App {
             tx,
             sim_skip: Notify::new(),
             source_cmds: std::sync::Mutex::new(HashMap::new()),
+            bt_ctl: std::sync::Mutex::new(None),
             art: RwLock::new(ArtCache::default()),
         })
+    }
+
+    /// Register the bluetooth control channel.
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub fn register_bt_ctl(&self, tx: tokio::sync::mpsc::UnboundedSender<BtCommand>) {
+        *self.bt_ctl.lock().unwrap() = Some(tx);
+    }
+
+    fn forward_bt(&self, cmd: BtCommand) -> bool {
+        match self.bt_ctl.lock().unwrap().as_ref() {
+            Some(tx) => tx.send(cmd).is_ok(),
+            None => false,
+        }
     }
 
     /// Current speaker name (runtime truth; may differ from boot config
@@ -202,6 +232,7 @@ impl App {
             volume: s.volume,
             battery: s.battery.clone(),
             pairing: s.pairing.clone(),
+            bt_devices: s.bt_devices.clone(),
             settings: s.settings.clone(),
             setup: s.setup.clone(),
         }
@@ -300,22 +331,28 @@ impl App {
                 // request is released when it disconnects.
             }
             ClientMessage::Pairing { action } => {
-                // TODO(Phase 3): drive BlueZ Adapter1 discoverable +
-                // Agent1 confirm/reject. For now just mirror state so UI
-                // development has something to bind to.
-                let mut s = self.shared.write().await;
-                s.pairing = match action {
-                    PairingAction::Enable => Pairing {
-                        state: PairingState::Discoverable,
-                        ..Pairing::default()
-                    },
-                    PairingAction::Cancel | PairingAction::Reject | PairingAction::Confirm => {
-                        Pairing::default()
-                    }
-                };
-                let pairing = s.pairing.clone();
-                drop(s);
-                self.broadcast(ServerMessage::Pairing(pairing));
+                if !self.forward_bt(BtCommand::Pairing(action)) {
+                    // No bluetooth task (--sim / non-Linux): mirror state so
+                    // UI development has something to bind to.
+                    let mut s = self.shared.write().await;
+                    s.pairing = match action {
+                        PairingAction::Enable => Pairing {
+                            state: PairingState::Discoverable,
+                            ..Pairing::default()
+                        },
+                        PairingAction::Cancel
+                        | PairingAction::Reject
+                        | PairingAction::Confirm => Pairing::default(),
+                    };
+                    let pairing = s.pairing.clone();
+                    drop(s);
+                    self.broadcast(ServerMessage::Pairing(pairing));
+                }
+            }
+            ClientMessage::BtDevice { address, action } => {
+                if !self.forward_bt(BtCommand::Device { address, action }) {
+                    tracing::info!(?action, "bt device action ignored (no bluetooth task)");
+                }
             }
             ClientMessage::SetSettings(patch) => {
                 let mut renamed = false;

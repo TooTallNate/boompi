@@ -15,6 +15,24 @@ export interface SettingsPatch {
   online_art_fallback?: boolean;
 }
 
+export type PairingState = "idle" | "discoverable" | "confirm";
+
+export interface Pairing {
+  state: PairingState;
+  device_name?: string;
+  passkey?: number;
+}
+
+export type PairingAction = "enable" | "cancel" | "confirm" | "reject";
+
+export interface BtDevice {
+  address: string;
+  name: string;
+  connected: boolean;
+}
+
+export type BtDeviceAction = "connect" | "disconnect" | "remove";
+
 export interface Hello {
   proto_version: number;
   name: string;
@@ -26,15 +44,31 @@ export interface Hello {
 export interface AppState {
   settings: Settings;
   volume: number;
+  pairing: Pairing;
+  bt_devices: BtDevice[];
+  setup: { required: boolean };
   // Present but unused by the settings UI so far:
   source: unknown;
   track: unknown;
   battery: unknown;
-  pairing: unknown;
-  setup: { required: boolean };
 }
 
 export interface StateResponse {
   hello: Hello;
   state: AppState;
 }
+
+/** Server → client WebSocket messages (subset the settings UI reacts to). */
+export type ServerMessage =
+  | ({ type: "hello" } & Hello)
+  | { type: "state"; [k: string]: unknown }
+  | ({ type: "settings" } & Settings)
+  | ({ type: "pairing" } & Pairing)
+  | { type: "bt_devices"; devices: BtDevice[] }
+  | { type: "volume"; level: number }
+  | { type: string; [k: string]: unknown };
+
+/** Client → server WebSocket messages used by the settings UI. */
+export type ClientMessage =
+  | { type: "pairing"; action: PairingAction }
+  | { type: "bt_device"; address: string; action: BtDeviceAction };

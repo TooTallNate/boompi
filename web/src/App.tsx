@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
-import { fetchState, patchSettings } from "./api";
-import type { Hello, Settings, SettingsPatch, Theme } from "./proto";
+import { patchSettings } from "./api";
+import { useBoompi } from "./useBoompi";
+import type {
+  BtDevice,
+  ClientMessage,
+  Pairing,
+  Settings,
+  SettingsPatch,
+  Theme,
+} from "./proto";
 
 type SaveStatus =
   | { kind: "idle" }
@@ -10,18 +18,8 @@ type SaveStatus =
   | { kind: "err"; message: string };
 
 export default function App() {
-  const [hello, setHello] = useState<Hello | null>(null);
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchState()
-      .then((data) => {
-        setHello(data.hello);
-        setSettings(data.state.settings);
-      })
-      .catch((e) => setError(String(e)));
-  }, []);
+  const { hello, state, error, send, applySettings } = useBoompi();
+  const settings = state?.settings ?? null;
 
   return (
     <div className="flex justify-center px-4 pt-6 pb-16">
@@ -38,16 +36,22 @@ export default function App() {
 
         {settings && (
           <>
-            <NameSection settings={settings} onSaved={setSettings} />
-            <AppearanceSection settings={settings} onSaved={setSettings} />
-            <ArtSection settings={settings} onSaved={setSettings} />
+            <NameSection settings={settings} onSaved={applySettings} />
+            <AppearanceSection settings={settings} onSaved={applySettings} />
+            <ArtSection settings={settings} onSaved={applySettings} />
           </>
         )}
 
+        {state && (
+          <BluetoothSection
+            pairing={state.pairing}
+            devices={state.bt_devices ?? []}
+            speakerName={settings?.name ?? "this speaker"}
+            send={send}
+          />
+        )}
+
         <Section title="Wi-Fi">
-          <p className="text-sm text-dim">Coming soon.</p>
-        </Section>
-        <Section title="Bluetooth devices">
           <p className="text-sm text-dim">Coming soon.</p>
         </Section>
         <Section title="Clock & timezone">
@@ -55,6 +59,121 @@ export default function App() {
         </Section>
       </main>
     </div>
+  );
+}
+
+function BluetoothSection({
+  pairing,
+  devices,
+  speakerName,
+  send,
+}: {
+  pairing: Pairing;
+  devices: BtDevice[];
+  speakerName: string;
+  send: (msg: ClientMessage) => void;
+}) {
+  return (
+    <Section title="Bluetooth">
+      {pairing.state === "idle" && (
+        <button
+          className="mb-2 rounded-lg bg-accent px-5 py-2.5 text-[15px] font-semibold text-accent-ink"
+          onClick={() => send({ type: "pairing", action: "enable" })}
+        >
+          Pair a device
+        </button>
+      )}
+      {pairing.state === "discoverable" && (
+        <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
+          <span className="text-sm">
+            Discoverable — choose “{speakerName}” in your device’s Bluetooth
+            settings.
+          </span>
+          <button
+            className="rounded-lg border border-line px-4 py-2 text-sm text-dim hover:text-fg"
+            onClick={() => send({ type: "pairing", action: "cancel" })}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+      {pairing.state === "confirm" && (
+        <div className="mb-2 rounded-lg border border-ok/40 bg-ok/10 p-3">
+          <p className="text-sm">
+            Pair with <strong>{pairing.device_name ?? "device"}</strong>?
+            Confirm this code matches:
+          </p>
+          <p className="my-2 text-center font-mono text-2xl tracking-[0.3em]">
+            {String(pairing.passkey ?? 0).padStart(6, "0")}
+          </p>
+          <div className="flex justify-center gap-3">
+            <button
+              className="rounded-lg bg-ok px-5 py-2 text-[15px] font-semibold text-accent-ink"
+              onClick={() => send({ type: "pairing", action: "confirm" })}
+            >
+              Pair
+            </button>
+            <button
+              className="rounded-lg border border-line px-5 py-2 text-[15px] text-dim hover:text-fg"
+              onClick={() => send({ type: "pairing", action: "reject" })}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
+
+      {devices.length === 0 ? (
+        <p className="text-sm text-dim">No paired devices.</p>
+      ) : (
+        devices.map((d) => (
+          <div
+            key={d.address}
+            className="flex items-center justify-between gap-3 border-t border-line py-2.5 first:border-t-0"
+          >
+            <div className="min-w-0">
+              <div className="truncate">{d.name}</div>
+              <div className="text-[12px] text-dim">
+                {d.connected ? (
+                  <span className="text-ok">connected</span>
+                ) : (
+                  "not connected"
+                )}
+                <span className="ml-2 font-mono">{d.address}</span>
+              </div>
+            </div>
+            <div className="flex flex-none gap-2">
+              <button
+                className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg"
+                onClick={() =>
+                  send({
+                    type: "bt_device",
+                    address: d.address,
+                    action: d.connected ? "disconnect" : "connect",
+                  })
+                }
+              >
+                {d.connected ? "Disconnect" : "Connect"}
+              </button>
+              <button
+                className="rounded-lg border border-err/40 px-3 py-1.5 text-sm text-err hover:bg-err/10"
+                onClick={() => {
+                  if (confirm(`Unpair “${d.name}”?`)) {
+                    send({
+                      type: "bt_device",
+                      address: d.address,
+                      action: "remove",
+                    });
+                  }
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </Section>
   );
 }
 

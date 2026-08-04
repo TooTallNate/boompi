@@ -59,7 +59,8 @@ BR2_PACKAGE_BLUEZ5_UTILS_OBEX=y
 BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
-BR2_PACKAGE_BLUEZ_TOOLS=y
+# bluez-tools (bt-agent) retired: boompid registers its own Agent1
+# (DisplayYesNo) with an on-screen confirm instead of auto-accepting.
 
 # Audio: PipeWire + WirePlumber + SBC codec (A2DP)
 BR2_PACKAGE_PIPEWIRE=y

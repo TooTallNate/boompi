@@ -122,6 +122,24 @@ pub struct Pairing {
     pub passkey: Option<u32>,
 }
 
+/// A Bluetooth device known to the adapter (paired, or mid-pairing).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct BtDevice {
+    /// Colon-form address ("6C:3A:FF:58:84:4C") — the id for device actions.
+    pub address: String,
+    pub name: String,
+    pub connected: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BtDeviceAction {
+    Connect,
+    Disconnect,
+    /// Unpair (BlueZ `RemoveDevice`).
+    Remove,
+}
+
 /// UI theme.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -211,6 +229,9 @@ pub struct State {
     pub volume: f32,
     pub battery: Option<Battery>,
     pub pairing: Pairing,
+    /// Paired Bluetooth devices.
+    #[serde(default)]
+    pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
 }
@@ -226,6 +247,9 @@ pub enum ServerMessage {
     Volume { level: f32 },
     Battery(Battery),
     Pairing(Pairing),
+    // NB: struct form — internally-tagged serde can't represent a newtype
+    // variant wrapping a sequence.
+    BtDevices { devices: Vec<BtDevice> },
     Settings(Settings),
     Setup(SetupState),
 }
@@ -248,6 +272,11 @@ pub enum ClientMessage {
     },
     Pairing {
         action: PairingAction,
+    },
+    /// Manage a known Bluetooth device.
+    BtDevice {
+        address: String,
+        action: BtDeviceAction,
     },
     SetSettings(SettingsPatch),
     Setup(SetupCommand),
@@ -320,6 +349,36 @@ mod tests {
         assert!(json.get("artwork_id").is_none());
         let back: ServerMessage = serde_json::from_value(json).unwrap();
         assert_eq!(back, msg);
+    }
+
+    #[test]
+    fn bt_messages_round_trip() {
+        // Every internally-tagged variant must serialize (newtype-of-Vec
+        // would panic at runtime, not compile time).
+        let msg = ServerMessage::BtDevices {
+            devices: vec![BtDevice {
+                address: "AA:BB:CC:DD:EE:FF".into(),
+                name: "Phone".into(),
+                connected: true,
+            }],
+        };
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "bt_devices");
+        assert_eq!(json["devices"][0]["address"], "AA:BB:CC:DD:EE:FF");
+        let back: ServerMessage = serde_json::from_value(json).unwrap();
+        assert_eq!(back, msg);
+
+        let action: ClientMessage = serde_json::from_str(
+            r#"{"type":"bt_device","address":"AA:BB:CC:DD:EE:FF","action":"disconnect"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            action,
+            ClientMessage::BtDevice {
+                address: "AA:BB:CC:DD:EE:FF".into(),
+                action: BtDeviceAction::Disconnect,
+            }
+        );
     }
 
     #[test]

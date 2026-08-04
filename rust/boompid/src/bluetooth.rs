@@ -12,8 +12,11 @@
 
 #![cfg(target_os = "linux")]
 
-use crate::state::{now_ms, SharedApp, SourceCommand};
-use boompi_proto::{PlaybackStatus, ServerMessage, SourceInfo, SourceKind, Track};
+use crate::state::{now_ms, BtCommand, SharedApp, SourceCommand};
+use boompi_proto::{
+    BtDevice, BtDeviceAction, Pairing, PairingAction, PairingState, PlaybackStatus, ServerMessage,
+    SourceInfo, SourceKind, Track,
+};
 use futures_util::StreamExt;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -26,10 +29,17 @@ trait Adapter1 {
     /// Controller alias — the name phones see when pairing/connecting.
     #[zbus(property)]
     fn set_alias(&self, alias: &str) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn set_discoverable(&self, discoverable: bool) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn set_pairable(&self, pairable: bool) -> zbus::Result<()>;
+    fn remove_device(&self, device: &ObjectPath<'_>) -> zbus::Result<()>;
 }
 
 #[zbus::proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
 trait Device1 {
+    fn connect(&self) -> zbus::Result<()>;
+    fn disconnect(&self) -> zbus::Result<()>;
     #[zbus(property)]
     fn alias(&self) -> zbus::Result<String>;
     #[zbus(property)]
@@ -124,12 +134,15 @@ struct Ctx {
 pub fn spawn(app: SharedApp) {
     let (tx, rx) = mpsc::unbounded_channel();
     app.register_source(SourceKind::Bluetooth, tx);
+    let (bt_tx, bt_rx) = mpsc::unbounded_channel();
+    app.register_bt_ctl(bt_tx);
     let resolved: crate::artwork::ResolvedArt = Default::default();
     let art_tx = crate::artwork::spawn(app.clone(), resolved.clone());
     tokio::spawn(async move {
         let mut rx = rx;
+        let mut bt_rx = bt_rx;
         loop {
-            if let Err(err) = run(&app, &resolved, &art_tx, &mut rx).await {
+            if let Err(err) = run(&app, &resolved, &art_tx, &mut rx, &mut bt_rx).await {
                 tracing::error!(%err, "bluetooth source failed; retrying in 5s");
             }
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
@@ -142,6 +155,7 @@ async fn run(
     resolved: &crate::artwork::ResolvedArt,
     art_tx: &mpsc::UnboundedSender<crate::artwork::ArtRequest>,
     cmds: &mut mpsc::UnboundedReceiver<SourceCommand>,
+    bt_cmds: &mut mpsc::UnboundedReceiver<BtCommand>,
 ) -> anyhow::Result<()> {
     let conn = zbus::Connection::system().await?;
     tracing::info!("connected to system D-Bus, watching org.bluez");
@@ -151,6 +165,12 @@ async fn run(
         resolved: resolved.clone(),
         art_tx: art_tx.clone(),
     };
+
+    // Pairing agent: decisions resolved via BtCommand::Pairing below.
+    let decision: crate::bt_agent::DecisionSlot = Default::default();
+    if let Err(err) = crate::bt_agent::register(&conn, app.clone(), decision.clone()).await {
+        tracing::warn!(%err, "pairing agent registration failed (pairing UI unavailable)");
+    }
 
     // All property changes under /org/bluez in one subscription (v1 did the
     // same): Device1.Connected, MediaPlayer1.*, MediaTransport1.Volume.
@@ -184,11 +204,16 @@ async fn run(
     }
     // The name phones see: keep the controller alias in sync with config.
     apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
+    refresh_devices(&ctx).await;
 
     loop {
         tokio::select! {
             _ = cfg_watch.changed() => {
                 apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
+            }
+            cmd = bt_cmds.recv() => {
+                let Some(cmd) = cmd else { anyhow::bail!("bt control channel closed") };
+                handle_bt_command(&ctx, &session, &decision, cmd).await;
             }
             msg = props_stream.next() => {
                 let Some(Ok(msg)) = msg else { anyhow::bail!("D-Bus signal stream ended") };
@@ -242,6 +267,9 @@ async fn handle_interface_added(
     match iface {
         "org.bluez.Adapter1" => {
             session.adapter_path = Some(path.clone());
+        }
+        "org.bluez.Device1" => {
+            refresh_devices(ctx).await;
         }
         "org.bluez.MediaPlayer1" => {
             tracing::info!(%path, "media player appeared");
@@ -326,6 +354,10 @@ async fn handle_interfaces_removed(
             {
                 session.transport_path = None;
             }
+            "org.bluez.Device1" => {
+                // Unpaired/removed device.
+                refresh_devices(ctx).await;
+            }
             _ => {}
         }
     }
@@ -383,6 +415,19 @@ async fn handle_properties_changed(
                     session.device_path = None;
                     session.device_alias = None;
                 }
+            }
+            // A pairing completed: leave discoverable mode and settle the
+            // pairing UI back to idle.
+            if changed.get("Paired").and_then(bool_from_value_ref) == Some(true) {
+                tracing::info!(%path, "device paired");
+                set_discoverable(ctx, session, false).await;
+                crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
+            }
+            if ["Connected", "Paired", "Alias"]
+                .iter()
+                .any(|k| changed.contains_key(*k))
+            {
+                refresh_devices(ctx).await;
             }
         }
         _ => {}
@@ -466,6 +511,181 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     };
     ctx.app.shared.write().await.source = source.clone();
     ctx.app.broadcast(ServerMessage::Source(source));
+}
+
+async fn handle_bt_command(
+    ctx: &Ctx,
+    session: &Session,
+    decision: &crate::bt_agent::DecisionSlot,
+    cmd: BtCommand,
+) {
+    let resolve = |confirmed: bool| {
+        if let Some(tx) = decision.lock().unwrap().take() {
+            let _ = tx.send(confirmed);
+        }
+    };
+    match cmd {
+        BtCommand::Pairing(PairingAction::Enable) => {
+            if set_discoverable(ctx, session, true).await {
+                crate::bt_agent::set_pairing(
+                    &ctx.app,
+                    Pairing {
+                        state: PairingState::Discoverable,
+                        ..Pairing::default()
+                    },
+                )
+                .await;
+            }
+        }
+        BtCommand::Pairing(PairingAction::Cancel) => {
+            resolve(false);
+            set_discoverable(ctx, session, false).await;
+            crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
+        }
+        BtCommand::Pairing(PairingAction::Confirm) => resolve(true),
+        BtCommand::Pairing(PairingAction::Reject) => resolve(false),
+        BtCommand::Device { address, action } => {
+            device_action(ctx, session, &address, action).await;
+        }
+    }
+}
+
+/// Toggle adapter discoverability (+ pairability). Returns success.
+async fn set_discoverable(ctx: &Ctx, session: &Session, on: bool) -> bool {
+    let Some(path) = &session.adapter_path else {
+        tracing::warn!("no BT adapter; cannot toggle discoverable");
+        return false;
+    };
+    let result = async {
+        let adapter = Adapter1Proxy::builder(&ctx.conn)
+            .path(path.clone())?
+            .build()
+            .await?;
+        adapter.set_pairable(on).await?;
+        adapter.set_discoverable(on).await
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            tracing::info!(discoverable = on, "adapter discoverability changed");
+            true
+        }
+        Err(err) => {
+            tracing::warn!(%err, on, "failed to toggle discoverable");
+            false
+        }
+    }
+}
+
+/// Connect/disconnect/unpair a known device by address.
+async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDeviceAction) {
+    if !address
+        .bytes()
+        .all(|b| b.is_ascii_hexdigit() || b == b':')
+    {
+        tracing::warn!(%address, "ignoring bt action for malformed address");
+        return;
+    }
+    let Some(adapter) = &session.adapter_path else {
+        tracing::warn!("no BT adapter; cannot run device action");
+        return;
+    };
+    let dev_path = format!("{}/dev_{}", adapter.as_str(), address.replace(':', "_"));
+    tracing::info!(%address, ?action, "bt device action");
+    let conn = ctx.conn.clone();
+    let adapter = adapter.clone();
+    // Connect can block for many seconds; never stall the event loop.
+    tokio::spawn(async move {
+        let result: anyhow::Result<()> = async {
+            let path = ObjectPath::try_from(dev_path.clone())?;
+            match action {
+                BtDeviceAction::Connect => {
+                    Device1Proxy::builder(&conn)
+                        .path(path)?
+                        .build()
+                        .await?
+                        .connect()
+                        .await?
+                }
+                BtDeviceAction::Disconnect => {
+                    Device1Proxy::builder(&conn)
+                        .path(path)?
+                        .build()
+                        .await?
+                        .disconnect()
+                        .await?
+                }
+                BtDeviceAction::Remove => {
+                    Adapter1Proxy::builder(&conn)
+                        .path(adapter)?
+                        .build()
+                        .await?
+                        .remove_device(&path)
+                        .await?
+                }
+            }
+            Ok(())
+        }
+        .await;
+        if let Err(err) = result {
+            tracing::warn!(%err, ?action, "bt device action failed");
+        }
+    });
+}
+
+/// Re-enumerate paired devices and broadcast when the list changed.
+async fn refresh_devices(ctx: &Ctx) {
+    let devices = match enumerate_devices(&ctx.conn).await {
+        Ok(devices) => devices,
+        Err(err) => {
+            tracing::warn!(%err, "device enumeration failed");
+            return;
+        }
+    };
+    let mut s = ctx.app.shared.write().await;
+    if s.bt_devices != devices {
+        s.bt_devices = devices.clone();
+        drop(s);
+        ctx.app.broadcast(ServerMessage::BtDevices { devices });
+    }
+}
+
+async fn enumerate_devices(conn: &zbus::Connection) -> anyhow::Result<Vec<BtDevice>> {
+    let om = ObjectManagerProxy::builder(conn)
+        .destination("org.bluez")?
+        .path("/")?
+        .build()
+        .await?;
+    let mut out = Vec::new();
+    for (_path, interfaces) in om.get_managed_objects().await? {
+        for (iface, props) in &interfaces {
+            if iface.as_str() != "org.bluez.Device1" {
+                continue;
+            }
+            if props.get("Paired").and_then(bool_from_value) != Some(true) {
+                continue;
+            }
+            let Some(address) = props.get("Address").and_then(str_from_value) else {
+                continue;
+            };
+            let name = props
+                .get("Alias")
+                .and_then(str_from_value)
+                .unwrap_or_else(|| address.clone());
+            let connected = props
+                .get("Connected")
+                .and_then(bool_from_value)
+                .unwrap_or(false);
+            out.push(BtDevice {
+                address,
+                name,
+                connected,
+            });
+        }
+    }
+    // Connected first, then alphabetical.
+    out.sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.cmp(&b.name)));
+    Ok(out)
 }
 
 /// Set the BlueZ controller alias — the advertised speaker name.
@@ -622,6 +842,10 @@ fn str_from_value(v: &OwnedValue) -> Option<String> {
 
 fn u32_from_value(v: &OwnedValue) -> Option<u32> {
     u32::try_from(v.clone()).ok()
+}
+
+fn bool_from_value(v: &OwnedValue) -> Option<bool> {
+    bool::try_from(v.clone()).ok()
 }
 
 fn u16_from_value(v: &OwnedValue) -> Option<u16> {
