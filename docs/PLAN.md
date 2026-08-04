@@ -78,13 +78,18 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
 - **artwork**: per-source art acquisition → decode → downscale (~480 px) →
   content-addressed LRU cache in `/data/art`. Track messages carry an
   `artwork_id`; clients fetch `GET /art/{id}`.
-  - *Bluetooth art* uses **AVRCP 1.6 Cover Art** (new in recent BlueZ,
-    `[experimental]`): `MediaPlayer1.ObexPort` (BIP OBEX PSM) +
-    `Track.ImgHandle` → obexd client session (`org.bluez.obex.Image1`)
-    → `GetThumbnail`/`Get`. Requires BlueZ ≥ ~5.79 with
-    `Experimental = true` on `bluetoothd` (obexd needs no flag; BIP client
-    is built in). Current RPi OS (Trixie) ships BlueZ 5.82 ✔ — no source
-    build needed for dev; Buildroot pins its own version.
+  - *Bluetooth art* uses **AVRCP 1.6 Cover Art** (validated end-to-end in
+    Phase 0 — real 200×200 JPEGs from an iPhone): `MediaPlayer1.ObexPort`
+    (BIP OBEX PSM; iOS uses 4105) + `Track.ImgHandle` → obexd client
+    session (`Target=bip-avrcp`, `PSM`) → `org.bluez.obex.Image1`
+    `GetThumbnail`/`Get`. Requires BlueZ ≥ ~5.79 with `Experimental = true`
+    on `bluetoothd`. Implementation rules (Phase 0): hold the obexd session
+    from a **persistent** D-Bus connection (it dies with its owner);
+    create it as soon as a player exposes `ObexPort` — `ImgHandle` only
+    appears in `Track` while the BIP session is alive; iOS permits exactly
+    **one** BIP channel, so `mpris-proxy` (enabled by default on Debian)
+    must not run alongside boompid. BlueZ's `tools/mpris-proxy.c` (5.81+)
+    is the reference implementation.
   - *Online fallback* (*user-toggleable in Settings, default TBD*): when a
     source provides no art, look up artist+album via iTunes Search /
     MusicBrainz Cover Art Archive over Wi-Fi; cache results.
