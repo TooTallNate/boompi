@@ -736,6 +736,7 @@ dependencies = [
  "chrono",
  "clap",
  "futures-util",
+ "image",
  "serde_json",
  "slint",
  "slint-build",

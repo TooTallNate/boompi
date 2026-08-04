@@ -33,6 +33,8 @@ export component AppWindow inherits Window {
     in property <string> remaining: "--:--";
     in-out property <float> volume: 0;
     in property <[float]> bars: [];
+    in property <image> artwork;
+    in property <bool> has-artwork: false;
 
     // --- battery ---
     in property <bool> battery-present: false;
@@ -105,6 +107,8 @@ export component AppWindow inherits Window {
         track-title: root.track-title;
         track-artist: root.track-artist;
         track-album: root.track-album;
+        artwork: root.artwork;
+        has-artwork: root.has-artwork;
         playing: root.playing;
         progress: root.progress;
         elapsed: root.elapsed;

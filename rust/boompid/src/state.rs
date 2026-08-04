@@ -47,7 +47,22 @@ pub struct App {
     /// When a hardware source is running, transport/volume commands are
     /// forwarded here instead of being applied to shared state directly.
     source_cmds: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<SourceCommand>>>,
+    /// Small LRU cache of album artwork, keyed by `artwork_id`
+    /// (served via `GET /art/{id}` and pushed as binary frames).
+    art: RwLock<ArtCache>,
 }
+
+// Only populated by the Linux-only artwork worker; harmless elsewhere.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+#[derive(Default)]
+struct ArtCache {
+    map: std::collections::HashMap<String, Bytes>,
+    order: std::collections::VecDeque<String>,
+}
+
+/// AVRCP thumbnails are ~10–30 KB; keep memory bounded regardless.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+const ART_CACHE_CAP: usize = 16;
 
 /// Mutable state mirrored to clients (see [`boompi_proto::State`]).
 #[derive(Debug, Default)]
@@ -80,7 +95,26 @@ impl App {
             tx,
             sim_skip: Notify::new(),
             source_cmds: std::sync::Mutex::new(None),
+            art: RwLock::new(ArtCache::default()),
         })
+    }
+
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    pub async fn insert_art(&self, id: String, bytes: Bytes) {
+        let mut cache = self.art.write().await;
+        if !cache.map.contains_key(&id) {
+            cache.order.push_back(id.clone());
+            if cache.order.len() > ART_CACHE_CAP {
+                if let Some(evicted) = cache.order.pop_front() {
+                    cache.map.remove(&evicted);
+                }
+            }
+        }
+        cache.map.insert(id, bytes);
+    }
+
+    pub async fn get_art(&self, id: &str) -> Option<Bytes> {
+        self.art.read().await.map.get(id).cloned()
     }
 
     /// Register the hardware source command channel (takes over transport

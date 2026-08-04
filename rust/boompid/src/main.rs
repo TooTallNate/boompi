@@ -9,6 +9,8 @@
 //! in Phase 1.
 
 #[cfg(target_os = "linux")]
+mod artwork;
+#[cfg(target_os = "linux")]
 mod audio;
 #[cfg(target_os = "linux")]
 mod battery;

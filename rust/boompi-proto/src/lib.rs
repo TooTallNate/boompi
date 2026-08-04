@@ -26,6 +26,11 @@ pub mod frame_tag {
     /// Visualizer bars: payload is N little-endian `u16` values
     /// (full scale = `u16::MAX`).
     pub const VISUALIZER: u8 = 0x01;
+    /// Album artwork for the current track: payload is an encoded image
+    /// (JPEG/PNG bytes, typically the AVRCP 200×200 thumbnail). Sent on
+    /// track/artwork changes and after the `state` snapshot on connect.
+    /// The same bytes are available via `GET /art/{artwork_id}`.
+    pub const ARTWORK: u8 = 0x02;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,6 +249,22 @@ pub fn encode_visualizer_frame(bars: &[u16]) -> Vec<u8> {
     buf
 }
 
+/// Encode current-track artwork (encoded image bytes) as a tagged frame.
+pub fn encode_artwork_frame(image: &[u8]) -> Vec<u8> {
+    let mut buf = Vec::with_capacity(1 + image.len());
+    buf.push(frame_tag::ARTWORK);
+    buf.extend_from_slice(image);
+    buf
+}
+
+/// Extract the image payload from an artwork frame (including its tag byte).
+pub fn decode_artwork_frame(frame: &[u8]) -> Option<&[u8]> {
+    match frame.split_first() {
+        Some((&frame_tag::ARTWORK, payload)) => Some(payload),
+        _ => None,
+    }
+}
+
 /// Decode a visualizer binary frame (including its tag byte).
 /// Returns `None` if the tag or length is wrong.
 pub fn decode_visualizer_frame(frame: &[u8]) -> Option<Vec<u16>> {
@@ -313,5 +334,15 @@ mod tests {
         assert!(decode_visualizer_frame(&[]).is_none());
         assert!(decode_visualizer_frame(&[0xFF, 0x01, 0x02]).is_none());
         assert!(decode_visualizer_frame(&[frame_tag::VISUALIZER, 0x01]).is_none());
+    }
+
+    #[test]
+    fn artwork_frame_round_trip() {
+        let jpeg = [0xFFu8, 0xD8, 0xFF, 0xE0, 0x42];
+        let frame = encode_artwork_frame(&jpeg);
+        assert_eq!(frame[0], frame_tag::ARTWORK);
+        assert_eq!(decode_artwork_frame(&frame).unwrap(), &jpeg);
+        assert!(decode_artwork_frame(&[frame_tag::VISUALIZER, 1, 2]).is_none());
+        assert!(decode_artwork_frame(&[]).is_none());
     }
 }

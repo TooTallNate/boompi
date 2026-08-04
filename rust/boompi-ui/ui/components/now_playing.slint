@@ -28,6 +28,8 @@ export component NowPlaying inherits VerticalLayout {
     in property <string> track-title;
     in property <string> track-artist;
     in property <string> track-album;
+    in property <image> artwork;
+    in property <bool> has-artwork;
     in property <bool> playing;
     in property <float> progress;
     in property <string> elapsed;
@@ -47,13 +49,20 @@ export component NowPlaying inherits VerticalLayout {
     HorizontalLayout {
         spacing: 24px;
 
-        // Album art (placeholder; wired to GET /art/{id} in Phase 3).
+        // Album art (AVRCP cover art via boompid; note icon when absent).
         Rectangle {
             width: 180px;
             height: 180px;
             border-radius: 12px;
             background: #16161f;
-            IconNote {
+            clip: true;
+            if root.has-artwork: Image {
+                width: 100%;
+                height: 100%;
+                source: root.artwork;
+                image-fit: cover;
+            }
+            if !root.has-artwork: IconNote {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
                 width: 64px;

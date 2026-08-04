@@ -4,8 +4,8 @@
 use crate::util::BatteryHistory;
 use crate::AppWindow;
 use boompi_proto::{
-    decode_visualizer_frame, Battery, ClientMessage, PairingState, PlaybackStatus, ServerMessage,
-    SourceInfo, Track,
+    decode_artwork_frame, decode_visualizer_frame, frame_tag, Battery, ClientMessage, PairingState,
+    PlaybackStatus, ServerMessage, SourceInfo, Track,
 };
 use futures_util::{SinkExt, StreamExt};
 use slint::{ModelRc, VecModel, Weak};
@@ -83,17 +83,25 @@ async fn session(
                         Err(err) => eprintln!("unparseable server message: {err}"),
                     }
                 }
-                Some(Ok(Message::Binary(data))) => {
-                    if let Some(bars) = decode_visualizer_frame(&data) {
-                        let bars: Vec<f32> = bars
-                            .iter()
-                            .map(|&b| b as f32 / u16::MAX as f32)
-                            .collect();
-                        let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
-                            ui.set_bars(ModelRc::new(VecModel::from(bars)));
-                        });
+                Some(Ok(Message::Binary(data))) => match data.first() {
+                    Some(&frame_tag::VISUALIZER) => {
+                        if let Some(bars) = decode_visualizer_frame(&data) {
+                            let bars: Vec<f32> = bars
+                                .iter()
+                                .map(|&b| b as f32 / u16::MAX as f32)
+                                .collect();
+                            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                                ui.set_bars(ModelRc::new(VecModel::from(bars)));
+                            });
+                        }
                     }
-                }
+                    Some(&frame_tag::ARTWORK) => {
+                        if let Some(payload) = decode_artwork_frame(&data) {
+                            apply_artwork(ctx, payload);
+                        }
+                    }
+                    _ => {}
+                },
                 Some(Ok(Message::Close(_))) | None => return,
                 Some(Ok(_)) => {} // ping/pong
                 Some(Err(err)) => {
@@ -181,6 +189,38 @@ fn apply_track(ctx: &NetCtx, track: Track) {
         ui.set_track_artist(track.artist.unwrap_or_default().into());
         ui.set_track_album(track.album.unwrap_or_default().into());
         ui.set_playing(playing);
+        // Art arrives separately as a binary frame; a track without an
+        // artwork_id has none (or none *yet*) — show the placeholder.
+        if track.artwork_id.is_none() {
+            ui.set_has_artwork(false);
+        }
+    });
+}
+
+/// Decode an artwork frame off the UI thread, hand pixels to Slint.
+fn apply_artwork(ctx: &NetCtx, payload: &[u8]) {
+    if payload.is_empty() {
+        let _ = ctx
+            .weak
+            .upgrade_in_event_loop(|ui| ui.set_has_artwork(false));
+        return;
+    }
+    let decoded = match image::load_from_memory(payload) {
+        Ok(img) => img.into_rgba8(),
+        Err(err) => {
+            eprintln!("artwork decode failed: {err}");
+            return;
+        }
+    };
+    let (width, height) = decoded.dimensions();
+    let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+        decoded.as_raw(),
+        width,
+        height,
+    );
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_artwork(slint::Image::from_rgba8(buffer));
+        ui.set_has_artwork(true);
     });
 }
 
@@ -192,6 +232,7 @@ fn clear_track(ctx: &NetCtx) {
         ui.set_track_artist("".into());
         ui.set_track_album("".into());
         ui.set_playing(false);
+        ui.set_has_artwork(false);
     });
 }
 

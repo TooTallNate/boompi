@@ -36,10 +36,20 @@ async fn ws_upgrade(State(app): State<SharedApp>, ws: WebSocketUpgrade) -> impl 
     })
 }
 
-/// Serve cached artwork by id. TODO(Phase 3): artwork pipeline + cache.
-async fn artwork(Path(id): Path<String>) -> impl IntoResponse {
-    tracing::debug!(%id, "artwork requested (pipeline not implemented yet)");
-    StatusCode::NOT_FOUND
+/// Serve cached artwork by id (content-addressed → safely immutable).
+async fn artwork(State(app): State<SharedApp>, Path(id): Path<String>) -> impl IntoResponse {
+    match app.get_art(&id).await {
+        Some(bytes) => (
+            StatusCode::OK,
+            [
+                ("content-type", "image/jpeg"),
+                ("cache-control", "public, max-age=31536000, immutable"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
 }
 
 async fn client_session(app: SharedApp, mut socket: WebSocket) -> anyhow::Result<()> {
@@ -54,8 +64,19 @@ async fn client_session(app: SharedApp, mut socket: WebSocket) -> anyhow::Result
         uptime_secs: app.started.elapsed().as_secs(),
     });
     send_json(&mut socket, &hello).await?;
-    let snapshot = ServerMessage::State(app.snapshot().await);
-    send_json(&mut socket, &snapshot).await?;
+    let snapshot = app.snapshot().await;
+    let artwork_id = snapshot.track.as_ref().and_then(|t| t.artwork_id.clone());
+    send_json(&mut socket, &ServerMessage::State(snapshot)).await?;
+    // Current track's artwork, if any, so late joiners render it too.
+    if let Some(id) = artwork_id {
+        if let Some(bytes) = app.get_art(&id).await {
+            socket
+                .send(Message::Binary(
+                    boompi_proto::encode_artwork_frame(&bytes).into(),
+                ))
+                .await?;
+        }
+    }
 
     tracing::info!("client connected");
     // Whether *this* connection requested battery fast-polling, so we can
