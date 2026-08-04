@@ -39,7 +39,7 @@ jobs:
       BR2_DL_DIR: /home/runner/br-dl
       OUTPUT: /home/runner/br-output
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install host dependencies
         run: |
@@ -52,7 +52,8 @@ jobs:
       # build still persists its progress (kernel/toolchain objects, downloads)
       # — otherwise every red run repeats the full ~80 min pass 1.
       - name: Restore Buildroot downloads
-        uses: actions/cache/restore@v4
+        id: restore-br-dl
+        uses: actions/cache/restore@v6
         with:
           path: /home/runner/br-dl
           key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
@@ -60,7 +61,7 @@ jobs:
             br-dl-${{ env.BR_VERSION }}-
 
       - name: Restore ccache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: /home/runner/.buildroot-ccache
           key: br-ccache-pi3-${{ github.sha }}
@@ -68,7 +69,8 @@ jobs:
             br-ccache-pi3-
 
       - name: Restore cargo cache
-        uses: actions/cache/restore@v4
+        id: restore-cargo
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.cargo/registry
@@ -142,30 +144,33 @@ jobs:
           xz -T0 -f "$OUTPUT/images/sdcard.img"
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: boompi-pi3-sdcard
           path: /home/runner/br-output/images/sdcard.img.xz
           if-no-files-found: error
           retention-days: 14
 
+      # Content-keyed caches (br-dl, cargo) can only be saved once per key;
+      # unconditional saves warn 'unable to reserve cache' on every warm run.
+      # The ccache key includes the commit SHA, so it always saves cleanly.
       - name: Save Buildroot downloads
-        if: always()
-        uses: actions/cache/save@v4
+        if: always() && steps.restore-br-dl.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
         with:
           path: /home/runner/br-dl
           key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
 
       - name: Save ccache
         if: always()
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: /home/runner/.buildroot-ccache
           key: br-ccache-pi3-${{ github.sha }}
 
       - name: Save cargo cache
-        if: always()
-        uses: actions/cache/save@v4
+        if: always() && steps.restore-cargo.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
         with:
           path: |
             ~/.cargo/registry
