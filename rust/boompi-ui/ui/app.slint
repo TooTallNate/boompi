@@ -30,6 +30,7 @@ export component AppWindow inherits Window {
 
     // --- source / track ---
     in property <string> device-name: "";
+    in property <string> source-kind: "";
     in property <bool> has-track: false;
     in property <string> track-title;
     in property <string> track-artist;
@@ -180,8 +181,8 @@ export component AppWindow inherits Window {
         clock-m: root.clock-m;
         colon-on: root.colon-on;
         device-name: root.device-name;
+        source-kind: root.source-kind;
         volume: root.volume;
-        bt-connected: root.has-track || root.device-name != "";
         battery-present: root.battery-present;
         battery-percentage: root.battery-percentage;
         battery-charging: root.battery-charging;

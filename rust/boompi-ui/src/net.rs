@@ -5,7 +5,7 @@ use crate::util::BatteryHistory;
 use crate::AppWindow;
 use boompi_proto::{
     decode_artwork_frame, decode_visualizer_frame, frame_tag, Battery, ClientMessage, PairingState,
-    PlaybackStatus, ServerMessage, SourceInfo, Track,
+    PlaybackStatus, ServerMessage, SourceInfo, SourceKind, Track,
 };
 use futures_util::{SinkExt, StreamExt};
 use slint::{ModelRc, VecModel, Weak};
@@ -238,12 +238,18 @@ fn clear_track(ctx: &NetCtx) {
 
 fn apply_source(ctx: &NetCtx, source: &SourceInfo) {
     let device = source.device_name.clone().unwrap_or_default();
-    let inactive = source.active.is_none();
-    if inactive {
+    let kind = match source.active {
+        Some(SourceKind::Bluetooth) => "bluetooth",
+        Some(SourceKind::Spotify) => "spotify",
+        Some(SourceKind::Airplay) => "airplay",
+        None => "",
+    };
+    if source.active.is_none() {
         clear_track(ctx);
     }
     let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
         ui.set_device_name(device.into());
+        ui.set_source_kind(kind.into());
     });
 }
 
@@ -284,6 +290,7 @@ fn set_connected(ctx: &NetCtx, connected: bool) {
         if !connected {
             ui.set_has_track(false);
             ui.set_device_name("".into());
+            ui.set_source_kind("".into());
             ui.set_bars(ModelRc::new(VecModel::from(Vec::<f32>::new())));
         }
     });

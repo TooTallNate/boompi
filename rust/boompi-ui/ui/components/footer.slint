@@ -3,7 +3,7 @@
 // All iconography is drawn (see icons.slint) — no font dependency.
 
 import { Theme } from "theme.slint";
-import { IconSpeaker, IconBluetooth, IconSliders } from "icons.slint";
+import { IconSpeaker, IconBluetooth, IconSliders, IconSpotify, IconAirplay } from "icons.slint";
 
 export component Footer inherits Rectangle {
     in property <string> clock-day;
@@ -11,8 +11,9 @@ export component Footer inherits Rectangle {
     in property <string> clock-m;
     in property <bool> colon-on: true;
     in property <string> device-name;
+    /// "bluetooth" | "spotify" | "airplay" | "" (no active source).
+    in property <string> source-kind: "";
     in property <float> volume;
-    in property <bool> bt-connected;
     in property <bool> battery-present;
     in property <float> battery-percentage;
     in property <bool> battery-charging;
@@ -56,6 +57,36 @@ export component Footer inherits Rectangle {
 
         Rectangle { } // spacer
 
+        // Active source logo + name (Spotify username, phone alias, ...).
+        if root.source-kind == "bluetooth": Rectangle {
+            width: 20px;
+            IconBluetooth {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 16px;
+                height: 18px;
+                icon-color: #0A84FF;
+            }
+        }
+        if root.source-kind == "spotify": Rectangle {
+            width: 22px;
+            IconSpotify {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 19px;
+                height: 19px;
+            }
+        }
+        if root.source-kind == "airplay": Rectangle {
+            width: 22px;
+            IconAirplay {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 19px;
+                height: 19px;
+                icon-color: Theme.dim;
+            }
+        }
         Text {
             text: root.device-name;
             color: Theme.dimmer;
@@ -72,17 +103,6 @@ export component Footer inherits Rectangle {
                 height: 20px;
                 icon-color: Theme.dim;
                 level: root.volume <= 0.001 ? 0 : root.volume < 0.5 ? 1 : 2;
-            }
-        }
-
-        Rectangle {
-            width: 20px;
-            IconBluetooth {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                width: 16px;
-                height: 18px;
-                icon-color: root.bt-connected ? Theme.accent : Theme.faint;
             }
         }
 

@@ -75,6 +75,62 @@ export component IconSpeaker inherits Rectangle {
     }
 }
 
+// Spotify mark: circle ring + three ascending sound-wave arcs.
+export component IconSpotify inherits Rectangle {
+    in property <color> icon-color: #1DB954;
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 50 6 A 44 44 0 1 0 50 94 A 44 44 0 1 0 50 6";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 26 42 Q 52 33 76 46";
+        stroke: root.icon-color;
+        stroke-width: 8px;
+        fill: transparent;
+    }
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 29 57 Q 51 49 72 60";
+        stroke: root.icon-color;
+        stroke-width: 7px;
+        fill: transparent;
+    }
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 32 71 Q 50 65 68 73";
+        stroke: root.icon-color;
+        stroke-width: 6px;
+        fill: transparent;
+    }
+}
+
+// AirPlay: display outline with a triangle rising through its bottom edge.
+export component IconAirplay inherits Rectangle {
+    in property <color> icon-color: white;
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 32 76 H 12 V 20 H 88 V 76 H 68";
+        stroke: root.icon-color;
+        stroke-width: 8px;
+        fill: transparent;
+    }
+    Path {
+        viewbox-width: 100;
+        viewbox-height: 100;
+        commands: "M 50 52 L 80 94 H 20 Z";
+        fill: root.icon-color;
+    }
+}
+
 export component IconBluetooth inherits Path {
     in property <color> icon-color: white;
     viewbox-width: 100;
