@@ -1,7 +1,9 @@
-// Settings screen: speaker info, online album-art fallback toggle,
-// Bluetooth pairing controls.
+// Settings screen: touch-appropriate controls on the left (theme, art
+// fallback, pairing incl. passkey confirm), and a QR code to the web
+// settings UI on the right for keyboard-heavy configuration (name, Wi-Fi).
 
-import { Switch, Button } from "std-widgets.slint";
+import { Switch } from "std-widgets.slint";
+import { ActionButton } from "widgets.slint";
 import { Theme } from "theme.slint";
 import { IconBack } from "icons.slint";
 
@@ -39,10 +41,17 @@ export component SettingsPanel inherits Rectangle {
     in property <string> version-line;
     in-out property <bool> online-art;
     in property <string> pairing-state; // "idle" | "discoverable" | "confirm"
+    in property <string> pairing-device;
+    in property <string> pairing-passkey;
+    in property <string> settings-url;
+    in property <image> settings-qr;
     callback close();
     callback online-art-toggled(bool);
+    callback theme-toggled(bool);
     callback pairing-enable();
     callback pairing-cancel();
+    callback pairing-confirm();
+    callback pairing-reject();
 
     background: Theme.bg;
 
@@ -75,48 +84,150 @@ export component SettingsPanel inherits Rectangle {
             Rectangle { }
         }
 
-        Row {
-            label: "Speaker name";
-            sublabel: "Renaming lands with the setup flow";
-            Text {
-                text: root.speaker-name;
-                color: Theme.dim;
-                font-size: 17px;
-                vertical-alignment: center;
-            }
-        }
+        HorizontalLayout {
+            spacing: 12px;
 
-        Row {
-            label: "Fetch album art online";
-            sublabel: "When a source sends no artwork (needs Wi-Fi)";
-            Switch {
-                checked <=> root.online-art;
-                toggled => {
-                    root.online-art-toggled(self.checked);
+            // ---- left column: touch controls -------------------------------
+            VerticalLayout {
+                spacing: 10px;
+
+                Row {
+                    label: "Light theme";
+                    sublabel: "Also switchable from the web settings";
+                    Switch {
+                        checked: Theme.light;
+                        toggled => {
+                            root.theme-toggled(self.checked);
+                        }
+                    }
                 }
-            }
-        }
 
-        Row {
-            label: "Bluetooth pairing";
-            sublabel: root.pairing-state == "discoverable"
-                ? "Discoverable — check your phone's Bluetooth list"
-                : root.pairing-state == "confirm"
-                ? "Pairing request pending…"
-                : "Allow a new device to pair";
-            Button {
-                text: root.pairing-state == "idle" ? "Pair device" : "Cancel";
-                clicked => {
-                    if (root.pairing-state == "idle") {
-                        root.pairing-enable();
-                    } else {
-                        root.pairing-cancel();
+                Row {
+                    label: "Fetch album art online";
+                    sublabel: "When a source sends no artwork (needs Wi-Fi)";
+                    Switch {
+                        checked <=> root.online-art;
+                        toggled => {
+                            root.online-art-toggled(self.checked);
+                        }
+                    }
+                }
+
+                if root.pairing-state != "confirm": Row {
+                    label: "Bluetooth pairing";
+                    sublabel: root.pairing-state == "discoverable"
+                        ? "Discoverable — check your phone's Bluetooth list"
+                        : "Allow a new device to pair";
+                    ActionButton {
+                        text: root.pairing-state == "idle" ? "Pair device" : "Cancel";
+                        clicked => {
+                            if (root.pairing-state == "idle") {
+                                root.pairing-enable();
+                            } else {
+                                root.pairing-cancel();
+                            }
+                        }
+                    }
+                }
+
+                // Passkey confirmation (SSP numeric comparison).
+                if root.pairing-state == "confirm": Rectangle {
+                    background: Theme.panel;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: Theme.accent;
+                    height: 96px;
+                    HorizontalLayout {
+                        padding-left: 14px;
+                        padding-right: 14px;
+                        spacing: 14px;
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 4px;
+                            Text {
+                                text: "Pair with " + (root.pairing-device == "" ? "device" : root.pairing-device) + "?";
+                                color: Theme.fg;
+                                font-size: 17px;
+                            }
+                            Text {
+                                text: "Code: " + root.pairing-passkey;
+                                color: Theme.accent;
+                                font-size: 22px;
+                            }
+                        }
+                        Rectangle { }
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 6px;
+                            ActionButton {
+                                text: "Pair";
+                                primary: true;
+                                clicked => {
+                                    root.pairing-confirm();
+                                }
+                            }
+                            ActionButton {
+                                text: "Reject";
+                                clicked => {
+                                    root.pairing-reject();
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Rectangle { } // spacer
+            }
+
+            // ---- right column: web settings QR ------------------------------
+            if root.settings-url != "": Rectangle {
+                width: 220px;
+                background: Theme.panel;
+                border-radius: 8px;
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 10px;
+                    alignment: start;
+                    Text {
+                        text: "More settings";
+                        color: Theme.fg;
+                        font-size: 17px;
+                        horizontal-alignment: center;
+                    }
+                    Text {
+                        text: "Name, Wi-Fi, clock, devices —\nscan with your phone:";
+                        color: Theme.dimmer;
+                        font-size: 13px;
+                        horizontal-alignment: center;
+                    }
+                    Rectangle {
+                        height: 150px;
+                        Rectangle {
+                            x: (parent.width - self.width) / 2;
+                            width: 150px;
+                            height: 150px;
+                            background: white;
+                            border-radius: 6px;
+                            Image {
+                                x: 5px;
+                                y: 5px;
+                                width: 140px;
+                                height: 140px;
+                                source: root.settings-qr;
+                                image-rendering: pixelated;
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.settings-url;
+                        color: Theme.dim;
+                        font-size: 14px;
+                        horizontal-alignment: center;
+                        wrap: word-wrap;
                     }
                 }
             }
         }
-
-        Rectangle { } // spacer
 
         Text {
             text: root.version-line;

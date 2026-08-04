@@ -129,9 +129,17 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 "boompid v{} · protocol v{}",
                 hello.version, hello.proto_version
             );
+            // QR pixels are generated off-thread (SharedPixelBuffer is
+            // Send); the slint::Image itself must be built on the UI thread.
+            let qr = hello.settings_url.as_deref().and_then(crate::util::qr_pixels);
+            let settings_url = hello.settings_url.clone().unwrap_or_default();
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_speaker_name(hello.name.into());
                 ui.set_version_line(version_line.into());
+                ui.set_settings_url(settings_url.into());
+                if let Some(buf) = qr {
+                    ui.set_settings_qr(slint::Image::from_rgba8(buf));
+                }
             });
         }
         ServerMessage::State(state) => {
@@ -164,9 +172,16 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
         ServerMessage::Battery(battery) => apply_battery(ctx, history, battery),
         ServerMessage::Pairing(pairing) => {
             let state = pairing_str(pairing.state);
-            let _ = ctx
-                .weak
-                .upgrade_in_event_loop(move |ui| ui.set_pairing_state(state.into()));
+            let device = pairing.device_name.unwrap_or_default();
+            let passkey = pairing
+                .passkey
+                .map(|p| format!("{p:06}"))
+                .unwrap_or_default();
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_pairing_state(state.into());
+                ui.set_pairing_device(device.into());
+                ui.set_pairing_passkey(passkey.into());
+            });
         }
         ServerMessage::Settings(settings) => {
             let light = settings.theme == boompi_proto::Theme::Light;

@@ -74,6 +74,9 @@ pub struct App {
     /// Bluetooth control channel (pairing + device management), registered
     /// by the bluetooth task when it starts.
     bt_ctl: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<BtCommand>>>,
+    /// Port the settings web UI listener bound (0 = none); set by the
+    /// server at startup, read when composing `Hello.settings_url`.
+    pub settings_port: std::sync::atomic::AtomicU16,
     /// Small LRU cache of album artwork, keyed by `artwork_id`
     /// (served via `GET /art/{id}` and pushed as binary frames).
     art: RwLock<ArtCache>,
@@ -128,7 +131,23 @@ impl App {
             sim_skip: Notify::new(),
             source_cmds: std::sync::Mutex::new(HashMap::new()),
             bt_ctl: std::sync::Mutex::new(None),
+            settings_port: std::sync::atomic::AtomicU16::new(0),
             art: RwLock::new(ArtCache::default()),
+        })
+    }
+
+    /// Browser URL for the settings UI, from the LAN IP + bound port.
+    /// Recomputed per call — DHCP leases change.
+    pub fn settings_url(&self) -> Option<String> {
+        let port = self.settings_port.load(std::sync::atomic::Ordering::Relaxed);
+        if port == 0 {
+            return None;
+        }
+        let ip = lan_ip()?;
+        Some(if port == 80 {
+            format!("http://{ip}/")
+        } else {
+            format!("http://{ip}:{port}/")
         })
     }
 
@@ -420,6 +439,19 @@ impl App {
         let track = track.clone();
         drop(s);
         self.broadcast(ServerMessage::Track(track));
+    }
+}
+
+/// Best-effort LAN IP: the source address the kernel would route to a
+/// public host (no packet is sent by `connect` on UDP).
+fn lan_ip() -> Option<std::net::IpAddr> {
+    let socket = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    socket.connect("8.8.8.8:80").ok()?;
+    let ip = socket.local_addr().ok()?.ip();
+    if ip.is_loopback() || ip.is_unspecified() {
+        None
+    } else {
+        Some(ip)
     }
 }
 

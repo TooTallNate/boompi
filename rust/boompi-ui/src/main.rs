@@ -30,11 +30,16 @@ struct Cli {
     /// WebSocket URL of the boompid backend.
     #[arg(long, default_value = "ws://127.0.0.1:3001/ws")]
     backend: String,
+
+    /// Initial screen (dev/screenshot aid): main | battery | settings.
+    #[arg(long, default_value = "main")]
+    screen: String,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let ui = AppWindow::new()?;
+    ui.set_screen(cli.screen.clone().into());
     let (tx, rx) = mpsc::unbounded_channel::<ClientMessage>();
 
     let track: Arc<Mutex<Option<TrackSnap>>> = Arc::new(Mutex::new(None));
@@ -110,6 +115,35 @@ fn main() -> anyhow::Result<()> {
             let _ = tx.send(ClientMessage::Pairing {
                 action: PairingAction::Cancel,
             });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_pairing_confirm(move || {
+            let _ = tx.send(ClientMessage::Pairing {
+                action: PairingAction::Confirm,
+            });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_pairing_reject(move || {
+            let _ = tx.send(ClientMessage::Pairing {
+                action: PairingAction::Reject,
+            });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_theme_toggled(move |light| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                theme: Some(if light {
+                    boompi_proto::Theme::Light
+                } else {
+                    boompi_proto::Theme::Dark
+                }),
+                ..SettingsPatch::default()
+            }));
         });
     }
 

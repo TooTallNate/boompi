@@ -1,6 +1,6 @@
 // "Connect your device" screen, shown when no source is active.
 
-import { Button } from "std-widgets.slint";
+import { ActionButton } from "widgets.slint";
 import { Theme } from "theme.slint";
 
 export component ConnectScreen inherits VerticalLayout {
@@ -35,7 +35,7 @@ export component ConnectScreen inherits VerticalLayout {
 
     HorizontalLayout {
         alignment: center;
-        Button {
+        ActionButton {
             text: root.pairing-state == "idle" ? "Pair a new device" : "Cancel pairing";
             clicked => {
                 if (root.pairing-state == "idle") {

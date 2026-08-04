@@ -59,7 +59,11 @@ export component AppWindow inherits Window {
 
     // --- pairing / settings ---
     in property <string> pairing-state: "idle";
+    in property <string> pairing-device: "";
+    in property <string> pairing-passkey: "";
     in-out property <bool> online-art: false;
+    in property <string> settings-url: "";
+    in property <image> settings-qr;
 
     // --- clock ---
     in property <string> clock-day: "";
@@ -76,8 +80,11 @@ export component AppWindow inherits Window {
     callback volume-edited(float);
     callback screen-changed();
     callback online-art-toggled(bool);
+    callback theme-toggled(bool);
     callback pairing-enable();
     callback pairing-cancel();
+    callback pairing-confirm();
+    callback pairing-reject();
 
     // ---- background visualizer --------------------------------------------
     HorizontalLayout {
@@ -158,6 +165,10 @@ export component AppWindow inherits Window {
         version-line: root.version-line;
         online-art <=> root.online-art;
         pairing-state: root.pairing-state;
+        pairing-device: root.pairing-device;
+        pairing-passkey: root.pairing-passkey;
+        settings-url: root.settings-url;
+        settings-qr: root.settings-qr;
         close => {
             root.screen = "main";
             root.screen-changed();
@@ -165,11 +176,20 @@ export component AppWindow inherits Window {
         online-art-toggled(enabled) => {
             root.online-art-toggled(enabled);
         }
+        theme-toggled(light) => {
+            root.theme-toggled(light);
+        }
         pairing-enable => {
             root.pairing-enable();
         }
         pairing-cancel => {
             root.pairing-cancel();
+        }
+        pairing-confirm => {
+            root.pairing-confirm();
+        }
+        pairing-reject => {
+            root.pairing-reject();
         }
     }
 

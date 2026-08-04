@@ -1,0 +1,32 @@
+// Small theme-aware widgets. The std-widgets controls follow the fluent
+// palette, not our Theme — fine for Switch (blue accent works on both
+// themes), broken for Button (light-on-light label in light mode).
+
+import { Theme } from "theme.slint";
+
+export component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> primary: false;
+    callback clicked();
+
+    background: root.primary
+        ? Theme.accent
+        : (touch.pressed ? Theme.faint : Theme.bar);
+    border-radius: 8px;
+    height: 40px;
+    width: label.preferred-width + 36px;
+
+    label := Text {
+        text: root.text;
+        color: root.primary ? (Theme.light ? white : #04121f) : Theme.fg;
+        font-size: 16px;
+        font-weight: root.primary ? 600 : 400;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        clicked => {
+            root.clicked();
+        }
+    }
+}

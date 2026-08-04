@@ -107,3 +107,28 @@ mod tests {
         assert!(h.points.len() <= 92, "len = {}", h.points.len());
     }
 }
+
+/// Render `url` as QR pixels (1 px per module + quiet zone) for the panel's
+/// "More settings" card. Returned buffer is `Send`; wrap it in a
+/// `slint::Image` on the UI thread and display with
+/// `image-rendering: pixelated`.
+pub fn qr_pixels(url: &str) -> Option<slint::SharedPixelBuffer<slint::Rgba8Pixel>> {
+    let code = qrcode::QrCode::new(url.as_bytes()).ok()?;
+    let modules = code.width();
+    const QUIET: usize = 2; // the white card behind it provides most of it
+    let size = modules + QUIET * 2;
+    let mut buf =
+        slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(size as u32, size as u32);
+    let pixels = buf.make_mut_slice();
+    let white = slint::Rgba8Pixel::new(255, 255, 255, 255);
+    let black = slint::Rgba8Pixel::new(16, 16, 20, 255);
+    pixels.fill(white);
+    for y in 0..modules {
+        for x in 0..modules {
+            if code[(x, y)] == qrcode::Color::Dark {
+                pixels[(y + QUIET) * size + (x + QUIET)] = black;
+            }
+        }
+    }
+    Some(buf)
+}

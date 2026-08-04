@@ -31,7 +31,7 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/command", post(api_command))
         .route("/api/clock", get(api_clock).post(api_clock_set))
         .fallback(get(static_asset))
-        .with_state(app);
+        .with_state(app.clone());
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on http://{addr} (WebSocket at /ws)");
@@ -57,6 +57,14 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
             },
         }
     };
+    // Remember the browser-facing port for Hello.settings_url / the QR code.
+    let ui_port = ui_listener
+        .as_ref()
+        .and_then(|l| l.local_addr().ok())
+        .map(|a| a.port())
+        .unwrap_or(if addr.port() == 80 { 80 } else { 0 });
+    app.settings_port
+        .store(ui_port, std::sync::atomic::Ordering::Relaxed);
 
     let shutdown = || async {
         let _ = tokio::signal::ctrl_c().await;
@@ -109,15 +117,20 @@ async fn static_asset(uri: axum::http::Uri) -> impl IntoResponse {
 
 /// Combined hello + state snapshot for the settings web UI.
 async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
-    let hello = Hello {
+    let hello = hello(&app).await;
+    let state = app.snapshot().await;
+    Json(serde_json::json!({ "hello": hello, "state": state }))
+}
+
+async fn hello(app: &SharedApp) -> Hello {
+    Hello {
         proto_version: PROTO_VERSION,
         name: app.speaker_name().await,
         model: app.cfg.model.clone(),
         version: crate::state::VERSION.into(),
         uptime_secs: app.started.elapsed().as_secs(),
-    };
-    let state = app.snapshot().await;
-    Json(serde_json::json!({ "hello": hello, "state": state }))
+        settings_url: app.settings_url(),
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -220,13 +233,7 @@ async fn client_session(app: SharedApp, mut socket: WebSocket) -> anyhow::Result
     let mut rx = app.tx.subscribe();
 
     // Greeting: hello + full state snapshot.
-    let hello = ServerMessage::Hello(Hello {
-        proto_version: PROTO_VERSION,
-        name: app.speaker_name().await,
-        model: app.cfg.model.clone(),
-        version: crate::state::VERSION.into(),
-        uptime_secs: app.started.elapsed().as_secs(),
-    });
+    let hello = ServerMessage::Hello(hello(&app).await);
     send_json(&mut socket, &hello).await?;
     let snapshot = app.snapshot().await;
     let artwork_id = snapshot.track.as_ref().and_then(|t| t.artwork_id.clone());

@@ -219,6 +219,10 @@ pub struct Hello {
     /// boompid version.
     pub version: String,
     pub uptime_secs: u64,
+    /// Browser URL of the settings web UI (LAN address), when known.
+    /// The panel renders this as a QR code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings_url: Option<String>,
 }
 
 /// Full state snapshot; sent after [`Hello`] and available on demand.
