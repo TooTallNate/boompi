@@ -6,6 +6,48 @@ export async function fetchState(): Promise<StateResponse> {
   return r.json();
 }
 
+export interface WifiNetwork {
+  ssid: string;
+  signal: number;
+  security: string;
+  in_use: boolean;
+  saved: boolean;
+}
+
+export interface WifiStatus {
+  supported: boolean;
+  enabled: boolean;
+  connected: string | null;
+  ip: string | null;
+  ap_active: boolean;
+  networks: WifiNetwork[];
+  saved: string[];
+}
+
+export type WifiAction =
+  | { action: "connect"; ssid: string; psk?: string }
+  | { action: "forget"; name: string }
+  | { action: "radio"; enabled: boolean }
+  | { action: "ap"; enabled: boolean };
+
+export async function fetchWifi(): Promise<WifiStatus> {
+  const r = await fetch("/api/wifi");
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+  return body;
+}
+
+export async function wifiAction(action: WifiAction): Promise<WifiStatus> {
+  const r = await fetch("/api/wifi", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(action),
+  });
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+  return body;
+}
+
 export interface ClockStatus {
   timezone: string;
   ntp: boolean;

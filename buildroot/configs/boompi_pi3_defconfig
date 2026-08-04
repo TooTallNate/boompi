@@ -15,7 +15,8 @@ BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_AARCH64_GLIBC_STABLE=y
 
 BR2_CCACHE=y
 
-BR2_SYSTEM_DHCP="eth0"
+# No BR2_SYSTEM_DHCP: NetworkManager owns all interfaces (ethernet DHCPs
+# by default); a networkd config here would fight it for eth0.
 BR2_TARGET_GENERIC_HOSTNAME="boompi"
 BR2_TARGET_GENERIC_ISSUE="Boompi v2"
 BR2_TARGET_GENERIC_ROOT_PASSWD="boompi"
@@ -82,6 +83,19 @@ BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT=y
 # Buildroot 2025.02.
 BR2_PACKAGE_SHAIRPORT_SYNC=y
 BR2_PACKAGE_SHAIRPORT_SYNC_DBUS=y
+
+# Wi-Fi: NetworkManager on the appliance to match the dev box (RPi OS) —
+# one D-Bus/nmcli code path in boompid. `shared` connections give the
+# onboarding AP + built-in DHCP (dnsmasq). Onboard brcmfmac needs the
+# firmware blob + wireless-regdb; wpa_supplicant needs D-Bus control for NM.
+BR2_PACKAGE_NETWORK_MANAGER=y
+BR2_PACKAGE_WPA_SUPPLICANT=y
+BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
+BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
+BR2_PACKAGE_DNSMASQ=y
+BR2_PACKAGE_WIRELESS_REGDB=y
+BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
+BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 
 # UI runtime deps (Slint linuxkms, software renderer for now)
 BR2_PACKAGE_LIBINPUT=y

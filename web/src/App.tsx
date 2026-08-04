@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { fetchClock, patchClock, patchSettings } from "./api";
-import type { ClockStatus } from "./api";
+import {
+  fetchClock,
+  fetchWifi,
+  patchClock,
+  patchSettings,
+  wifiAction,
+} from "./api";
+import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
 import { useBoompi } from "./useBoompi";
 import type {
   BtDevice,
@@ -52,12 +58,175 @@ export default function App() {
           />
         )}
 
-        <Section title="Wi-Fi">
-          <p className="text-sm text-dim">Coming soon.</p>
-        </Section>
+        <WifiSection />
         <ClockSection />
       </main>
     </div>
+  );
+}
+
+function SignalBars({ signal }: { signal: number }) {
+  const bars = signal > 75 ? 4 : signal > 50 ? 3 : signal > 25 ? 2 : 1;
+  return (
+    <span className="flex items-end gap-[2px]" title={`${signal}%`}>
+      {[1, 2, 3, 4].map((b) => (
+        <span
+          key={b}
+          className={`w-[3px] rounded-sm ${b <= bars ? "bg-fg" : "bg-line"}`}
+          style={{ height: 3 + b * 3 }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function WifiSection() {
+  const [wifi, setWifi] = useState<WifiStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [joining, setJoining] = useState<string | null>(null); // ssid with open psk prompt
+  const [psk, setPsk] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    try {
+      setWifi(await fetchWifi());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function act(a: Parameters<typeof wifiAction>[0]) {
+    setBusy(true);
+    setError(null);
+    try {
+      setWifi(await wifiAction(a));
+      setJoining(null);
+      setPsk("");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function join(net: WifiNetwork) {
+    if (net.saved || net.security === "") {
+      act({ action: "connect", ssid: net.ssid });
+    } else {
+      setJoining(net.ssid);
+      setPsk("");
+    }
+  }
+
+  return (
+    <Section title="Wi-Fi">
+      {!wifi ? (
+        <p className="text-sm text-dim">{error ?? "loading…"}</p>
+      ) : !wifi.supported ? (
+        <p className="text-sm text-dim">No Wi-Fi hardware.</p>
+      ) : (
+        <>
+          <div className="flex items-center justify-between gap-3 py-1.5">
+            <span>
+              Wi-Fi{" "}
+              {wifi.connected && (
+                <span className="text-[13px] text-ok">
+                  — {wifi.connected}
+                  {wifi.ip ? ` (${wifi.ip})` : ""}
+                </span>
+              )}
+              {wifi.ap_active && (
+                <span className="text-[13px] text-accent">
+                  — hotspot mode (onboarding)
+                </span>
+              )}
+            </span>
+            <Toggle
+              checked={wifi.enabled}
+              onChange={(v) => act({ action: "radio", enabled: v })}
+            />
+          </div>
+
+          {wifi.enabled &&
+            wifi.networks.map((n) => (
+              <div
+                key={n.ssid}
+                className="border-t border-line py-2.5 first:border-t-0"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <button
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => join(n)}
+                    disabled={busy || n.in_use}
+                  >
+                    <SignalBars signal={n.signal} />
+                    <span className="truncate">{n.ssid}</span>
+                    {n.security !== "" && (
+                      <span className="text-[11px] text-dim">🔒</span>
+                    )}
+                    {n.in_use && (
+                      <span className="text-[12px] text-ok">connected</span>
+                    )}
+                    {n.saved && !n.in_use && (
+                      <span className="text-[12px] text-dim">saved</span>
+                    )}
+                  </button>
+                  {(n.saved || n.in_use) && (
+                    <button
+                      className="flex-none rounded-lg border border-err/40 px-3 py-1 text-[13px] text-err hover:bg-err/10"
+                      onClick={() => act({ action: "forget", name: n.ssid })}
+                      disabled={busy}
+                    >
+                      Forget
+                    </button>
+                  )}
+                </div>
+                {joining === n.ssid && (
+                  <form
+                    className="mt-2 flex gap-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      act({ action: "connect", ssid: n.ssid, psk });
+                    }}
+                  >
+                    <input
+                      type="password"
+                      autoFocus
+                      placeholder="Password"
+                      className="min-w-0 flex-1 rounded-lg border border-line bg-bg px-3 py-2 text-sm focus:border-accent focus:outline-none"
+                      value={psk}
+                      onChange={(e) => setPsk(e.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-40"
+                      disabled={psk.length < 8 || busy}
+                    >
+                      Join
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-lg border border-line px-3 py-2 text-sm text-dim"
+                      onClick={() => setJoining(null)}
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                )}
+              </div>
+            ))}
+          {error && <p className="mt-2 text-[13px] text-err">{error}</p>}
+        </>
+      )}
+    </Section>
   );
 }
 

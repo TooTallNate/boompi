@@ -1,0 +1,15 @@
+// Dev-box polkit rule: let the unprivileged `pi` user (which runs boompid
+// during development) manage NetworkManager profiles and the system clock,
+// matching the appliance where boompid runs as root.
+//
+// Install on the dev Pi:
+//   sudo cp scripts/dev-pi-polkit.rules /etc/polkit-1/rules.d/50-boompi-dev.rules
+//   sudo systemctl restart polkit
+polkit.addRule(function (action, subject) {
+  if (subject.user !== "pi") return polkit.Result.NOT_HANDLED;
+  if (action.id.indexOf("org.freedesktop.NetworkManager.") === 0)
+    return polkit.Result.YES;
+  if (action.id.indexOf("org.freedesktop.timedate1.") === 0)
+    return polkit.Result.YES;
+  return polkit.Result.NOT_HANDLED;
+});

@@ -30,6 +30,16 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/settings", post(api_settings))
         .route("/api/command", post(api_command))
         .route("/api/clock", get(api_clock).post(api_clock_set))
+        .route("/api/wifi", get(api_wifi).post(api_wifi_action))
+        // Captive-portal detection probes (iOS/Android/Windows). In AP
+        // mode the portal dnsmasq resolves every name to us; answering
+        // these with a redirect pops the OS "sign in to network" sheet
+        // straight into the setup page.
+        .route("/hotspot-detect.html", get(captive_redirect))
+        .route("/generate_204", get(captive_redirect))
+        .route("/gen_204", get(captive_redirect))
+        .route("/connecttest.txt", get(captive_redirect))
+        .route("/ncsi.txt", get(captive_redirect))
         .fallback(get(static_asset))
         .with_state(app.clone());
 
@@ -86,6 +96,10 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn captive_redirect() -> impl IntoResponse {
+    (StatusCode::FOUND, [("location", "/")])
+}
+
 /// Embedded SPA assets; unknown paths fall back to index.html so client-side
 /// routes survive a refresh. Hashed assets get immutable caching.
 async fn static_asset(uri: axum::http::Uri) -> impl IntoResponse {
@@ -130,6 +144,75 @@ async fn hello(app: &SharedApp) -> Hello {
         version: crate::state::VERSION.into(),
         uptime_secs: app.started.elapsed().as_secs(),
         settings_url: app.settings_url(),
+    }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "action", rename_all = "snake_case")]
+enum WifiAction {
+    Connect { ssid: String, psk: Option<String> },
+    Forget { name: String },
+    Radio { enabled: bool },
+    /// Onboarding hotspot; `ssid` defaults to the speaker name.
+    Ap { enabled: bool },
+}
+
+async fn api_wifi() -> axum::response::Response {
+    #[cfg(target_os = "linux")]
+    match crate::wifi::status(true).await {
+        Ok(status) => return Json(status).into_response(),
+        Err(err) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response();
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({ "error": "wifi control is Linux-only" })),
+    )
+        .into_response()
+}
+
+async fn api_wifi_action(
+    State(app): State<SharedApp>,
+    Json(action): Json<WifiAction>,
+) -> axum::response::Response {
+    let _ = &app;
+    #[cfg(target_os = "linux")]
+    {
+        let result = match &action {
+            WifiAction::Connect { ssid, psk } => crate::wifi::connect(ssid, psk.as_deref()).await,
+            WifiAction::Forget { name } => crate::wifi::forget(name).await,
+            WifiAction::Radio { enabled } => crate::wifi::set_radio(*enabled).await,
+            WifiAction::Ap { enabled: true } => {
+                crate::wifi::start_ap(&app.speaker_name().await).await
+            }
+            WifiAction::Ap { enabled: false } => crate::wifi::stop_ap().await,
+        };
+        return match result {
+            Ok(()) => api_wifi().await,
+            Err(err) => {
+                tracing::warn!(%err, "wifi action failed");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": err.to_string() })),
+                )
+                    .into_response()
+            }
+        };
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = action;
+        (
+            StatusCode::NOT_IMPLEMENTED,
+            Json(serde_json::json!({ "error": "wifi control is Linux-only" })),
+        )
+            .into_response()
     }
 }
 

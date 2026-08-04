@@ -34,6 +34,8 @@ mod spotify;
 mod state;
 #[cfg(target_os = "linux")]
 mod visualizer;
+#[cfg(target_os = "linux")]
+mod wifi;
 
 use clap::Parser;
 use std::net::SocketAddr;
