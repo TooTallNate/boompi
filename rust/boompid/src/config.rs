@@ -17,6 +17,8 @@ pub struct Config {
     pub model: Option<String>,
     /// Battery monitor; omit entirely on boxes without an INA260.
     pub battery: Option<BatteryConfig>,
+    /// Spotify Connect (librespot subprocess).
+    pub spotify: SpotifyConfig,
     /// User settings (mutated at runtime, persisted back to disk).
     pub settings: SettingsConfig,
 }
@@ -27,8 +29,22 @@ impl Default for Config {
             name: "Boompi".into(),
             model: None,
             battery: None,
+            spotify: SpotifyConfig::default(),
             settings: SettingsConfig::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct SpotifyConfig {
+    /// Spotify Connect (embedded librespot). On by default.
+    pub enabled: bool,
+}
+
+impl Default for SpotifyConfig {
+    fn default() -> Self {
+        Self { enabled: true }
     }
 }
 

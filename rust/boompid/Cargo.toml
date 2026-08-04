@@ -33,5 +33,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 [target.'cfg(target_os = "linux")'.dependencies]
 futures-util = "0.3"
 ina260 = { path = "../ina260" }
+# Spotify Connect, embedded (pure-Rust feature set: rustls TLS, libmdns
+# zeroconf, no audio backends — we provide a pw-cat sink).
+librespot = { version = "0.8", default-features = false, features = [
+    "rustls-tls-webpki-roots",
+    "with-libmdns",
+] }
 linux-embedded-hal = "0.4"
+# Cover art downloads (Spotify CDN; later the online-art fallback).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
 zbus = { version = "5", default-features = false, features = ["tokio"] }

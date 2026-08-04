@@ -212,18 +212,23 @@ async fn wait_for_file(path: &str) -> anyhow::Result<Bytes> {
 
 /// Cache the image, record the handle→id mapping, and notify clients.
 async fn publish(app: &SharedApp, resolved: &ResolvedArt, handle: &str, bytes: Bytes) {
+    let id = publish_current_art(app, bytes).await;
+    resolved.lock().unwrap().insert(handle.to_string(), id);
+}
+
+/// Publish image bytes as the current track's artwork: cache it, stamp the
+/// current track's `artwork_id`, and push both to clients. Shared by the
+/// Bluetooth BIP fetcher and other sources (Spotify cover URLs, and later
+/// AirPlay/online-fallback).
+pub async fn publish_current_art(app: &SharedApp, bytes: Bytes) -> String {
     let id = art_id(&bytes);
-    resolved
-        .lock()
-        .unwrap()
-        .insert(handle.to_string(), id.clone());
     app.insert_art(id.clone(), bytes.clone()).await;
 
     let track = {
         let mut s = app.shared.write().await;
         match s.track.as_mut() {
             Some(track) => {
-                track.artwork_id = Some(id);
+                track.artwork_id = Some(id.clone());
                 Some(track.clone())
             }
             None => None,
@@ -233,6 +238,7 @@ async fn publish(app: &SharedApp, resolved: &ResolvedArt, handle: &str, bytes: B
         app.broadcast_frame(encode_artwork_frame(&bytes));
         app.broadcast(ServerMessage::Track(track));
     }
+    id
 }
 
 /// Content-derived artwork id (cache key / URL path segment).

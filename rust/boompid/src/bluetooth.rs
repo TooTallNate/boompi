@@ -114,7 +114,7 @@ struct Ctx {
 
 pub fn spawn(app: SharedApp) {
     let (tx, rx) = mpsc::unbounded_channel();
-    app.register_source(tx);
+    app.register_source(SourceKind::Bluetooth, tx);
     let resolved: crate::artwork::ResolvedArt = Default::default();
     let art_tx = crate::artwork::spawn(app.clone(), resolved.clone());
     tokio::spawn(async move {

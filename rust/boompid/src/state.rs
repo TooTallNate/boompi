@@ -2,9 +2,10 @@
 
 use boompi_proto::{
     Battery, ClientMessage, Pairing, PairingAction, PairingState, PlaybackStatus, ServerMessage,
-    Settings, SetupState, SourceInfo, State, Track,
+    Settings, SetupState, SourceInfo, SourceKind, State, Track,
 };
 use bytes::Bytes;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify, RwLock};
@@ -44,9 +45,11 @@ pub struct App {
     /// Signalled by Next/Previous; the sim track loop (and later, sources
     /// without native skip) listens on this.
     pub sim_skip: Notify,
-    /// When a hardware source is running, transport/volume commands are
-    /// forwarded here instead of being applied to shared state directly.
-    source_cmds: std::sync::Mutex<Option<tokio::sync::mpsc::UnboundedSender<SourceCommand>>>,
+    /// Command channels registered by hardware sources (BlueZ, Spotify).
+    /// Transport commands route to the *active* source; when no source is
+    /// registered the built-in/sim path applies commands directly.
+    source_cmds:
+        std::sync::Mutex<HashMap<SourceKind, tokio::sync::mpsc::UnboundedSender<SourceCommand>>>,
     /// Small LRU cache of album artwork, keyed by `artwork_id`
     /// (served via `GET /art/{id}` and pushed as binary frames).
     art: RwLock<ArtCache>,
@@ -94,7 +97,7 @@ impl App {
             }),
             tx,
             sim_skip: Notify::new(),
-            source_cmds: std::sync::Mutex::new(None),
+            source_cmds: std::sync::Mutex::new(HashMap::new()),
             art: RwLock::new(ArtCache::default()),
         })
     }
@@ -117,16 +120,30 @@ impl App {
         self.art.read().await.map.get(id).cloned()
     }
 
-    /// Register the hardware source command channel (takes over transport
+    /// Register a hardware source's command channel (takes over transport
     /// and volume handling from the built-in/sim path).
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
-    pub fn register_source(&self, tx: tokio::sync::mpsc::UnboundedSender<SourceCommand>) {
-        *self.source_cmds.lock().unwrap() = Some(tx);
+    pub fn register_source(
+        &self,
+        kind: SourceKind,
+        tx: tokio::sync::mpsc::UnboundedSender<SourceCommand>,
+    ) {
+        self.source_cmds.lock().unwrap().insert(kind, tx);
     }
 
-    fn forward_to_source(&self, cmd: SourceCommand) -> bool {
+    /// Route a command to the active source's channel. Volume goes to the
+    /// Bluetooth/audio path regardless of source (it owns system volume and
+    /// AVRCP sync); transport goes to whoever is actually playing.
+    async fn forward_to_source(&self, cmd: SourceCommand) -> bool {
+        let target = match cmd {
+            SourceCommand::SetVolume(_) => Some(SourceKind::Bluetooth),
+            _ => self.shared.read().await.source.active,
+        };
         let guard = self.source_cmds.lock().unwrap();
-        match guard.as_ref() {
+        let tx = target
+            .and_then(|kind| guard.get(&kind))
+            .or_else(|| guard.get(&SourceKind::Bluetooth));
+        match tx {
             Some(tx) => tx.send(cmd).is_ok(),
             None => false,
         }
@@ -171,28 +188,31 @@ impl App {
         tracing::debug!(?msg, "client message");
         match msg {
             ClientMessage::Play => {
-                if !self.forward_to_source(SourceCommand::Play) {
+                if !self.forward_to_source(SourceCommand::Play).await {
                     self.set_playback(PlaybackStatus::Playing).await;
                 }
             }
             ClientMessage::Pause => {
-                if !self.forward_to_source(SourceCommand::Pause) {
+                if !self.forward_to_source(SourceCommand::Pause).await {
                     self.set_playback(PlaybackStatus::Paused).await;
                 }
             }
             ClientMessage::Next => {
-                if !self.forward_to_source(SourceCommand::Next) {
+                if !self.forward_to_source(SourceCommand::Next).await {
                     self.sim_skip.notify_waiters();
                 }
             }
             ClientMessage::Previous => {
-                if !self.forward_to_source(SourceCommand::Previous) {
+                if !self.forward_to_source(SourceCommand::Previous).await {
                     self.sim_skip.notify_waiters();
                 }
             }
             ClientMessage::SetVolume { level } => {
                 let level = level.clamp(0.0, 1.0);
-                if !self.forward_to_source(SourceCommand::SetVolume(level)) {
+                if !self
+                    .forward_to_source(SourceCommand::SetVolume(level))
+                    .await
+                {
                     self.shared.write().await.volume = level;
                     self.broadcast(ServerMessage::Volume { level });
                 }

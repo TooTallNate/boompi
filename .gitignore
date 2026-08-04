@@ -5,3 +5,4 @@
 !/buildroot/board/boompi/rootfs-overlay-ci/.gitkeep
 *.log
 .DS_Store
+/build/

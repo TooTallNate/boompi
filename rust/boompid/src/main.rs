@@ -23,6 +23,8 @@ mod config;
 mod dsp;
 mod server;
 mod sim;
+#[cfg(target_os = "linux")]
+mod spotify;
 mod state;
 #[cfg(target_os = "linux")]
 mod visualizer;
@@ -73,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
             bluetooth::spawn(app.clone());
             battery::spawn(app.clone());
             visualizer::spawn(app.clone());
+            spotify::spawn(app.clone());
             // Seed the volume from the current system state.
             let app = app.clone();
             tokio::spawn(async move {
