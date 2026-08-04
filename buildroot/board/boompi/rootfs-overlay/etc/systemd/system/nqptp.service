@@ -1,0 +1,15 @@
+# nqptp: PTP timing daemon required by shairport-sync's AirPlay 2 mode.
+# The Buildroot package only ships a SysV script; this unit is ours.
+# Needs root (binds PTP ports 319/320).
+[Unit]
+Description=Network Precision Time Protocol for AirPlay 2 (nqptp)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/nqptp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

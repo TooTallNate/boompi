@@ -29,7 +29,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BR_VERSION: "2025.02"
+  # LTS line (YYYY.02). 2026.02 brings shairport-sync 4.3.7 + nqptp,
+  # unlocking AirPlay 2.
+  BR_VERSION: "2026.02"
 
 jobs:
   pi3:

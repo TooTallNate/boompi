@@ -79,7 +79,9 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
     transport control. **Decided & shipped**: D-Bus beat the metadata pipe
     (structured properties + free DACP remote). Cover art files are raw
     buffer dumps — trim to the image (EOI/IEND) and decode-validate before
-    publishing. Classic AirPlay (AP2 needs nqptp; not in Buildroot 2025.02).
+    publishing. AirPlay 2 as of Buildroot 2026.02 (shairport-sync 4.3.7 +
+    nqptp packaged upstream; one config option + an nqptp systemd unit in
+    our overlay). Started as classic on Buildroot 2025.02.
 - **artwork**: per-source art acquisition → decode → downscale (~480 px) →
   content-addressed LRU cache in `/data/art`. Track messages carry an
   `artwork_id`; clients fetch `GET /art/{id}`.
@@ -296,7 +298,7 @@ CI image builds with ccache. Tag v2.0.
 |---|---|
 | ~~Slint KMS on HyperPixel DPI~~ | ✔ **Resolved in Phase 0**: software renderer smooth at 800×480, touch perfect. Requires `SLINT_KMS_ROTATION=270` in the UI environment (panel-orientation hint not auto-applied by Slint). |
 | AVRCP cover art is `[experimental]` in BlueZ; sender support varies (iOS good, Android varies) | Phase 0 spike with real phones; online fallback covers gaps |
-| AirPlay 2 (nqptp) availability in Buildroot | Verify in Phase 0; fall back to AirPlay classic |
+| ~~AirPlay 2 (nqptp) availability in Buildroot~~ | ✔ Resolved: Buildroot 2026.02 packages shairport-sync 4.3.7 + nqptp |
 | librespot API/version churn | Subprocess integration keeps it swappable |
 | Buildroot iteration is slow | App dev on RPi OS Lite through Phase 3; ccache; `make deploy` pushes binaries without image rebuilds |
 | obexd expects a session bus | Run under the boompi service user with a dedicated bus (systemd) |
@@ -313,10 +315,13 @@ CI image builds with ccache. Tag v2.0.
       all pairing. Replaced by boompid's own `Agent1` (`DisplayYesNo`) in
       Phase 3. (Deployed kiosk.sh/units drifted from git; the v1 image dump
       is the authoritative reference.)
-- [x] AirPlay 2 vs classic: **classic** (shairport-sync 3.3.9 in Buildroot
-      2025.02; no nqptp package). AP2 later via custom nqptp + shairport 4.x
-      packages in our BR2_EXTERNAL if wanted. Coded against the 3.3.9 D-Bus
-      property set; 4.x extras (ClientName) used opportunistically.
+- [x] AirPlay 2 vs classic: **AirPlay 2** — Buildroot 2026.02 (LTS) ships
+      shairport-sync 4.3.7 + nqptp, so the packaging blocker that forced the
+      original classic decision is gone (BR bump commit). The D-Bus
+      integration was already coded against the 4.x property superset;
+      ClientName gives real device names on AP2 sessions. Dev-Pi apt build
+      remains classic-only (Debian ships no nqptp) — AP2 testing happens on
+      the appliance image.
 - [ ] Full source-manager arbitration (pause-others, audio-flow-based claims
       via MediaTransport1.State). Interim shipped with AirPlay: sources only
       write track/source state while they own the display, and async art
