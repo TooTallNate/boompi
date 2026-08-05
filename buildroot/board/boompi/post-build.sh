@@ -45,4 +45,16 @@ chmod 600 "${TARGET_DIR}/root/.ssh/authorized_keys"
 [ -f "${TARGET_DIR}/etc/wireplumber/wireplumber.conf.d/50-boompi.conf" ] \
     || fail "missing wireplumber overrides (A2DP roles / anti-crackle)"
 
+# --- Runtime binaries boompid/the panel shell out to. -----------------------
+# Kconfig silently drops packages with unmet `depends on` (first Pi 4
+# bench boot shipped without WirePlumber — no Lua — and without
+# pw-cat/nmcli): assert every binary we exec actually landed.
+for bin in nmcli wireplumber wpctl pw-cat pw-record \
+           shairport-sync avahi-daemon dnsmasq; do
+    find "${TARGET_DIR}/usr/bin" "${TARGET_DIR}/usr/sbin" \
+         "${TARGET_DIR}/bin" "${TARGET_DIR}/sbin" \
+         -maxdepth 1 -name "$bin" 2>/dev/null | grep -q . \
+        || fail "runtime binary '$bin' missing from the image"
+done
+
 echo "post-build assertions OK"

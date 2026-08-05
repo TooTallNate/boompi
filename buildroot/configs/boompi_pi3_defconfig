@@ -21,6 +21,9 @@ BR2_TARGET_GENERIC_HOSTNAME="boompi"
 BR2_TARGET_GENERIC_ISSUE="Boompi v2"
 BR2_TARGET_GENERIC_ROOT_PASSWD="boompi"
 BR2_INIT_SYSTEMD=y
+# NetworkManager owns all interfaces; networkd would fight it for eth0
+# (and its wait-online unit fails the boot health picture).
+# BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
@@ -64,9 +67,15 @@ BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
 # bluez-tools (bt-agent) retired: boompid registers its own Agent1
 # (DisplayYesNo) with an on-screen confirm instead of auto-accepting.
 
-# Audio: PipeWire + WirePlumber + SBC codec (A2DP)
+# Audio: PipeWire + WirePlumber + SBC codec (A2DP).
+# NB (first Pi 4 bench boot): Kconfig silently drops packages with unmet
+# `depends on` — WirePlumber needs Lua, pw-cat/pw-record need libsndfile.
+# post-build.sh asserts the binaries actually landed.
 BR2_PACKAGE_PIPEWIRE=y
 BR2_PACKAGE_WIREPLUMBER=y
+BR2_PACKAGE_LUA=y
+BR2_PACKAGE_LUA_5_4=y
+BR2_PACKAGE_LIBSNDFILE=y
 BR2_PACKAGE_SBC=y
 BR2_PACKAGE_ALSA_UTILS=y
 
@@ -92,6 +101,7 @@ BR2_PACKAGE_SHAIRPORT_SYNC_DBUS=y
 # onboarding AP + built-in DHCP (dnsmasq). Onboard brcmfmac needs the
 # firmware blob + wireless-regdb; wpa_supplicant needs D-Bus control for NM.
 BR2_PACKAGE_NETWORK_MANAGER=y
+BR2_PACKAGE_NETWORK_MANAGER_CLI=y
 BR2_PACKAGE_WPA_SUPPLICANT=y
 BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
 BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
