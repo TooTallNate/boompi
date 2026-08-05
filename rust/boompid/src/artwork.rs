@@ -214,7 +214,9 @@ async fn wait_for_file(path: &str) -> anyhow::Result<Bytes> {
 /// Cache the image, record the handle→id mapping, and notify clients.
 async fn publish(app: &SharedApp, resolved: &ResolvedArt, handle: &str, bytes: Bytes) {
     let id = publish_current_art(app, bytes, boompi_proto::SourceKind::Bluetooth).await;
-    resolved.lock().unwrap().insert(handle.to_string(), id);
+    if !id.is_empty() {
+        resolved.lock().unwrap().insert(handle.to_string(), id);
+    }
 }
 
 /// Publish image bytes as the current track's artwork: cache it, stamp the
@@ -231,6 +233,21 @@ pub async fn publish_current_art(
     bytes: Bytes,
     origin: boompi_proto::SourceKind,
 ) -> String {
+    // Central integrity gate for every art source: trim garbage tails and
+    // reject anything that doesn't decode. OBEX (BIP) transfers can come
+    // back truncated, and broken bytes are content-addressed — once cached
+    // and referenced, the UI re-fetches the same garbage on every track
+    // update.
+    let trimmed = trim_image(&bytes);
+    let bytes = if trimmed.len() == bytes.len() {
+        bytes
+    } else {
+        Bytes::copy_from_slice(trimmed)
+    };
+    if bytes.is_empty() || image::load_from_memory(&bytes).is_err() {
+        tracing::warn!(?origin, size = bytes.len(), "rejecting undecodable artwork");
+        return String::new();
+    }
     let id = art_id(&bytes);
     app.insert_art(id.clone(), bytes.clone()).await;
 
@@ -261,6 +278,31 @@ pub async fn publish_current_art(
         app.broadcast(ServerMessage::Track(track));
     }
     id
+}
+
+/// Cut an image out of a buffer with a possible garbage tail (AirPlay
+/// cover cache files are raw buffer dumps; OBEX transfers can trail).
+/// Returns an empty slice when no plausible image is present.
+pub fn trim_image(b: &[u8]) -> &[u8] {
+    const JPEG_SOI: [u8; 2] = [0xFF, 0xD8];
+    const PNG_MAGIC: [u8; 4] = [0x89, b'P', b'N', b'G'];
+    if b.starts_with(&JPEG_SOI) {
+        // Trim to the last EOI marker. If tail garbage happens to contain
+        // FF D9 we trim long, which decoders tolerate (they stop at the
+        // real EOI).
+        if let Some(eoi) = b.windows(2).rposition(|w| w == [0xFF, 0xD9]) {
+            return &b[..eoi + 2];
+        }
+        return &[];
+    }
+    if b.starts_with(&PNG_MAGIC) {
+        // Trim to the end of the IEND chunk (type + 4-byte CRC).
+        if let Some(iend) = b.windows(4).rposition(|w| w == *b"IEND") {
+            return b.get(..iend + 8).unwrap_or(&[]);
+        }
+        return &[];
+    }
+    b // unknown format: the decode gate still applies
 }
 
 /// Content-derived artwork id (cache key / URL path segment).

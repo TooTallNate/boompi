@@ -17,6 +17,7 @@ import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
 import { SettingsPanel } from "components/settings.slint";
 import { SetupScreen } from "components/setup.slint";
+import { ActionButton } from "components/widgets.slint";
 
 export component AppWindow inherits Window {
     title: "Boompi";
@@ -174,8 +175,6 @@ export component AppWindow inherits Window {
         version-line: root.version-line;
         online-art <=> root.online-art;
         pairing-state: root.pairing-state;
-        pairing-device: root.pairing-device;
-        pairing-passkey: root.pairing-passkey;
         settings-url: root.settings-url;
         settings-qr: root.settings-qr;
         close => {
@@ -194,11 +193,73 @@ export component AppWindow inherits Window {
         pairing-cancel => {
             root.pairing-cancel();
         }
-        pairing-confirm => {
-            root.pairing-confirm();
-        }
-        pairing-reject => {
-            root.pairing-reject();
+    }
+
+    // ---- pairing confirmation (modal over everything) ------------------------
+    // A passkey request must be answerable from any screen — settings,
+    // now-playing, wherever. 30 s to respond before BlueZ times out.
+    if root.pairing-state == "confirm": Rectangle {
+        background: #000000aa;
+        TouchArea { } // swallow touches behind the dialog
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 440px;
+            height: 230px;
+            background: Theme.panel;
+            border-radius: 14px;
+            border-width: 1px;
+            border-color: Theme.accent;
+            VerticalLayout {
+                padding: 22px;
+                spacing: 6px;
+                Text {
+                    text: "Bluetooth pairing request";
+                    color: Theme.dim;
+                    font-size: 14px;
+                }
+                Text {
+                    text: root.pairing-device == "" ? "Unknown device" : root.pairing-device;
+                    color: Theme.fg;
+                    font-size: 22px;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+                if root.pairing-passkey != "": Text {
+                    text: "Confirm this code matches your device:";
+                    color: Theme.dim;
+                    font-size: 14px;
+                }
+                if root.pairing-passkey != "": Text {
+                    text: root.pairing-passkey;
+                    color: Theme.accent;
+                    font-size: 30px;
+                    horizontal-alignment: center;
+                }
+                if root.pairing-passkey == "": Text {
+                    text: "wants to pair with this speaker.";
+                    color: Theme.dim;
+                    font-size: 15px;
+                }
+                Rectangle { height: 6px; }
+                HorizontalLayout {
+                    alignment: center;
+                    spacing: 12px;
+                    ActionButton {
+                        text: "Pair";
+                        primary: true;
+                        clicked => {
+                            root.pairing-confirm();
+                        }
+                    }
+                    ActionButton {
+                        text: "Reject";
+                        clicked => {
+                            root.pairing-reject();
+                        }
+                    }
+                }
+            }
         }
     }
 

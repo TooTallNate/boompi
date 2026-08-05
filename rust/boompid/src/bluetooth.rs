@@ -191,6 +191,12 @@ async fn run(
     let mut added_stream = om.receive_interfaces_added().await?;
     let mut removed_stream = om.receive_interfaces_removed().await?;
 
+    // A bluetoothd restart silently voids our agent registration and
+    // session state (signals keep flowing — the well-known name just
+    // changes owners). Watch for it and restart this task from scratch.
+    let dbus = zbus::fdo::DBusProxy::new(&conn).await?;
+    let mut owner_stream = dbus.receive_name_owner_changed().await?;
+
     let mut session = Session::default();
     let mut cfg_watch = app.subscribe_cfg();
     cfg_watch.mark_unchanged();
@@ -214,6 +220,13 @@ async fn run(
             cmd = bt_cmds.recv() => {
                 let Some(cmd) = cmd else { anyhow::bail!("bt control channel closed") };
                 handle_bt_command(&ctx, &session, &decision, cmd).await;
+            }
+            Some(change) = owner_stream.next() => {
+                if let Ok(args) = change.args() {
+                    if args.name.as_str() == "org.bluez" && args.new_owner.is_some() {
+                        anyhow::bail!("bluetoothd restarted; re-initializing");
+                    }
+                }
             }
             msg = props_stream.next() => {
                 let Some(Ok(msg)) = msg else { anyhow::bail!("D-Bus signal stream ended") };

@@ -513,7 +513,7 @@ fn publish_art_file(app: SharedApp, path: String) {
             let Ok(bytes) = tokio::fs::read(&path).await else {
                 continue; // not written yet
             };
-            let trimmed = trim_image(&bytes);
+            let trimmed = crate::artwork::trim_image(&bytes);
             if trimmed.is_empty() {
                 continue;
             }
@@ -538,30 +538,6 @@ fn publish_art_file(app: SharedApp, path: String) {
         }
         tracing::warn!(%path, "airplay cover art never became decodable; skipping");
     });
-}
-
-/// Cut an image out of a buffer with a possible garbage tail. Returns an
-/// empty slice when no plausible image is present.
-fn trim_image(b: &[u8]) -> &[u8] {
-    const JPEG_SOI: [u8; 2] = [0xFF, 0xD8];
-    const PNG_MAGIC: [u8; 4] = [0x89, b'P', b'N', b'G'];
-    if b.starts_with(&JPEG_SOI) {
-        // Trim to the last EOI marker. If the tail garbage happens to
-        // contain FF D9 we trim long, which decoders tolerate (they stop at
-        // the real EOI).
-        if let Some(eoi) = b.windows(2).rposition(|w| w == [0xFF, 0xD9]) {
-            return &b[..eoi + 2];
-        }
-        return &[];
-    }
-    if b.starts_with(&PNG_MAGIC) {
-        // Trim to the end of the IEND chunk (type + 4-byte CRC).
-        if let Some(iend) = b.windows(4).rposition(|w| w == *b"IEND") {
-            return b.get(..iend + 8).unwrap_or(&[]);
-        }
-        return &[];
-    }
-    b // unknown format: publish as-is, the decode gate still applies
 }
 
 // ---------------------------------------------------------------------------
@@ -640,9 +616,9 @@ mod tests {
     fn trims_jpeg_garbage_tail() {
         let mut buf = vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
         buf.extend_from_slice(&[0xAA; 64]); // garbage tail
-        assert_eq!(trim_image(&buf), &buf[..9]);
+        assert_eq!(crate::artwork::trim_image(&buf), &buf[..9]);
         // Truncated JPEG (no EOI) is rejected outright.
-        assert!(trim_image(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]).is_empty());
+        assert!(crate::artwork::trim_image(&[0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]).is_empty());
     }
 
     #[test]
@@ -650,8 +626,8 @@ mod tests {
         let mut buf = b"\x89PNG\r\n\x1a\n....chunks....IEND\xaeB`\x82".to_vec();
         let clean_len = buf.len();
         buf.extend_from_slice(&[0x55; 32]);
-        assert_eq!(trim_image(&buf).len(), clean_len);
-        assert!(trim_image(b"\x89PNG\r\n\x1a\nno-end-chunk").is_empty());
+        assert_eq!(crate::artwork::trim_image(&buf).len(), clean_len);
+        assert!(crate::artwork::trim_image(b"\x89PNG\r\n\x1a\nno-end-chunk").is_empty());
     }
 
     #[test]

@@ -1,0 +1,19 @@
+# The boombox's USB Bluetooth dongle is a CSR clone that advertises Secure
+# Connections support but fails the SC pairing handshake — phones report
+# "pairing unsuccessful" before the agent is ever consulted (Phase 0
+# finding, rediscovered the hard way in Phase 5). Disable SC at boot;
+# legacy SSP pairing works fine.
+[Unit]
+Description=Disable BT Secure Connections (CSR-clone dongle workaround)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/btmgmt power off
+ExecStart=/usr/bin/btmgmt sc off
+ExecStart=/usr/bin/btmgmt power on
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

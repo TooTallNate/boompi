@@ -357,11 +357,13 @@ function BluetoothSection({
         <div className="mb-2 rounded-lg border border-ok/40 bg-ok/10 p-3">
           <p className="text-sm">
             Pair with <strong>{pairing.device_name ?? "device"}</strong>?
-            Confirm this code matches:
+            {pairing.passkey != null && " Confirm this code matches:"}
           </p>
-          <p className="my-2 text-center font-mono text-2xl tracking-[0.3em]">
-            {String(pairing.passkey ?? 0).padStart(6, "0")}
-          </p>
+          {pairing.passkey != null && (
+            <p className="my-2 text-center font-mono text-2xl tracking-[0.3em]">
+              {String(pairing.passkey).padStart(6, "0")}
+            </p>
+          )}
           <div className="flex justify-center gap-3">
             <button
               className="rounded-lg bg-ok px-5 py-2 text-[15px] font-semibold text-accent-ink"

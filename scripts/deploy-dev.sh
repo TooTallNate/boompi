@@ -63,9 +63,13 @@ done
 ssh "$PI" "
 set -e
 for bin in ${WANT[*]}; do pkill -9 -x \"\$bin\" 2>/dev/null || true; done
-pkill -9 -x shairport-sync 2>/dev/null || true
-for i in \$(seq 1 20); do ss -ltn | grep -qE ':3001|:8080' || break; sleep 0.5; done
-if ss -ltn | grep -qE ':3001|:8080'; then echo 'ERROR: ports still held' >&2; exit 1; fi
+# boompid owns shairport (child) and the listen ports; only relevant
+# when boompid itself is being replaced.
+if printf '%s\n' ${WANT[*]} | grep -qx boompid; then
+    pkill -9 -x shairport-sync 2>/dev/null || true
+    for i in \$(seq 1 20); do ss -ltn | grep -qE ':3001|:8080' || break; sleep 0.5; done
+    if ss -ltn | grep -qE ':3001|:8080'; then echo 'ERROR: ports still held' >&2; exit 1; fi
+fi
 for bin in ${WANT[*]}; do mv ~/staging/\$bin ~/\$bin; chmod +x ~/\$bin; done
 if printf '%s\n' ${WANT[*]} | grep -qx boompid; then
     nohup ./boompid --config /home/pi/boompi-dev.toml >>/tmp/boompid.log 2>&1 < /dev/null &

@@ -41,8 +41,6 @@ export component SettingsPanel inherits Rectangle {
     in property <string> version-line;
     in-out property <bool> online-art;
     in property <string> pairing-state; // "idle" | "discoverable" | "confirm"
-    in property <string> pairing-device;
-    in property <string> pairing-passkey;
     in property <string> settings-url;
     in property <image> settings-qr;
     callback close();
@@ -50,8 +48,6 @@ export component SettingsPanel inherits Rectangle {
     callback theme-toggled(bool);
     callback pairing-enable();
     callback pairing-cancel();
-    callback pairing-confirm();
-    callback pairing-reject();
 
     background: Theme.bg;
 
@@ -113,7 +109,7 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
-                if root.pairing-state != "confirm": Row {
+                Row {
                     label: "Bluetooth pairing";
                     sublabel: root.pairing-state == "discoverable"
                         ? "Discoverable — check your phone's Bluetooth list"
@@ -125,52 +121,6 @@ export component SettingsPanel inherits Rectangle {
                                 root.pairing-enable();
                             } else {
                                 root.pairing-cancel();
-                            }
-                        }
-                    }
-                }
-
-                // Passkey confirmation (SSP numeric comparison).
-                if root.pairing-state == "confirm": Rectangle {
-                    background: Theme.panel;
-                    border-radius: 8px;
-                    border-width: 1px;
-                    border-color: Theme.accent;
-                    height: 96px;
-                    HorizontalLayout {
-                        padding-left: 14px;
-                        padding-right: 14px;
-                        spacing: 14px;
-                        VerticalLayout {
-                            alignment: center;
-                            spacing: 4px;
-                            Text {
-                                text: "Pair with " + (root.pairing-device == "" ? "device" : root.pairing-device) + "?";
-                                color: Theme.fg;
-                                font-size: 17px;
-                            }
-                            Text {
-                                text: "Code: " + root.pairing-passkey;
-                                color: Theme.accent;
-                                font-size: 22px;
-                            }
-                        }
-                        Rectangle { }
-                        VerticalLayout {
-                            alignment: center;
-                            spacing: 6px;
-                            ActionButton {
-                                text: "Pair";
-                                primary: true;
-                                clicked => {
-                                    root.pairing-confirm();
-                                }
-                            }
-                            ActionButton {
-                                text: "Reject";
-                                clicked => {
-                                    root.pairing-reject();
-                                }
                             }
                         }
                     }
