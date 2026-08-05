@@ -44,6 +44,8 @@ trait Device1 {
     fn alias(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn connected(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_trusted(&self, trusted: bool) -> zbus::Result<()>;
 }
 
 #[zbus::proxy(interface = "org.bluez.MediaPlayer1", default_service = "org.bluez")]
@@ -429,12 +431,71 @@ async fn handle_properties_changed(
                     session.device_alias = None;
                 }
             }
-            // A pairing completed: leave discoverable mode and settle the
-            // pairing UI back to idle.
+            // A pairing completed. Crucially, do NOT touch the adapter yet:
+            // yanking Pairable/Discoverable at the Paired event interrupts
+            // iOS's still-running post-pair profile discovery (the control
+            // experiment with bt-agent — which never touches the adapter —
+            // paired perfectly; we didn't). Trust the device (the explicit
+            // pairing window is the consent), give the source time to bring
+            // A2DP up on its own, dial it ourselves if it stays passive
+            // (macOS), and only then close the pairing window.
             if changed.get("Paired").and_then(bool_from_value_ref) == Some(true) {
-                tracing::info!(%path, "device paired");
-                set_discoverable(ctx, session, false).await;
-                crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
+                tracing::info!(%path, "device paired; trusting");
+                if let Ok(p) = ObjectPath::try_from(path.to_string()) {
+                    let conn = ctx.conn.clone();
+                    let app = ctx.app.clone();
+                    let adapter = session.adapter_path.clone();
+                    tokio::spawn(async move {
+                        let result: anyhow::Result<()> = async {
+                            let device = Device1Proxy::builder(&conn)
+                                .path(p)?
+                                .build()
+                                .await?;
+                            device.set_trusted(true).await?;
+                            // Wait for the source's own A2DP setup.
+                            let dev_path = device.inner().path().to_string();
+                            let mut transport_up = false;
+                            for _ in 0..16 {
+                                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                                if has_media_transport(&conn, &dev_path).await {
+                                    transport_up = true;
+                                    break;
+                                }
+                            }
+                            if !transport_up {
+                                // Passive source (macOS): dial it ourselves.
+                                tracing::info!("no audio transport after pairing; connecting back");
+                                if let Err(err) = device.disconnect().await {
+                                    tracing::debug!(%err, "pre-connect disconnect (may not be up)");
+                                }
+                                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+                                device.connect().await?;
+                            }
+                            tracing::info!(transport_up, "post-pair settled; closing pairing window");
+                            Ok(())
+                        }
+                        .await;
+                        if let Err(err) = result {
+                            tracing::warn!(%err, "post-pair trust/connect failed");
+                        }
+                        // Close the pairing window regardless of outcome.
+                        if let Some(adapter) = adapter {
+                            let close = async {
+                                let a = Adapter1Proxy::builder(&conn)
+                                    .path(adapter)?
+                                    .build()
+                                    .await?;
+                                a.set_pairable(false).await?;
+                                a.set_discoverable(false).await
+                            }
+                            .await;
+                            if let Err(err) = close {
+                                tracing::warn!(%err, "failed to close pairing window");
+                            }
+                        }
+                        crate::bt_agent::set_pairing(&app, Pairing::default()).await;
+                    });
+                }
             }
             if ["Connected", "Paired", "Alias"]
                 .iter()
@@ -539,6 +600,10 @@ async fn handle_bt_command(
     };
     match cmd {
         BtCommand::Pairing(PairingAction::Enable) => {
+            // Entering pairing mode releases current connections: the user
+            // is explicitly adding a new device, and the dongle struggles
+            // to accept pairings while servicing an A2DP link anyway.
+            disconnect_all(ctx, session).await;
             if set_discoverable(ctx, session, true).await {
                 crate::bt_agent::set_pairing(
                     &ctx.app,
@@ -560,6 +625,45 @@ async fn handle_bt_command(
         BtCommand::Device { address, action } => {
             device_action(ctx, session, &address, action).await;
         }
+    }
+}
+
+/// Does a MediaTransport1 (active audio profile) exist under `dev_path`?
+async fn has_media_transport(conn: &zbus::Connection, dev_path: &str) -> bool {
+    let Ok(om) = ObjectManagerProxy::builder(conn)
+        .destination("org.bluez")
+        .and_then(|b| b.path("/"))
+        .map(|b| b.build())
+    else {
+        return false;
+    };
+    let Ok(om) = om.await else { return false };
+    let Ok(objects) = om.get_managed_objects().await else {
+        return false;
+    };
+    objects.iter().any(|(path, ifaces)| {
+        path.as_str().starts_with(dev_path)
+            && ifaces
+                .keys()
+                .any(|i| i.as_str() == "org.bluez.MediaTransport1")
+    })
+}
+
+/// Disconnect every connected device (entering pairing mode).
+async fn disconnect_all(ctx: &Ctx, session: &Session) {
+    let connected: Vec<String> = ctx
+        .app
+        .shared
+        .read()
+        .await
+        .bt_devices
+        .iter()
+        .filter(|d| d.connected)
+        .map(|d| d.address.clone())
+        .collect();
+    for address in connected {
+        tracing::info!(%address, "disconnecting for pairing mode");
+        device_action(ctx, session, &address, BtDeviceAction::Disconnect).await;
     }
 }
 

@@ -1,20 +1,22 @@
 //! BlueZ pairing agent (`org.bluez.Agent1`), capability `NoInputNoOutput`.
 //!
-//! Replaces v1's *unconditional* auto-accept (`bt-agent`): pairing consent
-//! is surfaced to the panel/web UI (`Pairing` state) and blocks until the
-//! user approves, rejects, or a 30 s timeout fires.
+//! Security model = the pairing window, like every commercial speaker:
+//! devices can only pair while the user has explicitly enabled pairing
+//! mode from the panel/web UI, and a device paired in that window is
+//! trusted (set by the bluetooth task on the Paired event). No
+//! per-connection prompts — we tried, and BlueZ holds the profile
+//! connection hostage during the prompt, which makes Apple devices time
+//! out into a degraded bond.
 //!
 //! Capability is `NoInputNoOutput` (JustWorks), not `DisplayYesNo`: the
 //! boombox's USB dongle is a counterfeit CSR (0a12:0001) whose SSP
 //! implementation cannot complete MITM numeric comparison — advertising
 //! display capability makes iOS request it and pairing dies at the radio
 //! layer before bluetoothd says a word (v1 worked because JustWorks never
-//! asks for it). JustWorks consent arrives via `RequestAuthorization`
-//! (no passkey); `RequestConfirmation` stays wired for future boxes with
-//! real SSP silicon.
-//!
-//! The decision arrives through [`DecisionSlot`] — the bluetooth task owns
-//! the other end and resolves it from `ClientMessage::Pairing` commands.
+//! asks for it). `RequestConfirmation` stays wired (passkey modal on the
+//! panel/web) for future boxes with real SSP silicon; the decision
+//! arrives through [`DecisionSlot`], resolved by the bluetooth task from
+//! `ClientMessage::Pairing` commands.
 
 #![cfg(target_os = "linux")]
 
@@ -61,15 +63,6 @@ pub struct Agent {
     app: SharedApp,
     conn: zbus::Connection,
     decision: DecisionSlot,
-    /// Recent consent decisions per device path. One phone connection
-    /// authorizes several UUIDs (A2DP, AVRCP, ...) in a burst — ask once,
-    /// reuse the answer for the rest of the burst.
-    recent: Mutex<std::collections::HashMap<String, (std::time::Instant, bool)>>,
-    /// Serializes user prompts: burst UUID authorizations arrive
-    /// concurrently, and parallel `ask_user` calls would stomp each
-    /// other's decision channel (instant implicit rejects). Waiters queue
-    /// here, then read the first answer from `recent`.
-    prompt: tokio::sync::Mutex<()>,
 }
 
 impl Agent {
@@ -139,76 +132,21 @@ impl Agent {
         }
     }
 
-    /// Profile (A2DP/AVRCP/...) authorization. Trusted devices never reach
-    /// here — this fires on a device's *first* connection after JustWorks
-    /// pairing, which (with the counterfeit-CSR dongle silently
-    /// auto-pairing) is the one consent point BlueZ actually gives us.
-    /// Accept → mark Trusted (never asks again); reject → unpair.
+    /// Profile (A2DP/AVRCP/...) authorization — auto-accepted.
+    ///
+    /// We tried gating this on a user prompt ("first-connect consent"),
+    /// but BlueZ holds the profile connection hostage during the prompt:
+    /// Apple devices time out, degrade to a metadata-less generic bond,
+    /// and need a manual reconnect. Unfixable jank. The security model is
+    /// the pairing window instead: devices pair only while the user has
+    /// explicitly enabled pairing mode, and paired devices are trusted.
     async fn authorize_service(
         &self,
         device: OwnedObjectPath,
         uuid: String,
     ) -> Result<(), AgentError> {
-        // Serialize prompts, then check the burst cache: whoever loses the
-        // race waits here and reuses the winner's answer.
-        let _prompting = self.prompt.lock().await;
-        if let Some((when, allowed)) = self.recent.lock().unwrap().get(device.as_str()).copied() {
-            if when.elapsed() < Duration::from_secs(60) {
-                return if allowed {
-                    Ok(())
-                } else {
-                    Err(AgentError::Rejected("connection rejected".into()))
-                };
-            }
-        }
-        tracing::info!(device = %device.as_str(), %uuid, "first-connect authorization");
-        let allowed = self.ask_user(&device, None).await;
-        self.recent
-            .lock()
-            .unwrap()
-            .insert(device.as_str().to_string(), (std::time::Instant::now(), allowed));
-
-        let conn = self.conn.clone();
-        let dev = device.clone();
-        if allowed {
-            // Persist: trusted devices skip AuthorizeService entirely.
-            tokio::spawn(async move {
-                let result = async {
-                    zbus::Proxy::new(&conn, "org.bluez", dev.clone(), "org.bluez.Device1")
-                        .await?
-                        .set_property("Trusted", true)
-                        .await
-                }
-                .await;
-                if let Err(err) = result {
-                    tracing::warn!(%err, "failed to mark device trusted");
-                }
-            });
-            Ok(())
-        } else {
-            // A rejected first connect = user said no to this device:
-            // undo the (silently auto-accepted) pairing too.
-            tokio::spawn(async move {
-                let result: anyhow::Result<()> = async {
-                    let adapter = dev
-                        .as_str()
-                        .rsplit_once("/dev_")
-                        .map(|(a, _)| a.to_string())
-                        .unwrap_or_else(|| "/org/bluez/hci0".into());
-                    let proxy = zbus::Proxy::new(&conn, "org.bluez", adapter, "org.bluez.Adapter1")
-                        .await?;
-                    proxy
-                        .call_method("RemoveDevice", &(zbus::zvariant::ObjectPath::from(dev)))
-                        .await?;
-                    Ok(())
-                }
-                .await;
-                if let Err(err) = result {
-                    tracing::warn!(%err, "failed to remove rejected device");
-                }
-            });
-            Err(AgentError::Rejected("connection rejected".into()))
-        }
+        tracing::debug!(device = %device.as_str(), %uuid, "service authorized");
+        Ok(())
     }
 
     // Legacy PIN flows — DisplayYesNo shouldn't receive these, but answer
@@ -249,8 +187,6 @@ pub async fn register(
         app,
         conn: conn.clone(),
         decision,
-        recent: Mutex::new(std::collections::HashMap::new()),
-        prompt: tokio::sync::Mutex::new(()),
     };
     // `at` returns false when the interface is already served (restart) —
     // the existing instance holds stale channel refs, so replace it.

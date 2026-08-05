@@ -54,6 +54,10 @@ echo 'deploy OK (appliance)'
     exit 0
 fi
 
+# Dev box: boompid runs under a systemd *user* unit (~/.config/systemd/
+# user/boompid.service, Restart=always) — deploys must go through
+# systemctl or the unit's auto-restart races the new instance for the
+# ports (learned the hard way: zombie instances serving deleted inodes).
 PI="${PI:-pi@boompi-dev-2.local}"
 ssh "$PI" 'mkdir -p ~/staging'
 for bin in "${WANT[@]}"; do
@@ -62,24 +66,22 @@ done
 
 ssh "$PI" "
 set -e
-for bin in ${WANT[*]}; do pkill -9 -x \"\$bin\" 2>/dev/null || true; done
-# boompid owns shairport (child) and the listen ports; only relevant
-# when boompid itself is being replaced.
 if printf '%s\n' ${WANT[*]} | grep -qx boompid; then
+    systemctl --user stop boompid 2>/dev/null || true
+    pkill -9 -x boompid 2>/dev/null || true   # stray non-unit instances
     pkill -9 -x shairport-sync 2>/dev/null || true
     for i in \$(seq 1 20); do ss -ltn | grep -qE ':3001|:8080' || break; sleep 0.5; done
     if ss -ltn | grep -qE ':3001|:8080'; then echo 'ERROR: ports still held' >&2; exit 1; fi
-fi
-for bin in ${WANT[*]}; do mv ~/staging/\$bin ~/\$bin; chmod +x ~/\$bin; done
-if printf '%s\n' ${WANT[*]} | grep -qx boompid; then
-    nohup ./boompid --config /home/pi/boompi-dev.toml >>/tmp/boompid.log 2>&1 < /dev/null &
-    disown
+    mv ~/staging/boompid ~/boompid && chmod +x ~/boompid
+    systemctl --user start boompid
     sleep 3
     P=\$(pgrep -x boompid) || { echo 'ERROR: boompid did not start' >&2; exit 1; }
     readlink /proc/\$P/exe | grep -q deleted && { echo 'ERROR: stale inode' >&2; exit 1; }
     curl -sf http://127.0.0.1:3001/healthz > /dev/null || { echo 'ERROR: healthz' >&2; exit 1; }
 fi
 if printf '%s\n' ${WANT[*]} | grep -qx boompi-ui; then
+    pkill -9 -x boompi-ui 2>/dev/null || true
+    mv ~/staging/boompi-ui ~/boompi-ui && chmod +x ~/boompi-ui
     nohup env SLINT_KMS_ROTATION=270 ./boompi-ui >/tmp/boompi-ui.log 2>&1 < /dev/null &
     disown
     sleep 2
