@@ -709,6 +709,22 @@ async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDe
     };
     let dev_path = format!("{}/dev_{}", adapter.as_str(), address.replace(':', "_"));
     tracing::info!(%address, ?action, "bt device action");
+    // Connect means "switch to this device": the dongle can't service two
+    // A2DP links (a second connect flaps and drops itself), so release any
+    // other connected device first.
+    let others: Vec<String> = if action == BtDeviceAction::Connect {
+        ctx.app
+            .shared
+            .read()
+            .await
+            .bt_devices
+            .iter()
+            .filter(|d| d.connected && d.address != address)
+            .map(|d| format!("{}/dev_{}", adapter.as_str(), d.address.replace(':', "_")))
+            .collect()
+    } else {
+        Vec::new()
+    };
     let conn = ctx.conn.clone();
     let adapter = adapter.clone();
     // Connect can block for many seconds; never stall the event loop.
@@ -717,6 +733,27 @@ async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDe
             let path = ObjectPath::try_from(dev_path.clone())?;
             match action {
                 BtDeviceAction::Connect => {
+                    for other in &others {
+                        tracing::info!(device = %other, "disconnecting for device switch");
+                        let disconnect = async {
+                            let path = ObjectPath::try_from(other.clone())?;
+                            Device1Proxy::builder(&conn)
+                                .path(path)?
+                                .build()
+                                .await?
+                                .disconnect()
+                                .await?;
+                            anyhow::Ok(())
+                        }
+                        .await;
+                        if let Err(err) = disconnect {
+                            tracing::warn!(%err, "switch disconnect failed");
+                        }
+                    }
+                    if !others.is_empty() {
+                        // Let the radio settle before dialing the new link.
+                        tokio::time::sleep(std::time::Duration::from_millis(1200)).await;
+                    }
                     Device1Proxy::builder(&conn)
                         .path(path)?
                         .build()
