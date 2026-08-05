@@ -160,6 +160,20 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      # OTA bundle for the A/B updater (Pi 4's SD card is inaccessible once
+      # assembled — see boompi-update-slot / scripts/update-appliance.sh).
+      - name: Upload update bundle (pi4)
+        if: matrix.board == 'pi4'
+        uses: actions/upload-artifact@v7
+        with:
+          name: boompi-pi4-update
+          path: |
+            /home/runner/br-output/images/rootfs.ext4
+            /home/runner/br-output/images/boot-a.vfat
+            /home/runner/br-output/images/boot-b.vfat
+          if-no-files-found: error
+          retention-days: 14
+
       # Content-keyed caches (br-dl, cargo) can only be saved once per key;
       # unconditional saves warn 'unable to reserve cache' on every warm run.
       # The ccache key includes the commit SHA, so it always saves cleanly.

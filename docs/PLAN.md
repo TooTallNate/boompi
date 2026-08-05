@@ -289,7 +289,23 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
 
 ### Phase 6 — Boot polish, updates + release
 
-**Software updates** (design settled; builds on the `/data` partition):
+**Software updates** — implemented for the Pi 4 (its SD card is
+physically inaccessible once assembled, so A/B landed before its first
+flash; the Pi 3 keeps single-slot — accessible card, no EEPROM tryboot):
+- Layout: boot-a/boot-b (FAT) + rootfs-a/rootfs-b + data. EEPROM-native
+  `tryboot` boots a candidate slot exactly once; `boompi-boot-commit`
+  makes it permanent only after boompid answers healthz, else the next
+  boot falls back automatically.
+- `boompi-update-slot` (on-box) writes a CI update bundle into the
+  inactive slot; `scripts/update-appliance.sh` (workstation) fetches the
+  latest green `boompi-pi4-update` artifact and drives the whole thing
+  over SSH.
+- ⚠ Bench task before final assembly: verify the Pi 4's EEPROM is
+  ≥ 2021-04 (`vcgencmd bootloader_version`) — tryboot/autoboot.txt need
+  it, and the v1 install is buster-era. Update with rpi-eeprom-update
+  while the card is still reachable.
+
+Remaining (original design notes):
 - Partition layout grows to boot / rootfs-A / rootfs-B / data; the Pi
   bootloader's native `tryboot` mechanism gives atomic A/B switching with
   automatic fallback when the new slot fails to mark itself healthy.

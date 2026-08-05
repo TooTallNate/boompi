@@ -1,0 +1,13 @@
+# Commits a successful tryboot (A/B update candidate) — see
+# /usr/bin/boompi-boot-commit. No-op on normal boots.
+[Unit]
+Description=Commit A/B boot slot after successful tryboot
+After=multi-user.target boompid.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-boot-commit
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

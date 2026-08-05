@@ -1,0 +1,49 @@
+#!/bin/sh
+# A/B slot commit: when this boot came from the `tryboot` one-shot (an
+# update candidate), wait until the system proves healthy, then rewrite
+# autoboot.txt so the candidate slot becomes permanent. If we never get
+# here (crash, hang, boompid dead), the next reboot falls back to the
+# previous slot automatically — that is the whole point.
+set -eu
+
+TRYBOOT_FLAG=/proc/device-tree/chosen/bootloader/tryboot
+PART_FILE=/proc/device-tree/chosen/bootloader/partition
+
+if [ ! -e "$TRYBOOT_FLAG" ]; then
+    echo "normal boot (no tryboot); nothing to commit"
+    exit 0
+fi
+
+# Health gate: boompid must come up and answer before we commit.
+echo "tryboot boot detected; waiting for system health before commit"
+for i in $(seq 1 60); do
+    if wget -q -T 2 -O /dev/null http://127.0.0.1:3001/healthz 2>/dev/null; then
+        break
+    fi
+    if [ "$i" = 60 ]; then
+        echo "system never became healthy; NOT committing (will fall back on reboot)" >&2
+        exit 1
+    fi
+    sleep 2
+done
+
+# Which boot partition are we running from? (firmware-provided, u32 BE)
+CURRENT=$(od -A n -t u1 "$PART_FILE" | tr -s ' ' '\n' | grep -v '^$' | tail -1)
+case "$CURRENT" in
+    1) OTHER=2 ;;
+    2) OTHER=1 ;;
+    *) echo "unexpected boot partition '$CURRENT'" >&2; exit 1 ;;
+esac
+
+# autoboot.txt always lives on p1, whichever slot is active.
+MNT=$(mktemp -d)
+mount /dev/mmcblk0p1 "$MNT"
+cat > "$MNT/autoboot.txt" <<EOF
+[all]
+boot_partition=$CURRENT
+[tryboot]
+boot_partition=$OTHER
+EOF
+umount "$MNT"
+rmdir "$MNT"
+echo "committed: boot_partition=$CURRENT (tryboot -> $OTHER)"

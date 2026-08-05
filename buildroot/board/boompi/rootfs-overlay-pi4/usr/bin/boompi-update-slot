@@ -1,0 +1,54 @@
+#!/bin/sh
+# Write an OS update into the inactive A/B slot and tryboot into it.
+#
+# Usage: boompi-update-slot <bundle-dir>
+#   where <bundle-dir> contains: rootfs.ext4, boot-a.vfat, boot-b.vfat
+#   (the CI update bundle, decompressed).
+#
+# The new slot boots exactly once (`tryboot`); boompi-boot-commit makes
+# it permanent only after the system proves healthy. /data is untouched.
+set -eu
+
+BUNDLE="${1:?usage: boompi-update-slot <bundle-dir>}"
+
+for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
+    [ -f "$BUNDLE/$f" ] || { echo "missing $BUNDLE/$f" >&2; exit 1; }
+done
+
+# Active slot from the kernel cmdline (p3 = slot A, p5 = slot B).
+case "$(cat /proc/cmdline)" in
+    *root=/dev/mmcblk0p3*) ACTIVE=A ;;
+    *root=/dev/mmcblk0p5*) ACTIVE=B ;;
+    *) echo "cannot determine active slot from cmdline" >&2; exit 1 ;;
+esac
+
+if [ "$ACTIVE" = A ]; then
+    TARGET_BOOT=/dev/mmcblk0p2; TARGET_ROOT=/dev/mmcblk0p5
+    BOOT_IMG="$BUNDLE/boot-b.vfat"; CURRENT_PART=1; TRY_PART=2
+else
+    TARGET_BOOT=/dev/mmcblk0p1; TARGET_ROOT=/dev/mmcblk0p3
+    BOOT_IMG="$BUNDLE/boot-a.vfat"; CURRENT_PART=2; TRY_PART=1
+fi
+
+echo "active slot: $ACTIVE — writing update to $TARGET_ROOT / $TARGET_BOOT"
+dd if="$BUNDLE/rootfs.ext4" of="$TARGET_ROOT" bs=4M conv=fsync status=none
+dd if="$BOOT_IMG" of="$TARGET_BOOT" bs=4M conv=fsync status=none
+
+# Writing boot-a.vfat to p1 replaced autoboot.txt with the image default;
+# restore the truth: current slot stays active, tryboot targets the new one.
+if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
+    MNT=$(mktemp -d)
+    mount /dev/mmcblk0p1 "$MNT"
+    cat > "$MNT/autoboot.txt" <<EOF
+[all]
+boot_partition=$CURRENT_PART
+[tryboot]
+boot_partition=$TRY_PART
+EOF
+    umount "$MNT"
+    rmdir "$MNT"
+fi
+
+sync
+echo "update staged; rebooting into candidate slot (tryboot)"
+systemctl reboot --reboot-argument="0 tryboot"
