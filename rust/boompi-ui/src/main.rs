@@ -34,12 +34,26 @@ struct Cli {
     /// Initial screen (dev/screenshot aid): main | battery | settings.
     #[arg(long, default_value = "main")]
     screen: String,
+
+    /// Window size for desktop preview, e.g. "1024x600" (dev aid for
+    /// testing the Pi 4 box's panel resolution; ignored on the KMS
+    /// backend, which always uses the physical display size).
+    #[arg(long)]
+    size: Option<String>,
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let ui = AppWindow::new()?;
     ui.set_screen(cli.screen.clone().into());
+    if let Some(size) = &cli.size {
+        if let Some((w, h)) = size.split_once('x') {
+            if let (Ok(w), Ok(h)) = (w.parse::<u32>(), h.parse::<u32>()) {
+                ui.window()
+                    .set_size(slint::PhysicalSize::new(w, h));
+            }
+        }
+    }
     let (tx, rx) = mpsc::unbounded_channel::<ClientMessage>();
 
     let track: Arc<Mutex<Option<TrackSnap>>> = Arc::new(Mutex::new(None));

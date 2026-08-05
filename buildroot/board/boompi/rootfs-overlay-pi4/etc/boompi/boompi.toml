@@ -1,0 +1,10 @@
+# Boompi device configuration — Pi 4 box (first-boot seed; runtime
+# config persists to /data/boompi.toml).
+# Hardware facts from the v1 SD card dump.
+
+name = "Boompi"
+model = "pi4"
+
+[battery]
+# INA260 on the standard I2C bus (unlike the Pi 3 box's bit-banged bus).
+i2c_bus = 1

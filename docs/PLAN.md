@@ -321,7 +321,13 @@ CI image builds with ccache. Tag v2.0.
 
 ## Open items
 
-- [ ] DAC HAT model on Pi 4 (→ dtoverlay) — from Pi 4 v1 image dump
+- [x] DAC HAT model on Pi 4: **Raspiaudio Audio+** → `dtoverlay=hifiberry-dac`
+      (confirmed from the v1 Pi 4 image dump). Same dump also revealed the
+      Pi 4 box's display is **1024×600 over HDMI** (`hdmi_cvt=1024 600 60`,
+      `vc4-fkms-v3d`, touch presumably USB HID) — *not* a HyperPixel — and
+      its INA260 lives on standard `i2c-1`. Consequences for the pi4 image:
+      different kernel/DTB (bcm2711), hdmi config.txt, `battery.i2c_bus=1`,
+      and the panel UI must handle 1024×600 (fixed 800×480 today).
 - [x] INA260 I2C bus on Pi 3: `/dev/i2c-11` (overlay's i2c-gpio; v1 symlinked
       it to `/dev/i2c-1` in kiosk.sh). v2: seed `battery.i2c_bus = 11` for the
       Pi 3 image + implement find-adapter-by-name in Phase 1 for robustness.

@@ -1,0 +1,31 @@
+# Boompi Pi 4 box boot configuration.
+# Hardware facts recovered from the v1 SD card dump (Aug 2026):
+# Raspiaudio Audio+ DAC HAT, 1024×600 HDMI touch panel (USB HID touch),
+# INA260 on the standard i2c-1 bus.
+
+start_file=start4.elf
+fixup_file=fixup4.dat
+kernel=Image
+arm_64bit=1
+
+disable_overscan=1
+disable_splash=1
+boot_delay=0
+
+# KMS graphics. The panel's mode is set via cmdline.txt (video=...):
+# full KMS ignores the legacy hdmi_* config.txt settings v1 used, and
+# the panel may not provide EDID.
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+# Raspiaudio Audio+ DAC HAT (PCM51xx-family I2S — vendor-documented
+# overlay). Onboard audio off so the DAC is the only ALSA card.
+dtoverlay=hifiberry-dac
+dtparam=audio=off
+
+# INA260 battery monitor on the standard I2C bus.
+dtparam=i2c_arm=on
+
+# USB Bluetooth dongle only; onboard radio disabled (same rationale as
+# the Pi 3 box: shared antenna stutters).
+dtoverlay=disable-bt

@@ -34,12 +34,18 @@ env:
   BR_VERSION: "2026.02"
 
 jobs:
-  pi3:
+  image:
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [pi3, pi4]
+    name: ${{ matrix.board }}
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     env:
       BR2_DL_DIR: /home/runner/br-dl
       OUTPUT: /home/runner/br-output
+      BOARD: ${{ matrix.board }}
     steps:
       - uses: actions/checkout@v7
 
@@ -58,17 +64,18 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles(format('buildroot/configs/boompi_{0}_defconfig', matrix.board)) }}
           restore-keys: |
+            br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-
             br-dl-${{ env.BR_VERSION }}-
 
       - name: Restore ccache
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/.buildroot-ccache
-          key: br-ccache-pi3-${{ github.sha }}
+          key: br-ccache-${{ matrix.board }}-${{ github.sha }}
           restore-keys: |
-            br-ccache-pi3-
+            br-ccache-${{ matrix.board }}-
 
       - name: Restore cargo cache
         id: restore-cargo
@@ -90,7 +97,7 @@ jobs:
         run: |
           make -C "$HOME/buildroot" O="$OUTPUT" \
             BR2_EXTERNAL="$GITHUB_WORKSPACE/buildroot" \
-            boompi_pi3_defconfig
+            boompi_${BOARD}_defconfig
 
       - name: Build system (pass 1)
         run: make -C "$OUTPUT" -j"$(nproc)"
@@ -148,7 +155,7 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@v7
         with:
-          name: boompi-pi3-sdcard
+          name: boompi-${{ matrix.board }}-sdcard
           path: /home/runner/br-output/images/sdcard.img.xz
           if-no-files-found: error
           retention-days: 14
@@ -161,14 +168,14 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/boompi_pi3_defconfig') }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles(format('buildroot/configs/boompi_{0}_defconfig', matrix.board)) }}
 
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v6
         with:
           path: /home/runner/.buildroot-ccache
-          key: br-ccache-pi3-${{ github.sha }}
+          key: br-ccache-${{ matrix.board }}-${{ github.sha }}
 
       - name: Save cargo cache
         if: always() && steps.restore-cargo.outputs.cache-hit != 'true'
