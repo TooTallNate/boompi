@@ -18,6 +18,15 @@ fail() {
 [ -f "${TARGET_DIR}/etc/ssh/sshd_config.d/boompi.conf" ] \
     || fail "missing sshd_config.d/boompi.conf (PermitRootLogin)"
 
+# Buildroot's OpenSSH installs a sshd_config *without* upstream's Include
+# line (first CI run of these assertions caught the drop-in being
+# silently ignored — which would have shipped another locked-out image).
+# Inject it at the top: sshd's first-obtained-value-wins semantics make
+# the drop-in authoritative.
+if ! grep -q "^Include /etc/ssh/sshd_config.d" "${TARGET_DIR}/etc/ssh/sshd_config"; then
+    sed -i '1i Include /etc/ssh/sshd_config.d/*.conf' "${TARGET_DIR}/etc/ssh/sshd_config"
+fi
+
 grep -q "^Include /etc/ssh/sshd_config.d" "${TARGET_DIR}/etc/ssh/sshd_config" \
     || fail "sshd_config lacks the Include line — the drop-in would be ignored"
 
