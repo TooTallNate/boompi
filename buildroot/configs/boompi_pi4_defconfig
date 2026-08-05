@@ -23,6 +23,7 @@ BR2_TARGET_GENERIC_ROOT_PASSWD="boompi"
 BR2_INIT_SYSTEMD=y
 
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-pi4 $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
+BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/post-image.sh"
 
 # Kernel: same Raspberry Pi kernel pin as upstream raspberrypi3_64_defconfig
