@@ -126,6 +126,25 @@ pub struct Pairing {
     pub passkey: Option<u32>,
 }
 
+/// Who applies Bluetooth loudness for a paired device.
+///
+/// Modern iOS scales the PCM it streams according to its own volume
+/// slider and uses AVRCP absolute volume as position sync; the AVRCP
+/// spec instead expects the renderer to apply the value to full-scale
+/// audio (how Android behaves). Applying it on both ends attenuates
+/// twice, applying it on neither leaves a sender at full blast.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BtVolumeMode {
+    /// Vendor-based default: Apple senders get `Phone`, others `Speaker`.
+    #[default]
+    Auto,
+    /// The sender scales its PCM; AVRCP only syncs the displayed volume.
+    Phone,
+    /// The speaker applies AVRCP volume to its output (AVRCP spec).
+    Speaker,
+}
+
 /// A Bluetooth device known to the adapter (paired, or mid-pairing).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BtDevice {
@@ -133,6 +152,12 @@ pub struct BtDevice {
     pub address: String,
     pub name: String,
     pub connected: bool,
+    /// The user's assignment for this device (default `Auto`).
+    #[serde(default)]
+    pub volume_mode: BtVolumeMode,
+    /// What `Auto` resolves to for this device (`Phone` or `Speaker`).
+    #[serde(default)]
+    pub volume_mode_auto: BtVolumeMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -142,6 +167,10 @@ pub enum BtDeviceAction {
     Disconnect,
     /// Unpair (BlueZ `RemoveDevice`).
     Remove,
+    /// Assign who applies this device's loudness (persisted).
+    SetVolumeMode {
+        mode: BtVolumeMode,
+    },
 }
 
 /// UI theme.

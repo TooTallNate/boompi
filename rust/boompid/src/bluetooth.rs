@@ -16,8 +16,8 @@
 
 use crate::state::{now_ms, BtCommand, SharedApp, SourceCommand};
 use boompi_proto::{
-    BtDevice, BtDeviceAction, Pairing, PairingAction, PairingState, PlaybackStatus, ServerMessage,
-    SourceInfo, SourceKind, Track,
+    BtDevice, BtDeviceAction, BtVolumeMode, Pairing, PairingAction, PairingState, PlaybackStatus,
+    ServerMessage, SourceInfo, SourceKind, Track,
 };
 use futures_util::StreamExt;
 use std::collections::HashMap;
@@ -44,6 +44,12 @@ trait Device1 {
     fn disconnect(&self) -> zbus::Result<()>;
     #[zbus(property)]
     fn alias(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn address(&self) -> zbus::Result<String>;
+    /// Device ID profile identity, e.g. "bluetooth:v004Cp720Dd0F20"
+    /// (v = vendor; 0x004C = Apple). Absent on devices without DI.
+    #[zbus(property)]
+    fn modalias(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn connected(&self) -> zbus::Result<bool>;
     #[zbus(property)]
@@ -86,6 +92,9 @@ struct Session {
     adapter_path: Option<OwnedObjectPath>,
     device_path: Option<String>,
     device_alias: Option<String>,
+    device_address: Option<String>,
+    /// What `BtVolumeMode::Auto` resolves to for the connected device.
+    auto_volume_mode: BtVolumeMode,
     player_path: Option<OwnedObjectPath>,
     transport_path: Option<OwnedObjectPath>,
     // Last-known track state (BlueZ sends partial updates).
@@ -344,7 +353,7 @@ async fn handle_interface_added(
                 },
             };
             if let Some(v) = volume {
-                apply_phone_volume(&ctx.app, v).await;
+                apply_phone_volume(ctx, session, v).await;
             }
         }
         _ => {}
@@ -427,7 +436,7 @@ async fn handle_properties_changed(
         }
         "org.bluez.MediaTransport1" => {
             if let Some(v) = changed.get("Volume").and_then(u16_from_value_ref) {
-                apply_phone_volume(&ctx.app, v).await;
+                apply_phone_volume(ctx, session, v).await;
             }
         }
         "org.bluez.Device1" => {
@@ -437,6 +446,8 @@ async fn handle_properties_changed(
                     clear_session(ctx, session).await;
                     session.device_path = None;
                     session.device_alias = None;
+                    session.device_address = None;
+                    session.auto_volume_mode = BtVolumeMode::default();
                 }
             }
             // A pairing completed. Crucially, do NOT touch the adapter yet:
@@ -455,10 +466,7 @@ async fn handle_properties_changed(
                     let adapter = session.adapter_path.clone();
                     tokio::spawn(async move {
                         let result: anyhow::Result<()> = async {
-                            let device = Device1Proxy::builder(&conn)
-                                .path(p)?
-                                .build()
-                                .await?;
+                            let device = Device1Proxy::builder(&conn).path(p)?.build().await?;
                             device.set_trusted(true).await?;
                             // Wait for the source's own A2DP setup.
                             let dev_path = device.inner().path().to_string();
@@ -479,7 +487,10 @@ async fn handle_properties_changed(
                                 tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
                                 device.connect().await?;
                             }
-                            tracing::info!(transport_up, "post-pair settled; closing pairing window");
+                            tracing::info!(
+                                transport_up,
+                                "post-pair settled; closing pairing window"
+                            );
                             Ok(())
                         }
                         .await;
@@ -489,10 +500,8 @@ async fn handle_properties_changed(
                         // Close the pairing window regardless of outcome.
                         if let Some(adapter) = adapter {
                             let close = async {
-                                let a = Adapter1Proxy::builder(&conn)
-                                    .path(adapter)?
-                                    .build()
-                                    .await?;
+                                let a =
+                                    Adapter1Proxy::builder(&conn).path(adapter)?.build().await?;
                                 a.set_pairable(false).await?;
                                 a.set_discoverable(false).await
                             }
@@ -519,8 +528,8 @@ async fn handle_properties_changed(
 async fn handle_command(ctx: &Ctx, session: &Session, cmd: SourceCommand) -> anyhow::Result<()> {
     match cmd {
         SourceCommand::SetVolume(level) => {
-            let bt_active = ctx.app.shared.read().await.source.active
-                == Some(SourceKind::Bluetooth);
+            let bt_active =
+                ctx.app.shared.read().await.source.active == Some(SourceKind::Bluetooth);
             tracing::debug!(
                 level,
                 bt_active,
@@ -528,17 +537,21 @@ async fn handle_command(ctx: &Ctx, session: &Session, cmd: SourceCommand) -> any
                 "SetVolume routed to bluetooth path"
             );
             if bt_active && session.transport_path.is_some() {
-                // The phone owns the loudness (it scales its PCM); send
-                // AVRCP only and let its echo update the display. The
-                // sink stays at reference.
+                let mode = effective_volume_mode(ctx, session).await;
+                if mode != BtVolumeMode::Phone {
+                    // Speaker mode: we own the loudness.
+                    crate::audio::set_system_volume(level).await?;
+                    ctx.app.shared.write().await.sink_volume = level;
+                }
+                // Sync the sender's slider either way; in Phone mode its
+                // echo is what changes the loudness (the phone rescales
+                // its PCM).
                 if let Some(path) = &session.transport_path {
                     let proxy = MediaTransport1Proxy::builder(&ctx.conn)
                         .path(path.clone())?
                         .build()
                         .await?;
-                    if let Err(err) =
-                        proxy.set_volume((level * AVRCP_MAX).round() as u16).await
-                    {
+                    if let Err(err) = proxy.set_volume((level * AVRCP_MAX).round() as u16).await {
                         tracing::warn!(%err, ?path, "AVRCP set_volume failed");
                     }
                 }
@@ -593,18 +606,24 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     let Some(device_path) = device_prefix(child_path) else {
         return;
     };
-    let alias = match ObjectPath::try_from(device_path.clone()) {
+    let (alias, address, modalias) = match ObjectPath::try_from(device_path.clone()) {
         Ok(p) => match Device1Proxy::builder(&ctx.conn).path(p) {
             Ok(b) => match b.build().await {
-                Ok(proxy) => proxy.alias().await.ok(),
-                Err(_) => None,
+                Ok(proxy) => (
+                    proxy.alias().await.ok(),
+                    proxy.address().await.ok(),
+                    proxy.modalias().await.ok(),
+                ),
+                Err(_) => (None, None, None),
             },
-            Err(_) => None,
+            Err(_) => (None, None, None),
         },
-        Err(_) => None,
+        Err(_) => (None, None, None),
     };
     session.device_path = Some(device_path);
     session.device_alias = alias.clone();
+    session.device_address = address;
+    session.auto_volume_mode = auto_mode_for(modalias.as_deref());
 
     if !bt_owns_display(&ctx.app).await {
         return;
@@ -616,12 +635,55 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     ctx.app.shared.write().await.source = source.clone();
     ctx.app.broadcast(ServerMessage::Source(source));
 
-    // Bluetooth playback carries the phone's volume inside the samples;
-    // the sink must sit at reference or volume applies twice.
-    if let Err(err) = crate::audio::set_system_volume(1.0).await {
-        tracing::warn!(%err, "failed to set sink to reference for bluetooth");
+    apply_sink_policy(ctx, session).await;
+}
+
+/// Point the sink where the device's volume mode wants it: reference
+/// (1.0) when the sender scales its own PCM, the user volume when the
+/// speaker applies loudness.
+async fn apply_sink_policy(ctx: &Ctx, session: &Session) {
+    let target = match effective_volume_mode(ctx, session).await {
+        BtVolumeMode::Phone => 1.0,
+        _ => ctx.app.shared.read().await.volume,
+    };
+    if let Err(err) = crate::audio::set_system_volume(target).await {
+        tracing::warn!(%err, target, "failed to set sink for bluetooth volume mode");
     }
-    ctx.app.shared.write().await.sink_volume = 1.0;
+    ctx.app.shared.write().await.sink_volume = target;
+}
+
+/// Vendor-based default: Apple senders scale their own PCM.
+fn auto_mode_for(modalias: Option<&str>) -> BtVolumeMode {
+    let apple = modalias
+        .and_then(|m| m.split_once('v'))
+        .and_then(|(_, rest)| rest.get(0..4))
+        .is_some_and(|v| v.eq_ignore_ascii_case("004c"));
+    if apple {
+        BtVolumeMode::Phone
+    } else {
+        BtVolumeMode::Speaker
+    }
+}
+
+/// The mode actually in force for the connected device: the user's
+/// persisted assignment, with `Auto` resolved by vendor.
+async fn effective_volume_mode(ctx: &Ctx, session: &Session) -> BtVolumeMode {
+    let assigned = match &session.device_address {
+        Some(addr) => ctx
+            .app
+            .shared
+            .read()
+            .await
+            .bt_volume_modes
+            .get(addr)
+            .copied()
+            .unwrap_or(BtVolumeMode::Auto),
+        None => BtVolumeMode::Auto,
+    };
+    match assigned {
+        BtVolumeMode::Auto => session.auto_volume_mode,
+        mode => mode,
+    }
 }
 
 async fn handle_bt_command(
@@ -748,11 +810,26 @@ async fn set_discoverable(ctx: &Ctx, session: &Session, on: bool) -> bool {
 
 /// Connect/disconnect/unpair a known device by address.
 async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDeviceAction) {
-    if !address
-        .bytes()
-        .all(|b| b.is_ascii_hexdigit() || b == b':')
-    {
+    if !address.bytes().all(|b| b.is_ascii_hexdigit() || b == b':') {
         tracing::warn!(%address, "ignoring bt action for malformed address");
+        return;
+    }
+    if let BtDeviceAction::SetVolumeMode { mode } = action {
+        tracing::info!(%address, ?mode, "bt volume mode assigned");
+        {
+            let mut s = ctx.app.shared.write().await;
+            if mode == BtVolumeMode::Auto {
+                s.bt_volume_modes.remove(address);
+            } else {
+                s.bt_volume_modes.insert(address.to_string(), mode);
+            }
+        }
+        ctx.app.persist_config().await;
+        // Re-point the sink if the assignment targets the live device.
+        if session.device_address.as_deref() == Some(address) && session.transport_path.is_some() {
+            apply_sink_policy(ctx, session).await;
+        }
+        refresh_devices(ctx).await;
         return;
     }
     let Some(adapter) = &session.adapter_path else {
@@ -779,6 +856,8 @@ async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDe
     };
     let conn = ctx.conn.clone();
     let adapter = adapter.clone();
+    let app = ctx.app.clone();
+    let forget_address = address.to_string();
     // Connect can block for many seconds; never stall the event loop.
     tokio::spawn(async move {
         let result: anyhow::Result<()> = async {
@@ -827,8 +906,19 @@ async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDe
                         .build()
                         .await?
                         .remove_device(&path)
-                        .await?
+                        .await?;
+                    let dropped = app
+                        .shared
+                        .write()
+                        .await
+                        .bt_volume_modes
+                        .remove(&forget_address)
+                        .is_some();
+                    if dropped {
+                        app.persist_config().await;
+                    }
                 }
+                BtDeviceAction::SetVolumeMode { .. } => unreachable!("handled above"),
             }
             Ok(())
         }
@@ -841,7 +931,8 @@ async fn device_action(ctx: &Ctx, session: &Session, address: &str, action: BtDe
 
 /// Re-enumerate paired devices and broadcast when the list changed.
 async fn refresh_devices(ctx: &Ctx) {
-    let devices = match enumerate_devices(&ctx.conn).await {
+    let modes = ctx.app.shared.read().await.bt_volume_modes.clone();
+    let devices = match enumerate_devices(&ctx.conn, &modes).await {
         Ok(devices) => devices,
         Err(err) => {
             tracing::warn!(%err, "device enumeration failed");
@@ -856,7 +947,10 @@ async fn refresh_devices(ctx: &Ctx) {
     }
 }
 
-async fn enumerate_devices(conn: &zbus::Connection) -> anyhow::Result<Vec<BtDevice>> {
+async fn enumerate_devices(
+    conn: &zbus::Connection,
+    modes: &std::collections::HashMap<String, BtVolumeMode>,
+) -> anyhow::Result<Vec<BtDevice>> {
     let om = ObjectManagerProxy::builder(conn)
         .destination("org.bluez")?
         .path("/")?
@@ -882,10 +976,14 @@ async fn enumerate_devices(conn: &zbus::Connection) -> anyhow::Result<Vec<BtDevi
                 .get("Connected")
                 .and_then(bool_from_value)
                 .unwrap_or(false);
+            let modalias = props.get("Modalias").and_then(str_from_value);
+            let volume_mode = modes.get(&address).copied().unwrap_or_default();
             out.push(BtDevice {
                 address,
                 name,
                 connected,
+                volume_mode,
+                volume_mode_auto: auto_mode_for(modalias.as_deref()),
             });
         }
     }
@@ -982,16 +1080,24 @@ fn prime_art_session(ctx: &Ctx, session: &Session) {
     });
 }
 
-/// Phone changed its volume (AVRCP absolute volume, 0 to 127). iOS scales
-/// the PCM it streams according to its own volume curve and uses AVRCP
-/// purely as position sync (measured on the bench: stream energy follows
-/// the slider while the sink and bluez node volumes sit untouched), so
-/// this must only update the displayed volume - applying it to the sink
-/// as well attenuates twice.
-async fn apply_phone_volume(app: &SharedApp, avrcp: u16) {
+/// Phone changed its volume (AVRCP absolute volume, 0 to 127). What we
+/// do with it depends on the device's volume mode: `Phone` senders (iOS,
+/// measured on the bench) scale the PCM they stream and use AVRCP as
+/// position sync, so only the displayed volume updates; `Speaker`
+/// senders (AVRCP spec, Android) stream full scale and expect us to
+/// apply the value to the output.
+async fn apply_phone_volume(ctx: &Ctx, session: &Session, avrcp: u16) {
     let level = (avrcp as f32 / AVRCP_MAX).clamp(0.0, 1.0);
-    tracing::debug!(avrcp, level, "phone volume changed (display sync)");
-    app.apply_remote_volume_display(level).await;
+    match effective_volume_mode(ctx, session).await {
+        BtVolumeMode::Phone => {
+            tracing::debug!(avrcp, level, "phone volume changed (display sync)");
+            ctx.app.apply_remote_volume_display(level).await;
+        }
+        _ => {
+            tracing::debug!(avrcp, level, "phone volume changed (applying to sink)");
+            ctx.app.apply_external_volume(level).await;
+        }
+    }
 }
 
 fn apply_track_dict(session: &mut Session, track: &HashMap<String, OwnedValue>) {

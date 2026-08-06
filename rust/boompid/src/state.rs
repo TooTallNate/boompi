@@ -113,6 +113,8 @@ pub struct Shared {
     pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
+    /// Per-device Bluetooth volume-mode assignments (address → mode).
+    pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
 }
@@ -129,6 +131,7 @@ impl App {
         let setup = SetupState {
             required: !cfg.setup_complete,
         };
+        let cfg2_bt_volume_modes = cfg.bt_volume_modes.clone();
         Arc::new(Self {
             cfg,
             config_path,
@@ -139,6 +142,7 @@ impl App {
                 sink_volume: 0.5,
                 settings,
                 setup,
+                bt_volume_modes: cfg2_bt_volume_modes,
                 ..Shared::default()
             }),
             tx,
@@ -155,7 +159,9 @@ impl App {
     /// internet (onboarding hotspot: NM shared mode, no uplink) fall back
     /// to the AP gateway address.
     pub fn settings_url(&self) -> Option<String> {
-        let port = self.settings_port.load(std::sync::atomic::Ordering::Relaxed);
+        let port = self
+            .settings_port
+            .load(std::sync::atomic::Ordering::Relaxed);
         if port == 0 {
             return None;
         }
@@ -196,7 +202,7 @@ impl App {
     }
 
     /// Persist the current runtime settings back to the config file.
-    async fn persist_config(&self) {
+    pub async fn persist_config(&self) {
         let Some(path) = &self.config_path else {
             tracing::warn!("no --config path; settings change not persisted");
             return;
@@ -209,6 +215,7 @@ impl App {
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.setup_complete = !s.setup.required;
+            cfg.bt_volume_modes = s.bt_volume_modes.clone();
         }
         match crate::config::save(&cfg, path) {
             Ok(()) => tracing::info!(path = %path.display(), "config persisted"),
@@ -437,9 +444,9 @@ impl App {
                             state: PairingState::Discoverable,
                             ..Pairing::default()
                         },
-                        PairingAction::Cancel
-                        | PairingAction::Reject
-                        | PairingAction::Confirm => Pairing::default(),
+                        PairingAction::Cancel | PairingAction::Reject | PairingAction::Confirm => {
+                            Pairing::default()
+                        }
                     };
                     let pairing = s.pairing.clone();
                     drop(s);

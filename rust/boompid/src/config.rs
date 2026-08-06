@@ -27,6 +27,9 @@ pub struct Config {
     /// The appliance image ships a config without this flag; the setup
     /// flow persists it. Dev boxes set it manually.
     pub setup_complete: bool,
+    /// Per-device Bluetooth volume-mode assignments (address → mode);
+    /// devices absent from the map are `Auto`.
+    pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
 }
 
 impl Default for Config {
@@ -39,6 +42,7 @@ impl Default for Config {
             airplay: AirplayConfig::default(),
             settings: SettingsConfig::default(),
             setup_complete: false,
+            bt_volume_modes: Default::default(),
         }
     }
 }
@@ -152,9 +156,7 @@ pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
                 tracing::info!(path = %p.display(), "config not found; using defaults");
                 Ok(Config::default())
             }
-            Err(err) => {
-                Err(err).with_context(|| format!("reading config {}", p.display()))
-            }
+            Err(err) => Err(err).with_context(|| format!("reading config {}", p.display())),
         },
     }
 }
