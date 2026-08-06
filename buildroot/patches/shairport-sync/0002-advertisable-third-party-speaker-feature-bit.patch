@@ -1,0 +1,45 @@
+Make the third-party speaker feature bit advertisable
+
+Senders pick the AirPlay-picker icon in two steps: an Apple model
+string (e.g. "AudioAccessory5,1") maps to that product's icon, and
+otherwise a receiver advertising feature bit 26 (Authentication_8,
+MFi) - or bit 51 - is classified ThirdPartySpeaker and drawn with the
+bookshelf-speaker icon. Anything else gets the plain generic glyph,
+regardless of the model string (verified with synthetic mDNS
+registrations against iOS; Sonos and WiiM receivers advertise bit 26).
+
+shairport-sync hardcodes the features mask without bit 26. New option:
+general.airplay_third_party_speaker, default off (mask unchanged).
+Companion to 0001 (general.airplay_device_model); carried locally by
+boompi.
+
+--- a/common.h	2026-08-06 02:40:48
++++ b/common.h	2026-08-06 15:20:00
+@@ -136,5 +136,7 @@
+   char *airplay_device_model; // advertised model ("am="/"model=" TXT records and the AirPlay 2
+                               // /info plist). Senders pick their device icon from this.
++  int airplay_third_party_speaker; // advertise feature bit 26 (Authentication_8, MFi): senders
++                                   // classify the receiver as a third-party (bookshelf) speaker.
+ 
+ #ifdef CONFIG_PA
+   char *pa_server;           // the pulseaudio server address that Shairport Sync will play on.
+--- a/shairport.c	2026-08-06 02:40:48
++++ b/shairport.c	2026-08-06 15:20:00
+@@ -595,6 +595,17 @@
+       if (config_lookup_string(config.cfg, "general.airplay_device_model", &str)) {
+         config.airplay_device_model = (char *)str;
+       }
++
++      /* Advertise AirPlay feature bit 26 (Authentication_8, MFi). Senders
++         classify a receiver with bit 26 (or 51) set as ThirdPartySpeaker and
++         draw the bookshelf-speaker icon for it; Apple model strings still
++         take precedence over the bit. */
++      config_set_lookup_bool(config.cfg, "general.airplay_third_party_speaker",
++                             &config.airplay_third_party_speaker);
++#ifdef CONFIG_AIRPLAY_2
++      if (config.airplay_third_party_speaker)
++        config.airplay_features |= ((uint64_t)1 << 26);
++#endif
+ #ifdef CONFIG_LIBDAEMON
+       /* Get the Daemonize setting. */
+       config_set_lookup_bool(config.cfg, "sessioncontrol.daemonize_with_pid_file", &daemonisewith);

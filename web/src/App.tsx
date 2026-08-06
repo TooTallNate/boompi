@@ -745,12 +745,81 @@ function ArtSection({ settings, onSaved }: SectionProps) {
   );
 }
 
+// Values are mDNS `model=` strings sniffed from real devices. Senders
+// resolve Apple model strings to product icons; the bookshelf icon is
+// keyed off AirPlay feature bit 26 (ThirdPartySpeaker), which boompid
+// advertises alongside any non-Apple model. The empty default draws
+// the plain speaker glyph.
 const AIRPLAY_MODELS: { label: string; value: string }[] = [
   { label: "Generic speaker", value: "" },
+  { label: "Bookshelf speaker", value: "WiiM Amp" },
   { label: "HomePod mini", value: "AudioAccessory5,1" },
   { label: "HomePod", value: "AudioAccessory1,1" },
   { label: "Apple TV", value: "AppleTV3,2" },
 ];
+
+// Hand-drawn approximations of the icons iOS shows for each model.
+function AirplayModelIcon({ model }: { model: string }) {
+  const stroke = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.5,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+  } as const;
+  let art: ReactNode;
+  switch (model) {
+    case "WiiM Amp": // bookshelf speaker: cabinet, tweeter, woofer
+      art = (
+        <>
+          <rect x="7" y="2.75" width="10" height="18.5" rx="2" {...stroke} />
+          <circle cx="12" cy="7.75" r="1.5" {...stroke} />
+          <circle cx="12" cy="15" r="3.25" {...stroke} />
+        </>
+      );
+      break;
+    case "AudioAccessory5,1": // HomePod mini: ball on a flat base
+      art = (
+        <>
+          <path
+            d="M5.5 12a6.5 6.5 0 0 1 13 0c0 2.5-1.4 4.7-3.5 5.8h-6c-2.1-1.1-3.5-3.3-3.5-5.8Z"
+            {...stroke}
+          />
+          <path d="M8 20.75h8" {...stroke} />
+        </>
+      );
+      break;
+    case "AudioAccessory1,1": // HomePod: tall rounded cylinder + mesh hint
+      art = (
+        <>
+          <rect x="7" y="2.75" width="10" height="18.5" rx="5" {...stroke} />
+          <path d="M9 6.5c1.6-1.1 4.4-1.1 6 0" {...stroke} />
+          <path d="M9 17.5c1.6 1.1 4.4 1.1 6 0" {...stroke} />
+        </>
+      );
+      break;
+    case "AppleTV3,2": // Apple TV: the puck with its status LED
+      art = (
+        <>
+          <rect x="4.5" y="7.5" width="15" height="9" rx="2.5" {...stroke} />
+          <circle cx="16.25" cy="13.75" r="0.4" fill="currentColor" stroke="none" />
+        </>
+      );
+      break;
+    default: // generic speaker cone
+      art = (
+        <path
+          d="M4.75 9.5v5h3.5l5 4.25V5.25l-5 4.25h-3.5Z M16.5 9.25a4 4 0 0 1 0 5.5"
+          {...stroke}
+        />
+      );
+  }
+  return (
+    <svg viewBox="0 0 24 24" className="h-9 w-9" aria-hidden="true">
+      {art}
+    </svg>
+  );
+}
 
 function AirplayIconSection({ settings, onSaved }: SectionProps) {
   const { status, save } = useSave(onSaved);
@@ -760,27 +829,33 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
     <Section title="AirPlay device icon">
       <p className="mb-2 text-sm text-dim">
         Phones choose the icon in their AirPlay list from the advertised
-        model. Apple models mimic their product icons; anything else shows
-        the generic speaker. Senders may need to rediscover the speaker
-        (toggle Wi-Fi or wait a minute) after changing this.
+        model. Senders may need to rediscover the speaker (toggle Wi-Fi or
+        wait a minute) after changing this.
       </p>
-      <div className="flex items-center justify-between gap-3 py-1.5">
-        <span>Advertised model</span>
-        <select
-          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
-          value={preset ? settings.airplay_model : "custom"}
-          onChange={(e) => {
-            if (e.target.value !== "custom") save({ airplay_model: e.target.value });
-          }}
-        >
-          {AIRPLAY_MODELS.map((m) => (
-            <option key={m.label} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-          {!preset && <option value="custom">Custom: {settings.airplay_model}</option>}
-        </select>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        {AIRPLAY_MODELS.map((m) => {
+          const selected = settings.airplay_model === m.value;
+          return (
+            <button
+              key={m.label}
+              className={`flex flex-col items-center gap-1.5 rounded-lg border p-3 text-[12px] ${
+                selected
+                  ? "border-accent bg-accent/10 text-fg"
+                  : "border-line text-dim hover:text-fg"
+              }`}
+              onClick={() => save({ airplay_model: m.value })}
+            >
+              <AirplayModelIcon model={m.value} />
+              <span>{m.label}</span>
+            </button>
+          );
+        })}
       </div>
+      {!preset && (
+        <p className="mt-2 text-[13px] text-dim">
+          Custom model: <span className="font-mono">{settings.airplay_model}</span>
+        </p>
+      )}
       <StatusText status={status} />
     </Section>
   );

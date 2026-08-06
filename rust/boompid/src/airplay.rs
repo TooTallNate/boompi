@@ -281,14 +281,25 @@ impl<T> Drop for AbortOnDrop<T> {
 fn write_config(name: &str, airplay_model: &str) -> anyhow::Result<()> {
     let escaped = name.replace('\\', "\\\\").replace('"', "\\\"");
     // Advertised model → the sender's AirPlay-picker icon (patched-in
-    // shairport option; see buildroot/patches/shairport-sync). Empty =
-    // shairport's default (generic speaker icon).
+    // shairport options; see buildroot/patches/shairport-sync). Empty =
+    // shairport's default (generic speaker icon). Senders resolve Apple
+    // model strings to product icons; for anything else the bookshelf
+    // third-party-speaker icon needs feature bit 26 advertised too, so
+    // claim it for non-Apple models (Apple strings win over the bit).
     let model_line = if airplay_model.is_empty() {
         String::new()
     } else {
+        let apple_model =
+            airplay_model.starts_with("AudioAccessory") || airplay_model.starts_with("AppleTV");
+        let third_party = if apple_model {
+            ""
+        } else {
+            "  airplay_third_party_speaker = \"yes\";\n"
+        };
         format!(
-            "  airplay_device_model = \"{}\";\n",
-            airplay_model.replace('\\', "\\\\").replace('"', "\\\"")
+            "  airplay_device_model = \"{}\";\n{}",
+            airplay_model.replace('\\', "\\\\").replace('"', "\\\""),
+            third_party
         )
     };
     let conf = format!(
