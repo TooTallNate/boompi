@@ -65,9 +65,15 @@ export RUSTFLAGS="-L $SYS/usr/lib ${RUSTFLAGS:-}"
 echo "== cross-building boompid (embeds web/dist) + boompi-ui =="
 cargo zigbuild --manifest-path "$REPO_ROOT/rust/Cargo.toml" \
     --target "$TARGET.$GLIBC" --release -p boompid
+# Skia renderer (matches the pi4 image). The Skia prebuilt is C++ against
+# GNU libstdc++; zig substitutes its own libc++ for -lstdc++, so link the
+# sysroot's real libstdc++ by path.
+if [ -e "$SYS/usr/lib/libstdc++.so.6" ]; then
+    export RUSTFLAGS="$RUSTFLAGS -C link-arg=$SYS/usr/lib/libstdc++.so.6"
+fi
 cargo zigbuild --manifest-path "$REPO_ROOT/rust/Cargo.toml" \
     --target "$TARGET.$GLIBC" --release \
-    -p boompi-ui --no-default-features --features kms
+    -p boompi-ui --no-default-features --features kms-skia
 
 BIN="$REPO_ROOT/rust/target/$TARGET/release"
 
