@@ -1,5 +1,5 @@
 # Private D-Bus "session" bus for obexd. obexd is hardcoded to a session
-# bus, which an appliance has none of — so give it (and boompid) a
+# bus, which an appliance has none of - so give it (and boompid) a
 # dedicated one at a fixed socket path. Without this, AVRCP cover art is
 # dead: org.bluez.obex is unreachable and boompid logs
 # "BIP session prime failed ... ServiceUnknown".

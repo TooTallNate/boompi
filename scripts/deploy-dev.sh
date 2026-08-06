@@ -2,8 +2,8 @@
 # Deploy cross-built binaries, race-free.
 #
 # Two targets:
-#   default      — the RPi OS dev box: binaries in ~pi, started via nohup.
-#   --appliance  — a flashed Buildroot image: binaries in /usr/bin under
+#   default      - the RPi OS dev box: binaries in ~pi, started via nohup.
+#   --appliance  - a flashed Buildroot image: binaries in /usr/bin under
 #                  systemd (ssh as root; hostname 'boompi' via avahi).
 #
 # The naive `pkill && mv && nohup` pattern raced the old instance's port
@@ -55,7 +55,7 @@ echo 'deploy OK (appliance)'
 fi
 
 # Dev box: boompid runs under a systemd *user* unit (~/.config/systemd/
-# user/boompid.service, Restart=always) — deploys must go through
+# user/boompid.service, Restart=always) - deploys must go through
 # systemctl or the unit's auto-restart races the new instance for the
 # ports (learned the hard way: zombie instances serving deleted inodes).
 PI="${PI:-pi@boompi-dev-2.local}"

@@ -1,9 +1,9 @@
-//! Spotify Connect source — librespot embedded as a library.
+//! Spotify Connect source - librespot embedded as a library.
 //!
 //! Embedding (vs the earlier subprocess + event-hook approach) gives us:
 //! - a `Spirc` handle, so the panel's transport buttons actually control
 //!   Spotify (play/pause/next/prev)
-//! - in-process `PlayerEvent`s — no hook process, no HTTP, no missed skips
+//! - in-process `PlayerEvent`s - no hook process, no HTTP, no missed skips
 //! - credentials cached across restarts (Spotify app pairs once)
 //!
 //! Audio goes through a custom [`Sink`] that pipes raw PCM into
@@ -114,7 +114,7 @@ async fn run_once(
     // NoOpVolume: don't software-attenuate the PCM. The mixer still tracks
     // the Connect device volume (and Spirc reports it to the app), but the
     // audible volume is the *system* volume, driven from VolumeChanged
-    // events below — parity with the Bluetooth (AVRCP) and AirPlay (DACP)
+    // events below - parity with the Bluetooth (AVRCP) and AirPlay (DACP)
     // paths, so the phone app, the panel slider and the web UI all agree.
     let player = Player::new(
         player_config,
@@ -150,7 +150,7 @@ async fn run_once(
                 // Some(_): a (possibly different) account tapped us while a
                 // session is live; credentials are cached on connect, so a
                 // restart picks the freshest state up cleanly. None: the
-                // zeroconf backend died — restart re-probes avahi/libmdns.
+                // zeroconf backend died - restart re-probes avahi/libmdns.
                 match creds {
                     Some(_) => tracing::info!("new discovery credentials; restarting session"),
                     None => tracing::warn!("discovery stream ended (zeroconf error?); restarting session"),

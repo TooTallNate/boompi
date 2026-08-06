@@ -7,7 +7,7 @@ and uploads `sdcard.img.xz` as an artifact. The system layer comes from
 Buildroot (pinned release, Bootlin external toolchain, dl+ccache cached);
 the Rust binaries are cross-built with cargo-zigbuild against the build's
 own staging sysroot and injected via `board/boompi/rootfs-overlay-ci/`
-(gitignored, populated by CI — the `package/boompid` etc. stubs remain for
+(gitignored, populated by CI - the `package/boompid` etc. stubs remain for
 a future in-Buildroot build).
 
 The rootfs overlay encodes the Phase 0 findings: root system services

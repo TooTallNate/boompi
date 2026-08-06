@@ -112,8 +112,8 @@ pub enum PairingState {
     /// A device requested pairing; awaiting on-screen confirmation.
     Confirm,
     /// No Bluetooth adapter present (dongle unplugged / bluetoothd down).
-    /// Broadcast instead of silently ignoring a pairing request — a dead
-    /// button is indistinguishable from a bug (first Pi 4 OOBE lesson).
+    /// Broadcast instead of silently ignoring a pairing request - a dead
+    /// button is indistinguishable from a bug.
     Unavailable,
 }
 
@@ -129,7 +129,7 @@ pub struct Pairing {
 /// A Bluetooth device known to the adapter (paired, or mid-pairing).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BtDevice {
-    /// Colon-form address ("6C:3A:FF:58:84:4C") — the id for device actions.
+    /// Colon-form address ("6C:3A:FF:58:84:4C") - the id for device actions.
     pub address: String,
     pub name: String,
     pub connected: bool,
@@ -203,7 +203,7 @@ pub struct SetupCommand {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub speaker_name: Option<String>,
     /// Finish setup: clears `required`, persists, and tears the
-    /// onboarding hotspot down. Wi-Fi is optional — completing without
+    /// onboarding hotspot down. Wi-Fi is optional - completing without
     /// ever configuring it is fine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub complete: Option<bool>,
@@ -270,7 +270,7 @@ pub enum ServerMessage {
     Volume { level: f32 },
     Battery(Battery),
     Pairing(Pairing),
-    // NB: struct form — internally-tagged serde can't represent a newtype
+    // NB: struct form - internally-tagged serde can't represent a newtype
     // variant wrapping a sequence.
     BtDevices { devices: Vec<BtDevice> },
     Settings(Settings),
@@ -305,7 +305,7 @@ pub enum ClientMessage {
     Setup(SetupCommand),
     /// Wipe all persistent state (config, Wi-Fi, Bluetooth pairings,
     /// caches) and reboot into first-boot setup. The OS slots are
-    /// untouched — this is a data reset, not a reflash.
+    /// untouched - this is a data reset, not a reflash.
     FactoryReset,
 }
 

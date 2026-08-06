@@ -10,14 +10,14 @@
 //!
 //! | Reg  | Name            | LSB      |
 //! |------|-----------------|----------|
-//! | 0x00 | Configuration   | —        |
+//! | 0x00 | Configuration   | -        |
 //! | 0x01 | Current         | 1.25 mA  |
 //! | 0x02 | Bus Voltage     | 1.25 mV  |
 //! | 0x03 | Power           | 10 mW    |
-//! | 0x06 | Mask/Enable     | —        |
-//! | 0x07 | Alert Limit     | —        |
+//! | 0x06 | Mask/Enable     | -        |
+//! | 0x07 | Alert Limit     | -        |
 //! | 0xFE | Manufacturer ID | ("TI")   |
-//! | 0xFF | Die ID          | —        |
+//! | 0xFF | Die ID          | -        |
 
 #![cfg_attr(not(test), no_std)]
 

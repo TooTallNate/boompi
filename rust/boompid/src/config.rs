@@ -118,7 +118,7 @@ pub struct SettingsConfig {
 ///
 /// The appliance splits config in two: `/etc/boompi/boompi.toml` (image-
 /// baked hardware facts: model, battery bus) seeds the very first boot,
-/// after which everything persists to `/data/boompi.toml` — which survives
+/// after which everything persists to `/data/boompi.toml` - which survives
 /// OS reflashes.
 pub fn load_with_seed(path: Option<&Path>, seed: Option<&Path>) -> anyhow::Result<Config> {
     if let Some(p) = path {
@@ -162,7 +162,7 @@ pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
 /// Persist config to `path` atomically (write sibling temp file + rename).
 pub fn save(cfg: &Config, path: &Path) -> anyhow::Result<()> {
     let toml = toml::to_string_pretty(cfg).context("serializing config")?;
-    let toml = format!("# Boompi device configuration — managed by boompid.\n{toml}");
+    let toml = format!("# Boompi device configuration - managed by boompid.\n{toml}");
     let tmp = path.with_extension("toml.tmp");
     std::fs::write(&tmp, &toml).with_context(|| format!("writing {}", tmp.display()))?;
     std::fs::rename(&tmp, path).with_context(|| format!("renaming into {}", path.display()))?;

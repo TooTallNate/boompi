@@ -1,10 +1,10 @@
 // Hand-mirrored subset of boompi-proto (rust/boompi-proto/src/lib.rs).
-// Keep field names in sync — serde uses snake_case throughout.
+// Keep field names in sync - serde uses snake_case throughout.
 
 export type Theme = "dark" | "light";
 
 export interface Settings {
-  /** Advertised AirPlay model — senders pick their picker icon from it.
+  /** Advertised AirPlay model - senders pick their picker icon from it.
       "" = generic speaker. */
   airplay_model: string;
   name: string;

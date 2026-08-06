@@ -1,4 +1,4 @@
-# Commits (or rolls back) an A/B update trial — see
+# Commits (or rolls back) an A/B update trial - see
 # /usr/bin/boompi-boot-commit. No-op on normal boots.
 [Unit]
 Description=Commit or roll back A/B update trial boot

@@ -3,7 +3,7 @@
 //!
 //! This replaces the v1 architecture entirely (custom cava fork piping
 //! over fd 3). Capturing the *sink monitor* means we see whatever is
-//! playing — Bluetooth today, librespot/shairport in Phase 3 — after
+//! playing - Bluetooth today, librespot/shairport in Phase 3 - after
 //! mixing, with no per-source work.
 
 #![cfg(target_os = "linux")]

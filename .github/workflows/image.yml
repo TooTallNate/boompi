@@ -58,7 +58,7 @@ jobs:
 
 # Caches are split into restore/save pairs with `if: always()` so a failed
       # build still persists its progress (kernel/toolchain objects, downloads)
-      # — otherwise every red run repeats the full ~80 min pass 1.
+      # - otherwise every red run repeats the full ~80 min pass 1.
       - name: Restore Buildroot downloads
         id: restore-br-dl
         uses: actions/cache/restore@v6
@@ -131,7 +131,7 @@ jobs:
           export RUSTFLAGS="-L $STAGING/usr/lib"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid
-          # pi4: Skia GPU renderer (GLES/EGL via mesa V3D — smooth frames,
+          # pi4: Skia GPU renderer (GLES/EGL via mesa V3D - smooth frames,
           # rounded art, drop shadows, color emoji). The Skia prebuilt is
           # C++ built against GNU libstdc++; zig substitutes its own libc++
           # for `-lstdc++`, so link the real staging libstdc++ by path.
@@ -180,7 +180,7 @@ jobs:
           retention-days: 14
 
       # OTA bundle for the A/B updater (Pi 4's SD card is inaccessible once
-      # assembled — see boompi-update-slot / scripts/update-appliance.sh).
+      # assembled - see boompi-update-slot / scripts/update-appliance.sh).
       - name: Upload update bundle (pi4)
         if: matrix.board == 'pi4'
         uses: actions/upload-artifact@v7

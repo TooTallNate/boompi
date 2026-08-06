@@ -16,7 +16,7 @@ echo "${BASE_CMDLINE}" | sed 's|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p5|' \
 	> "${BINARIES_DIR}/cmdline-b.txt"
 
 # Initial boot selection: slot A. Updates are trialled via kexec
-# (boompi-update-slot) and committed by rewriting this file — no
+# (boompi-update-slot) and committed by rewriting this file - no
 # [tryboot] section; firmware tryboot is unusable on this hardware.
 cat > "${BINARIES_DIR}/autoboot.txt" <<EOF
 [all]

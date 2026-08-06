@@ -16,7 +16,7 @@ bytes = "1"
 # tail, sometimes mid-write); decode-validate before publishing.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
 libc = "0.2"
-# Settings web UI (web/dist, committed prebuilt — regenerate via `make web`).
+# Settings web UI (web/dist, committed prebuilt - regenerate via `make web`).
 rust-embed = { version = "8", features = ["mime-guess"] }
 realfft = "3"
 clap = { workspace = true }
@@ -40,7 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures-util = "0.3"
 ina260 = { path = "../ina260" }
 # Spotify Connect, embedded (pure-Rust feature set: rustls TLS, no audio
-# backends — we provide a pw-cat sink). Zeroconf: avahi when the daemon is
+# backends - we provide a pw-cat sink). Zeroconf: avahi when the daemon is
 # present (it owns UDP :5353 once shairport-sync/AirPlay is in the picture;
 # a second responder via libmdns dies with 'responder died' panics that take
 # the whole daemon down), libmdns as the avahi-less fallback.

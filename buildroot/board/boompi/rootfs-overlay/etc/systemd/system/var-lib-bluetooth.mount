@@ -1,5 +1,5 @@
 # BlueZ pairing/link-key store lives on /data so paired phones survive
-# an OS reflash. Bind-mounted over the default path — bluetoothd itself
+# an OS reflash. Bind-mounted over the default path - bluetoothd itself
 # needs no configuration.
 [Unit]
 Description=Persistent BlueZ state (bind /data/bluetooth)

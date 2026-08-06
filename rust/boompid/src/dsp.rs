@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// Number of spectrum bars (matches v1's cava config).
 pub const BARS: usize = 10;
 
-/// FFT window size in samples. At 22.05 kHz this is ~93 ms — enough
+/// FFT window size in samples. At 22.05 kHz this is ~93 ms - enough
 /// resolution (~10.8 Hz/bin) to separate the low bands.
 pub const FFT_SIZE: usize = 2048;
 

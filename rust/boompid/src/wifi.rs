@@ -6,7 +6,7 @@
 //! box).
 //!
 //! AP mode: a `shared` connection named [`AP_CONNECTION`] turns wlan0 into
-//! an open access point with NM's built-in DHCP — the onboarding path when
+//! an open access point with NM's built-in DHCP - the onboarding path when
 //! no Wi-Fi is configured (see docs/PLAN.md Phase 5).
 
 #![cfg(target_os = "linux")]
@@ -143,7 +143,7 @@ pub async fn status(scan: bool) -> anyhow::Result<WifiStatus> {
         *SCAN_CACHE.lock().unwrap() = best.clone();
         st.networks = best;
     } else if scan && st.enabled && st.ap_active {
-        // Hotspot up: serve the pre-AP scan (nothing is "in use" — the
+        // Hotspot up: serve the pre-AP scan (nothing is "in use" - the
         // radio is busy being the hotspot).
         let mut cached = SCAN_CACHE.lock().unwrap().clone();
         for n in &mut cached {
@@ -189,7 +189,7 @@ pub async fn set_radio(enabled: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Bring up the onboarding access point (open network, NM shared IPv4 —
+/// Bring up the onboarding access point (open network, NM shared IPv4 -
 /// NM runs its own DHCP). Creates the profile on first use.
 pub async fn start_ap(ssid: &str) -> anyhow::Result<()> {
     // Refresh the scan cache while the radio can still scan: the captive

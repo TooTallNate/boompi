@@ -1,4 +1,4 @@
-# Boompi device configuration — Pi 4 box (first-boot seed; runtime
+# Boompi device configuration - Pi 4 box (first-boot seed; runtime
 # config persists to /data/boompi.toml).
 # Hardware facts from the v1 SD card dump.
 

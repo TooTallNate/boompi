@@ -63,7 +63,7 @@ export function useBoompi() {
       ws.onclose = () => {
         wsRef.current = null;
         if (!closed) {
-          setError("connection lost — retrying…");
+          setError("connection lost - retrying…");
           retry = setTimeout(connect, 2000);
         }
       };

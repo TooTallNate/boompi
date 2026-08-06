@@ -6,7 +6,7 @@
 //! - The obexd client session **dies with its creating D-Bus connection**,
 //!   so this worker holds one long-lived connection and one session per
 //!   device (reference: BlueZ `tools/mpris-proxy.c`, 5.81+).
-//! - Phones (iOS at least) allow **one** BIP channel — competing clients
+//! - Phones (iOS at least) allow **one** BIP channel - competing clients
 //!   get `Connection refused (no resources)`. `mpris-proxy` must not run
 //!   alongside boompid.
 //! - Sessions can go stale (phone reconnect/idle); a failed fetch drops the
@@ -15,7 +15,7 @@
 //! obexd is hardcoded to a session bus. On the dev Pi (RPi OS) that's the
 //! real user session bus; the appliance has no session bus, so the image
 //! runs a private one (`obex-bus.service`, unix:path=/run/obex-bus) with
-//! obexd on it, and boompid.service points DBUS_SESSION_BUS_ADDRESS at it —
+//! obexd on it, and boompid.service points DBUS_SESSION_BUS_ADDRESS at it -
 //! `Connection::session()` below then lands on the right bus in both
 //! worlds. (The system-bus fallback is a last resort and normally unused.)
 
@@ -166,7 +166,7 @@ async fn ensure_session(
     req: &ArtRequest,
 ) -> anyhow::Result<OwnedObjectPath> {
     // A cached session dies whenever the phone drops the link (disconnect,
-    // reconnect, idle) — obexd removes the object. Verify it still answers
+    // reconnect, idle) - obexd removes the object. Verify it still answers
     // before trusting it, else the eager re-prime after reconnection would
     // silently no-op and the phone would never mint ImgHandles again.
     if let Some(path) = sessions.get(&req.address) {
@@ -229,7 +229,7 @@ async fn publish(app: &SharedApp, resolved: &ResolvedArt, handle: &str, bytes: B
 ///
 /// `origin` is the source the art belongs to: fetches complete
 /// asynchronously, so by the time bytes arrive another source may own the
-/// display — stamping regardless would overwrite *its* artwork (this is
+/// display - stamping regardless would overwrite *its* artwork (this is
 /// exactly how late BIP thumbnails were clobbering AirPlay covers). The
 /// bytes are still cached so an existing `artwork_id` reference resolves.
 pub async fn publish_current_art(
@@ -239,7 +239,7 @@ pub async fn publish_current_art(
 ) -> String {
     // Central integrity gate for every art source: trim garbage tails and
     // reject anything that doesn't decode. OBEX (BIP) transfers can come
-    // back truncated, and broken bytes are content-addressed — once cached
+    // back truncated, and broken bytes are content-addressed - once cached
     // and referenced, the UI re-fetches the same garbage on every track
     // update.
     let trimmed = trim_image(&bytes);

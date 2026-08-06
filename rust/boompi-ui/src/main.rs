@@ -1,4 +1,4 @@
-//! boompi-ui — the Boompi touchscreen UI.
+//! boompi-ui - the Boompi touchscreen UI.
 //!
 //! A Slint application that talks to `boompid` over WebSocket. The same
 //! binary runs:

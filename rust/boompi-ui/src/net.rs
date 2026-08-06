@@ -220,7 +220,7 @@ fn apply_track(ctx: &NetCtx, track: Track) {
         ui.set_track_album(track.album.unwrap_or_default().into());
         ui.set_playing(playing);
         // Art arrives separately as a binary frame; a track without an
-        // artwork_id has none (or none *yet*) — show the placeholder.
+        // artwork_id has none (or none *yet*) - show the placeholder.
         if track.artwork_id.is_none() {
             if ui.get_has_artwork() {
                 eprintln!(

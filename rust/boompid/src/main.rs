@@ -1,4 +1,4 @@
-//! boompid — the Boompi backend daemon.
+//! boompid - the Boompi backend daemon.
 //!
 //! Bridges audio sources (Bluetooth/BlueZ, Spotify/librespot,
 //! AirPlay/shairport-sync), PipeWire volume, INA260 battery telemetry, and an

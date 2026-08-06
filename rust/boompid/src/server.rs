@@ -1,7 +1,7 @@
 //! axum HTTP + WebSocket server.
 //!
 //! One router, up to two listeners: the protocol port (default :3001,
-//! WebSocket + art + JSON API) and — for the browser settings UI — plain
+//! WebSocket + art + JSON API) and - for the browser settings UI - plain
 //! HTTP on :80 when we can bind it (root on the appliance), falling back
 //! to :8080 for unprivileged dev runs.
 
@@ -279,7 +279,7 @@ async fn api_clock_set(Json(patch): Json<ClockPatch>) -> axum::response::Respons
     }
 }
 
-/// Accept any [`ClientMessage`] over plain HTTP — same dispatch as the
+/// Accept any [`ClientMessage`] over plain HTTP - same dispatch as the
 /// WebSocket path. Lets the web UI (and curl) drive pairing/device actions
 /// without holding a socket open.
 async fn api_command(

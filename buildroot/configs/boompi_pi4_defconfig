@@ -3,7 +3,7 @@
 #
 # App binaries (boompid, boompi-ui) are injected via rootfs-overlay-ci by
 # CI (cross-built with cargo-zigbuild against this build's staging sysroot)
-# — see .github/workflows/image.yml.
+# - see .github/workflows/image.yml.
 
 BR2_aarch64=y
 BR2_cortex_a72=y
@@ -37,7 +37,7 @@ BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,576cc10e1ed50a9eacffc7a05c796051d7343ea4)/linux-576cc10e1ed50a9eacffc7a05c796051d7343ea4.tar.gz"
 BR2_LINUX_KERNEL_DEFCONFIG="bcm2711"
-# kexec for A/B trial boots — firmware tryboot is unusable on this
+# kexec for A/B trial boots - firmware tryboot is unusable on this
 # hardware (see board/boompi/linux-kexec.fragment).
 BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
@@ -55,7 +55,7 @@ BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/p
 BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/cmdline.txt"
 
 # TF-A BL31 armstub (armstub=bl31.bin in config.txt): PSCI for CPU
-# park/wake — without it the CPUs use spin-tables and kexec_load (the
+# park/wake - without it the CPUs use spin-tables and kexec_load (the
 # A/B update trial boot) fails with EBUSY.
 BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
 BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="rpi4"
@@ -84,8 +84,8 @@ BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
 # while it's open, any pairing is accepted; no on-screen confirm.
 
 # Audio: PipeWire + WirePlumber + SBC codec (A2DP).
-# NB (first Pi 4 bench boot): Kconfig silently drops packages with unmet
-# `depends on` — WirePlumber needs Lua, pw-cat/pw-record need libsndfile.
+# NB: Kconfig silently drops packages with unmet
+# `depends on` - WirePlumber needs Lua, pw-cat/pw-record need libsndfile.
 # post-build.sh asserts the binaries actually landed.
 BR2_PACKAGE_PIPEWIRE=y
 BR2_PACKAGE_WIREPLUMBER=y
@@ -95,7 +95,7 @@ BR2_PACKAGE_LIBSNDFILE=y
 BR2_PACKAGE_SBC=y
 BR2_PACKAGE_ALSA_UTILS=y
 
-# mDNS: avahi is the single owner of UDP :5353 — shairport-sync links
+# mDNS: avahi is the single owner of UDP :5353 - shairport-sync links
 # against it and librespot's discovery uses its D-Bus API. (Running a second
 # responder, e.g. librespot's libmdns, alongside a daemon on :5353 dies with
 # 'responder died' panics.)
@@ -106,13 +106,13 @@ BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT=y
 # AirPlay 2: shairport-sync 4.3.7 (Buildroot ≥ 2026.02), spawned by boompid
 # (pipe backend → pw-cat; org.gnome.ShairportSync D-Bus control); the dbus
 # policy files ship with the package. AIRPLAY2 selects nqptp (PTP clock
-# daemon — systemd unit lives in our overlay; the package only ships SysV)
+# daemon - systemd unit lives in our overlay; the package only ships SysV)
 # plus ffmpeg/libplist/libsodium/libgcrypt.
 BR2_PACKAGE_SHAIRPORT_SYNC=y
 BR2_PACKAGE_SHAIRPORT_SYNC_AIRPLAY2=y
 BR2_PACKAGE_SHAIRPORT_SYNC_DBUS=y
 
-# Wi-Fi: NetworkManager on the appliance to match the dev box (RPi OS) —
+# Wi-Fi: NetworkManager on the appliance to match the dev box (RPi OS) -
 # one D-Bus/nmcli code path in boompid. `shared` connections give the
 # onboarding AP + built-in DHCP (dnsmasq). Onboard brcmfmac needs the
 # firmware blob + wireless-regdb; wpa_supplicant needs D-Bus control for NM.
@@ -126,11 +126,11 @@ BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 # Onboard Bluetooth (BCM43455): UART BT firmware (BCM4345C0.hcd). The
-# Pi 4 box has no USB dongle — v1 used the onboard radio.
+# Pi 4 box has no USB dongle - v1 used the onboard radio.
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
 # UI runtime deps (Slint linuxkms + Skia GPU renderer: EGL/GLES on
-# KMS/GBM via mesa V3D — smooth 60fps, border-radius clipping, drop
+# KMS/GBM via mesa V3D - smooth 60fps, border-radius clipping, drop
 # shadows and color emoji, none of which the software renderer does).
 BR2_PACKAGE_LIBINPUT=y
 BR2_PACKAGE_LIBXKBCOMMON=y

@@ -9,7 +9,7 @@ kernel=Image
 arm_64bit=1
 
 # TF-A BL31 as the armstub: provides PSCI so secondary CPUs can be
-# parked — required by kexec (the A/B update trial boot; spin-table
+# parked - required by kexec (the A/B update trial boot; spin-table
 # CPUs make kexec_load fail with EBUSY). TF-A also injects the psci
 # nodes into the DT before starting the kernel.
 armstub=bl31.bin
@@ -25,7 +25,7 @@ boot_delay=0
 dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
-# Raspiaudio Audio+ DAC HAT (PCM51xx-family I2S — vendor-documented
+# Raspiaudio Audio+ DAC HAT (PCM51xx-family I2S - vendor-documented
 # overlay). Onboard audio off so the DAC is the only ALSA card.
 dtoverlay=hifiberry-dac
 dtparam=audio=off
@@ -33,8 +33,8 @@ dtparam=audio=off
 # INA260 battery monitor on the standard I2C bus.
 dtparam=i2c_arm=on
 
-# Onboard Bluetooth (BCM43455, UART-attached). Unlike the Pi 3 box —
-# which uses a USB dongle and disables the onboard radio — the Pi 4 box
+# Onboard Bluetooth (BCM43455, UART-attached). Unlike the Pi 3 box -
+# which uses a USB dongle and disables the onboard radio - the Pi 4 box
 # has no dongle and v1 shipped with onboard BT active (verified from the
 # v1 SD dump: no disable-bt). Needs BCM4345C0.hcd from
 # BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT; the kernel attaches hci0

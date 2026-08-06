@@ -2,7 +2,7 @@
 //!
 //! Reads work everywhere; writes need privilege (root on the appliance).
 //! On the dev box (boompid as `pi`, non-interactive) polkit denies
-//! SetTimezone/SetNTP — the error is surfaced to the caller rather than
+//! SetTimezone/SetNTP - the error is surfaced to the caller rather than
 //! prompting, since there is nobody to prompt on an appliance.
 
 #![cfg(target_os = "linux")]
@@ -32,7 +32,7 @@ pub struct ClockStatus {
     pub timezone: String,
     pub ntp: bool,
     pub synchronized: bool,
-    /// Current unix time in ms — lets clients display device time and
+    /// Current unix time in ms - lets clients display device time and
     /// compute a local offset.
     pub now_ms: u64,
     pub timezones: Vec<String>,

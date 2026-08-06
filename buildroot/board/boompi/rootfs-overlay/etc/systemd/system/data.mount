@@ -1,4 +1,4 @@
-# Persistent device state — its own SD partition, survives OS reflashes
+# Persistent device state - its own SD partition, survives OS reflashes
 # and updates. By-label so the same unit works on both boards (pi3:
 # mmcblk0p3; pi4 with A/B slots: mmcblk0p6). systemd creates the /data
 # mountpoint automatically.

@@ -11,7 +11,7 @@ export component TestWindow inherits Window {
     in-out property <int> taps: 0;
     in property <string> info: "starting…";
     // Set from Rust (window().size()) to avoid a text→layout binding loop.
-    in property <string> resolution: "—";
+    in property <string> resolution: "-";
 
     // Animation smoothness check: bar sweeping back and forth.
     Rectangle {

@@ -20,7 +20,7 @@ Restart=always
 RestartSec=2
 # The AirPlay FIFO bridge blocks in open() on the blocking pool and can't
 # be cancelled, so a clean stop stalls; don't let restarts hang for the
-# default 90s (this delayed a deploy long enough to muddy bench testing).
+# default 90s.
 TimeoutStopSec=10
 
 [Install]

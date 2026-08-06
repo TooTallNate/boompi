@@ -1,5 +1,5 @@
 #!/bin/sh
-# A/B slot commit / rollback — runs once per boot.
+# A/B slot commit / rollback - runs once per boot.
 #
 # boompi-update-slot kexec-chains into the candidate slot WITHOUT
 # touching autoboot.txt; the only record of the trial is the marker on
@@ -73,7 +73,7 @@ sync
 echo "committed: boot_partition=$BOOT_PART; rebooting onto a firmware boot"
 
 # The kexec trial environment is not quite a real boot (e.g. a CPU can
-# fail to come back online across the PSCI off/on cycle) — finish the
+# fail to come back online across the PSCI off/on cycle) - finish the
 # update with a firmware boot of the now-committed slot. The marker is
 # gone, so this run's successor is a no-op.
 systemctl reboot

@@ -153,13 +153,13 @@ function WifiSection() {
               Wi-Fi{" "}
               {wifi.connected && (
                 <span className="text-[13px] text-ok">
-                  — {wifi.connected}
+                  - {wifi.connected}
                   {wifi.ip ? ` (${wifi.ip})` : ""}
                 </span>
               )}
               {wifi.ap_active && (
                 <span className="text-[13px] text-accent">
-                  — setup hotspot active
+                  - setup hotspot active
                 </span>
               )}
             </span>
@@ -179,7 +179,7 @@ function WifiSection() {
               You’re connected through the speaker’s setup hotspot. The
               networks below were found just before the hotspot started.
               Joining one switches the hotspot off while the speaker
-              connects — rejoin your normal Wi-Fi afterwards. If the
+              connects - rejoin your normal Wi-Fi afterwards. If the
               password is wrong, the hotspot comes back within a minute so
               you can retry. You can also skip this and set up Wi-Fi later
               from this page over your home network or Ethernet.
@@ -361,7 +361,7 @@ function BluetoothSection({
       {pairing.state === "unavailable" && (
         <div className="mb-2 rounded-lg border border-err/40 bg-err/10 p-3">
           <p className="text-sm">
-            Bluetooth is unavailable — no adapter was found. Check that the
+            Bluetooth is unavailable - no adapter was found. Check that the
             Bluetooth dongle is plugged in.
           </p>
         </div>
@@ -369,7 +369,7 @@ function BluetoothSection({
       {pairing.state === "discoverable" && (
         <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
           <span className="text-sm">
-            Discoverable — choose “{speakerName}” in your device’s Bluetooth
+            Discoverable - choose “{speakerName}” in your device’s Bluetooth
             settings.
           </span>
           <button
@@ -494,7 +494,7 @@ function SetupWizard({
     setError(null);
     // Show the terminal step *before* the request settles: when this page
     // is served over the setup hotspot, finishing tears the hotspot down
-    // and the HTTP response never arrives — which looks like a hang or an
+    // and the HTTP response never arrives - which looks like a hang or an
     // error even though setup completed. (The server treats the command
     // as idempotent, so a retry after a real failure is also fine.)
     setStep("done");
@@ -513,11 +513,11 @@ function SetupWizard({
       <main className="w-full max-w-lg">
         <h1 className="text-[26px] font-semibold">Welcome 👋</h1>
         <p className="mb-8 text-[14px] text-dim">
-          Let’s set up your speaker — takes about a minute.
+          Let’s set up your speaker - takes about a minute.
         </p>
 
         {step === "name" && (
-          <Section title="Step 1 of 2 — Name your speaker">
+          <Section title="Step 1 of 2 - Name your speaker">
             <label className="mb-1.5 block text-sm text-dim" htmlFor="setup-name">
               Shown for Bluetooth, AirPlay, and Spotify Connect
             </label>
@@ -550,7 +550,7 @@ function SetupWizard({
 
         {step === "wifi" && (
           <>
-            <Section title="Step 2 of 2 — Wi-Fi (optional)">
+            <Section title="Step 2 of 2 - Wi-Fi (optional)">
               <p className="mb-2 text-sm text-dim">
                 Connecting “{trimmed}” to your Wi-Fi enables Spotify Connect,
                 AirPlay, and online album art. You can skip this and set it
@@ -575,7 +575,7 @@ function SetupWizard({
           <Section title="Setup complete 🎉">
             <p className="text-sm text-dim">
               “{trimmed}” is ready. If you were connected to the speaker’s
-              setup hotspot, it has switched off — rejoin your normal
+              setup hotspot, it has switched off - rejoin your normal
               Wi-Fi network.
             </p>
             <p className="mt-2 text-sm text-dim">

@@ -28,13 +28,13 @@ export component ConnectScreen inherits VerticalLayout {
     }
 
     if root.pairing-state == "discoverable": Text {
-        text: "Discoverable — check your phone's Bluetooth list…";
+        text: "Discoverable - check your phone's Bluetooth list…";
         color: Theme.accent;
         horizontal-alignment: center;
     }
 
     if root.pairing-state == "unavailable": Text {
-        text: "Bluetooth is unavailable — is the dongle plugged in?";
+        text: "Bluetooth is unavailable - is the dongle plugged in?";
         color: Theme.bad;
         horizontal-alignment: center;
     }

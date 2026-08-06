@@ -2,12 +2,12 @@
 // the window to the panel (Pi 3 box: 800×480 HyperPixel; Pi 4 box:
 // 1024×600 HDMI); layouts are percentage/layout-driven so both work.
 // The preferred size below is the desktop-preview default (--size to
-// override). Screens: main (connect / now-playing), battery, settings —
+// override). Screens: main (connect / now-playing), battery, settings -
 // with the visualizer behind everything and the footer always on top.
 
-// Geist Sans (vendored, OFL — see fonts/OFL.txt) is embedded into the
+// Geist Sans (vendored, OFL - see fonts/OFL.txt) is embedded into the
 // binary, so every platform renders identically with no OS font setup.
-// Emoji fallback still comes from the system (fontconfig) — see
+// Emoji fallback still comes from the system (fontconfig) - see
 // docs/PLAN.md fonts section.
 import "fonts/Geist.ttf";
 
@@ -57,10 +57,10 @@ export component AppWindow inherits Window {
     in property <bool> battery-charging: false;
     in property <string> battery-voltage-path: "";
     in property <string> battery-current-path: "";
-    in property <string> stat-volts: "—";
-    in property <string> stat-amps: "—";
-    in property <string> stat-watts: "—";
-    in property <string> stat-percent: "—";
+    in property <string> stat-volts: "-";
+    in property <string> stat-amps: "-";
+    in property <string> stat-watts: "-";
+    in property <string> stat-percent: "-";
 
     // --- pairing / settings ---
     in property <string> pairing-state: "idle";
@@ -95,7 +95,7 @@ export component AppWindow inherits Window {
     // ---- background visualizer --------------------------------------------
     // Synthwave-ish: rounded bars with an accent→base vertical gradient and
     // a soft neon glow. The glow only renders on the Skia (GPU) backend;
-    // the software renderer skips drop shadows, which is fine — it can't
+    // the software renderer skips drop shadows, which is fine - it can't
     // sustain the fill rate for this anyway.
     HorizontalLayout {
         spacing: 6px;
@@ -210,7 +210,7 @@ export component AppWindow inherits Window {
     }
 
     // ---- pairing confirmation (modal over everything) ------------------------
-    // A passkey request must be answerable from any screen — settings,
+    // A passkey request must be answerable from any screen - settings,
     // now-playing, wherever. 30 s to respond before BlueZ times out.
     if root.pairing-state == "confirm": Rectangle {
         background: #000000aa;

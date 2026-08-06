@@ -4,9 +4,9 @@
 //! runtime (v1 TODO) by driving everything from `ObjectManager` +
 //! `PropertiesChanged` on the `org.bluez` service:
 //!
-//! - `org.bluez.Device1` — connect/disconnect + device alias
-//! - `org.bluez.MediaPlayer1` — track metadata, playback status, transport
-//! - `org.bluez.MediaTransport1` — AVRCP absolute volume (0–127)
+//! - `org.bluez.Device1` - connect/disconnect + device alias
+//! - `org.bluez.MediaPlayer1` - track metadata, playback status, transport
+//! - `org.bluez.MediaTransport1` - AVRCP absolute volume (0–127)
 //!
 //! Plus the pairing agent (`bt_agent`, NoInputNoOutput/JustWorks with an
 //! explicit pairing window as the consent) and cover art (obexd/BIP, see
@@ -28,7 +28,7 @@ use zbus::{MatchRule, MessageStream};
 
 #[zbus::proxy(interface = "org.bluez.Adapter1", default_service = "org.bluez")]
 trait Adapter1 {
-    /// Controller alias — the name phones see when pairing/connecting.
+    /// Controller alias - the name phones see when pairing/connecting.
     #[zbus(property)]
     fn set_alias(&self, alias: &str) -> zbus::Result<()>;
     #[zbus(property)]
@@ -62,7 +62,7 @@ trait MediaPlayer1 {
     fn status(&self) -> zbus::Result<String>;
     #[zbus(property)]
     fn position(&self) -> zbus::Result<u32>;
-    /// BIP OBEX PSM for AVRCP cover art. `[experimental]` — present only
+    /// BIP OBEX PSM for AVRCP cover art. `[experimental]` - present only
     /// with `Experimental = true` and a phone that supports cover art.
     #[zbus(property)]
     fn obex_port(&self) -> zbus::Result<u16>;
@@ -196,7 +196,7 @@ async fn run(
     let mut removed_stream = om.receive_interfaces_removed().await?;
 
     // A bluetoothd restart silently voids our agent registration and
-    // session state (signals keep flowing — the well-known name just
+    // session state (signals keep flowing - the well-known name just
     // changes owners). Watch for it and restart this task from scratch.
     let dbus = zbus::fdo::DBusProxy::new(&conn).await?;
     let mut owner_stream = dbus.receive_name_owner_changed().await?;
@@ -396,7 +396,7 @@ async fn handle_properties_changed(
     match iface {
         "org.bluez.MediaPlayer1" => {
             if session.player_path.as_ref().map(|p| p.as_str()) != Some(path) {
-                // A different (or first) player became chatty — adopt it.
+                // A different (or first) player became chatty - adopt it.
                 if let Ok(p) = ObjectPath::try_from(path.to_string()) {
                     session.player_path = Some(p.into());
                     adopt_device_of(ctx, session, path).await;
@@ -442,7 +442,7 @@ async fn handle_properties_changed(
             // A pairing completed. Crucially, do NOT touch the adapter yet:
             // yanking Pairable/Discoverable at the Paired event interrupts
             // iOS's still-running post-pair profile discovery (the control
-            // experiment with bt-agent — which never touches the adapter —
+            // experiment with bt-agent - which never touches the adapter -
             // paired perfectly; we didn't). Trust the device (the explicit
             // pairing window is the consent), give the source time to bring
             // A2DP up on its own, dial it ourselves if it stays passive
@@ -609,8 +609,8 @@ async fn handle_bt_command(
     match cmd {
         BtCommand::Pairing(PairingAction::Enable) => {
             // No adapter (dongle unplugged, bluetoothd down): say so
-            // instead of silently doing nothing — a dead pairing button
-            // reads as a boompid bug (first Pi 4 OOBE).
+            // instead of silently doing nothing - a dead pairing button
+            // is indistinguishable from a bug.
             if session.adapter_path.is_none() {
                 tracing::warn!("pairing requested but no BT adapter present");
                 crate::bt_agent::set_pairing(
@@ -865,7 +865,7 @@ async fn enumerate_devices(conn: &zbus::Connection) -> anyhow::Result<Vec<BtDevi
     Ok(out)
 }
 
-/// Set the BlueZ controller alias — the advertised speaker name.
+/// Set the BlueZ controller alias - the advertised speaker name.
 async fn apply_adapter_alias(ctx: &Ctx, session: &Session, name: &str) {
     let Some(path) = &session.adapter_path else {
         tracing::debug!("no BT adapter yet; alias not set");
@@ -896,7 +896,7 @@ async fn clear_session(ctx: &Ctx, session: &mut Session) {
     // Image handles are namespaced per device; drop stale mappings.
     ctx.resolved.lock().unwrap().clear();
     let mut s = ctx.app.shared.write().await;
-    // Only clear the display if Bluetooth owns it — a BT disconnect must
+    // Only clear the display if Bluetooth owns it - a BT disconnect must
     // not wipe another source's active session.
     if !matches!(s.source.active, None | Some(SourceKind::Bluetooth)) {
         return;
@@ -940,7 +940,7 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
     });
 }
 
-/// Eagerly establish the BIP session as soon as cover-art support is seen —
+/// Eagerly establish the BIP session as soon as cover-art support is seen -
 /// phones only include `ImgHandle` in metadata while the session is alive.
 fn prime_art_session(ctx: &Ctx, session: &Session) {
     let (Some(port), Some(address)) = (session.obex_port, session.address()) else {

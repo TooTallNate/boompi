@@ -2,7 +2,7 @@
 #
 # boompid
 #
-# NOTE: skeleton — finalized in Phase 4. Builds the `boompid` crate out of
+# NOTE: skeleton - finalized in Phase 4. Builds the `boompid` crate out of
 # the workspace in ../rust using Buildroot's cargo infrastructure.
 #
 ################################################################################

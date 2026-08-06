@@ -1,4 +1,4 @@
-# Boompi device configuration — Pi 3 box.
+# Boompi device configuration - Pi 3 box.
 # Hardware facts from the v1 SD card + Phase 0 (docs/PHASE0-PI3.md).
 
 name = "Boompi"

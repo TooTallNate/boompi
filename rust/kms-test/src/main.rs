@@ -30,7 +30,7 @@ fn main() -> Result<(), slint::PlatformError> {
             move || {
                 if let Some(ui) = weak.upgrade() {
                     ui.set_info(
-                        format!("event loop alive — {}s", start.elapsed().as_secs()).into(),
+                        format!("event loop alive - {}s", start.elapsed().as_secs()).into(),
                     );
                     let size = ui.window().size();
                     ui.set_resolution(format!("{} × {}", size.width, size.height).into());

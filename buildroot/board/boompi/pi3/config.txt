@@ -16,7 +16,7 @@ dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
 # HyperPixel 4.0 panel + GT911 touch, rotated (matches v1; Slint adds
-# SLINT_KMS_ROTATION=270 on top — see boompi-ui.service)
+# SLINT_KMS_ROTATION=270 on top - see boompi-ui.service)
 dtoverlay=vc4-kms-dpi-hyperpixel4
 dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
 

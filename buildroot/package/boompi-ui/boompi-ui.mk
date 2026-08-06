@@ -2,7 +2,7 @@
 #
 # boompi-ui
 #
-# NOTE: skeleton — finalized in Phase 4. Builds the `boompi-ui` crate with
+# NOTE: skeleton - finalized in Phase 4. Builds the `boompi-ui` crate with
 # Slint's linuxkms backend (DRM/KMS + libinput, no compositor).
 #
 ################################################################################

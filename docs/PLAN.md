@@ -1,4 +1,4 @@
-# Boompi v2 — Implementation Plan
+# Boompi v2 - Implementation Plan
 
 Boompi v2 is a ground-up rewrite of the boombox software stack as a native
 appliance: a Rust backend daemon, a Slint touchscreen UI, and flashable
@@ -70,7 +70,7 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
     `Adapter1` (discoverable), `Agent1`/`AgentManager1` (pairing flow).
     Handles devices paired at runtime (v1 TODO). Register the agent with
     `NoInputNoOutput` capability (JustWorks; the explicit pairing window
-    is the consent — on-screen confirm was abandoned); v1 ran
+    is the consent - on-screen confirm was abandoned); v1 ran
     bluez-tools `bt-agent -c NoInputNoOutput` (auto-accept everything).
   - *spotify*: librespot (subprocess with event hooks first; embed-as-crate
     is a later option). Art via metadata CDN URLs.
@@ -79,7 +79,7 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
     `org.gnome.ShairportSync` D-Bus interface for metadata/progress/DACP
     transport control. **Decided & shipped**: D-Bus beat the metadata pipe
     (structured properties + free DACP remote). Cover art files are raw
-    buffer dumps — trim to the image (EOI/IEND) and decode-validate before
+    buffer dumps - trim to the image (EOI/IEND) and decode-validate before
     publishing. AirPlay 2 as of Buildroot 2026.02 (shairport-sync 4.3.7 +
     nqptp packaged upstream; one config option + an nqptp systemd unit in
     our overlay). Started as classic on Buildroot 2025.02.
@@ -87,13 +87,13 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
   content-addressed LRU cache in `/data/art`. Track messages carry an
   `artwork_id`; clients fetch `GET /art/{id}`.
   - *Bluetooth art* uses **AVRCP 1.6 Cover Art** (validated end-to-end in
-    Phase 0 — real 200×200 JPEGs from an iPhone): `MediaPlayer1.ObexPort`
+    Phase 0 - real 200×200 JPEGs from an iPhone): `MediaPlayer1.ObexPort`
     (BIP OBEX PSM; iOS uses 4105) + `Track.ImgHandle` → obexd client
     session (`Target=bip-avrcp`, `PSM`) → `org.bluez.obex.Image1`
     `GetThumbnail`/`Get`. Requires BlueZ ≥ ~5.79 with `Experimental = true`
     on `bluetoothd`. Implementation rules (Phase 0): hold the obexd session
     from a **persistent** D-Bus connection (it dies with its owner);
-    create it as soon as a player exposes `ObexPort` — `ImgHandle` only
+    create it as soon as a player exposes `ObexPort` - `ImgHandle` only
     appears in `Track` while the BIP session is alive; iOS permits exactly
     **one** BIP channel, so `mpris-proxy` (enabled by default on Debian)
     must not run alongside boompid. BlueZ's `tools/mpris-proxy.c` (5.81+)
@@ -119,16 +119,16 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
 
 ### boompi-ui screens
 
-1. **Connect** — "To play music, connect to: {name}" (+ pairing mode button).
-2. **Now Playing** — album art, title/artist/album (marquee on overflow),
+1. **Connect** - "To play music, connect to: {name}" (+ pairing mode button).
+2. **Now Playing** - album art, title/artist/album (marquee on overflow),
    position bar with client-side interpolation, transport controls, volume
    slider, visualizer bars in the background.
-3. **Battery panel** — live voltage/current chart (custom Slint component),
+3. **Battery panel** - live voltage/current chart (custom Slint component),
    volts/amps/watts/percent readouts; enables backend fast-poll while open.
-4. **Settings** — speaker name, online-art fallback toggle, pairing,
+4. **Settings** - speaker name, online-art fallback toggle, pairing,
    Wi-Fi info, about/version.
-5. **Setup wizard** — first boot only.
-6. **Footer** (persistent) — clock, connected device, volume, BT, battery.
+5. **Setup wizard** - first boot only.
+6. **Footer** (persistent) - clock, connected device, volume, BT, battery.
 
 ## Protocol v2
 
@@ -167,8 +167,8 @@ and UI.
 |---|---|---|
 | SoC | BCM2711 (aarch64) | BCM2837 (aarch64) |
 | Display | HDMI monitor (KMS trivial) | Pimoroni HyperPixel 4.0 800×480, 18-bit DPI (`dpi_18bit_cpadhi_gpio0`), `dtoverlay=vc4-kms-dpi-hyperpixel4` + `dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x` ✔ confirmed from v1 card |
-| Touch | USB HID (from monitor) — libinput, no extra work | Goodix GT911 on overlay-created `i2c-gpio` bus (GPIO 10=SDA / 11=SCL, ~100 kHz) ✔ |
-| Audio | I2S DAC HAT — **model/overlay TBD** (read from Pi 4 v1 image dump) | USB audio |
+| Touch | USB HID (from monitor) - libinput, no extra work | Goodix GT911 on overlay-created `i2c-gpio` bus (GPIO 10=SDA / 11=SCL, ~100 kHz) ✔ |
+| Audio | I2S DAC HAT - **model/overlay TBD** (read from Pi 4 v1 image dump) | USB audio |
 | INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | ✔ On the overlay's `i2c-gpio` bus (GPIO 10/11) = `/dev/i2c-11` (dynamic: DTB aliases reserve 0–10). v1's deployed `kiosk.sh` ran `ln -sf /dev/i2c-11 /dev/i2c-1` at boot so its hardcoded bus 1 worked. v2: config takes the real bus, and boompid should optionally locate the adapter **by name** (`/sys/class/i2c-adapter/*/name`) since i2c-gpio numbering is dynamic. |
 | v1 OS | (dump pending) | Raspberry Pi OS Bullseye 2022-04-04 (pi-gen stage4), kernel 5.15 ✔ |
 
@@ -197,7 +197,7 @@ Makefile                dev loop: check/build/deploy-over-ssh/image targets
 
 ## Phases
 
-### Phase 0 — Validation spikes (gate for everything else)
+### Phase 0 - Validation spikes (gate for everything else)
 On stock RPi OS Lite first (fast iteration, no Buildroot yet).
 **Pi 3 runbook with exact commands: [`docs/PHASE0-PI3.md`](PHASE0-PI3.md)**
 (spike app: `rust/kms-test`).
@@ -212,30 +212,30 @@ On stock RPi OS Lite first (fast iteration, no Buildroot yet).
 4. **Buildroot minimal boot** on both Pis (serial console + network).
 5. Resolve remaining hardware TBDs from the v1 image dump.
 
-### Phase 1 — boompid core (dev on RPi OS Lite)
+### Phase 1 - boompid core (dev on RPi OS Lite)
 Workspace scaffolding (done in initial commit), then: config store, WS server
 + protocol v2, BlueZ source via zbus, PipeWire volume, INA260 polling, FFT
 visualizer, `--sim` mode, cross-compile + `make deploy` loop.
 
-### Phase 2 — Slint UI to parity
+### Phase 2 - Slint UI to parity
 Connect / Now Playing / battery panel / footer; runs on laptop against a real
 box and against `--sim`.
 
-### Phase 3 — Multi-source, pairing, artwork
+### Phase 3 - Multi-source, pairing, artwork
 librespot + shairport-sync providers, source arbitration, pairing agent +
 UI flow, artwork pipeline for all three sources + online fallback + Settings
 screen with the fallback toggle.
 
-### Phase 4 — Buildroot appliance image
+### Phase 4 - Buildroot appliance image
 BR2_EXTERNAL tree fleshed out: both defconfigs, custom packages, rootfs
 overlay, RO rootfs + `/data`, genimage SD layout, Wi-Fi/BT firmware, recent
 BlueZ pinned with experimental flags, obexd service wiring, SSH for dev.
 
 **Renderer** (decided in Phase 0): the Pi UI uses **Skia OpenGL** on
-linuxkms (`kms-skia` feature) — verified on the Pi 3: vc4 GLES via
+linuxkms (`kms-skia` feature) - verified on the Pi 3: vc4 GLES via
 EGL/GBM works, and Skia is the only Slint renderer that rasterizes color
 emoji (software renderer is outline/alpha-only per
-`i-slint-renderer-software/fonts/vectorfont.rs`; FemtoVG is monochrome —
+`i-slint-renderer-software/fonts/vectorfont.rs`; FemtoVG is monochrome -
 upstream gaps slint-ui/slint#8646, #5171). The image therefore ships the
 mesa GL stack: `libegl` (glvnd + mesa vendor), `libgles`,
 mesa vc4 DRI driver. The software-renderer build (`kms` feature,
@@ -244,7 +244,7 @@ monochrome Noto Emoji) remains as a fallback variant.
 **Fonts** (recipe validated in Phase 0): UI chrome uses drawn vector icons
 (`icons.slint`, zero font dependency). Regular text is **Geist Sans**
 (vendored at `rust/boompi-ui/ui/fonts/`, OFL license alongside), embedded
-into the binary via Slint's font import + `default-font-family` — so text
+into the binary via Slint's font import + `default-font-family` - so text
 renders identically on the laptop, dev Pi, and appliance with no OS font
 packages. For emoji in arbitrary user content (speaker name
 `George's 🔊`, track/device names) the image additionally ships:
@@ -255,13 +255,13 @@ Emoji **cannot** be bundled into the binary like Geist: Slint's imported
 fonts are only used when named explicitly (`font-family` is
 single-valued), while emoji in mixed text resolve through fontique's
 *fallback* query, which is OS-backed (fontconfig on Linux, CoreText on
-macOS). Consequence: laptop dev shows Apple Color Emoji — a known,
+macOS). Consequence: laptop dev shows Apple Color Emoji - a known,
 accepted, dev-only discrepancy; the appliance is deterministic because
 its fontconfig is ours. Possible upstream Slint PR: expose fontique's
 `set_generic_families(GenericFamily::Emoji, …)` for imported fonts
 (Slint already uses that API internally for its bundled Inter).
 
-### Phase 5 — Settings & first-boot setup
+### Phase 5 - Settings & first-boot setup
 One HTTP config surface (boompid, :80 on the appliance / :8080 dev) serves
 both onboarding and day-2 settings; the panel gets touch-appropriate
 controls plus a QR code pointing browsers at the web UI for keyboard-heavy
@@ -274,7 +274,7 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
    passkey confirm on panel+web; list/disconnect/remove) replacing the
    auto-accept bt-agent. *(Pairing confirm needs a hands-on phone test.)*
 3. ✅ Theme (light palette) end-to-end + clock/timezone via
-   `org.freedesktop.timedate1` (writes need root/polkit — see
+   `org.freedesktop.timedate1` (writes need root/polkit - see
    scripts/dev-pi-polkit.rules for the dev box).
 4. ✅ Panel settings screen rework + QR code to the web UI
    (`Hello.settings_url`; themed ActionButton replaces fluent Button).
@@ -288,11 +288,11 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
    Remaining: `/data` writable partition for appliance config persistence
    (Phase 4 image work), panel BT device list, richer wizard polish.
 
-### Phase 6 — Boot polish, updates + release
+### Phase 6 - Boot polish, updates + release
 
-**Software updates** — implemented for the Pi 4 (its SD card is
+**Software updates** - implemented for the Pi 4 (its SD card is
 physically inaccessible once assembled, so A/B landed before its first
-flash; the Pi 3 keeps single-slot — accessible card, no EEPROM tryboot):
+flash; the Pi 3 keeps single-slot - accessible card, no EEPROM tryboot):
 - Layout: boot-a/boot-b (FAT) + rootfs-a/rootfs-b + data. EEPROM-native
   `tryboot` boots a candidate slot exactly once; `boompi-boot-commit`
   makes it permanent only after boompid answers healthz, else the next
@@ -302,7 +302,7 @@ flash; the Pi 3 keeps single-slot — accessible card, no EEPROM tryboot):
   latest green `boompi-pi4-update` artifact and drives the whole thing
   over SSH.
 - ⚠ Bench task before final assembly: verify the Pi 4's EEPROM is
-  ≥ 2021-04 (`vcgencmd bootloader_version`) — tryboot/autoboot.txt need
+  ≥ 2021-04 (`vcgencmd bootloader_version`) - tryboot/autoboot.txt need
   it, and the v1 install is buster-era. Update with rpi-eeprom-update
   while the card is still reachable.
 
@@ -311,14 +311,14 @@ Remaining (original design notes):
   bootloader's native `tryboot` mechanism gives atomic A/B switching with
   automatic fallback when the new slot fails to mark itself healthy.
 - boompid gains an updater module + Settings section (web + panel):
-  "check for updates" hits a release feed — GitHub Releases once tagging
-  starts (CI artifacts as the interim nightly channel) — compares
+  "check for updates" hits a release feed - GitHub Releases once tagging
+  starts (CI artifacts as the interim nightly channel) - compares
   versions, downloads the rootfs image into the inactive slot, verifies
   (hash from the feed), sets the tryboot flag, reboots. An auto-update
   toggle (default off) lives in Settings and persists like everything
   else. RAUC (packaged in Buildroot, documented Pi tryboot support) is
   the fallback if hand-rolling slot management proves annoying.
-- `/data` is never touched by updates — state and OS lifecycles stay
+- `/data` is never touched by updates - state and OS lifecycles stay
   decoupled (same property that makes reflash-during-dev painless).
 
 Silent boot (`quiet loglevel=0`, `disable_splash=1`, no cursor/rainbow),
@@ -341,7 +341,7 @@ CI image builds with ccache. Tag v2.0.
 - [x] DAC HAT model on Pi 4: **Raspiaudio Audio+** → `dtoverlay=hifiberry-dac`
       (confirmed from the v1 Pi 4 image dump). Same dump also revealed the
       Pi 4 box's display is **1024×600 over HDMI** (`hdmi_cvt=1024 600 60`,
-      `vc4-fkms-v3d`, touch presumably USB HID) — *not* a HyperPixel — and
+      `vc4-fkms-v3d`, touch presumably USB HID) - *not* a HyperPixel - and
       its INA260 lives on standard `i2c-1`. Consequences for the pi4 image:
       different kernel/DTB (bcm2711), hdmi config.txt, `battery.i2c_bus=1`,
       and the panel UI must handle 1024×600 (fixed 800×480 today).
@@ -350,28 +350,28 @@ CI image builds with ccache. Tag v2.0.
       Pi 3 image + implement find-adapter-by-name in Phase 1 for robustness.
 - [x] HyperPixel touch variant: touch (Goodix GT911, per KMS overlay)
 - [x] v1 pairing mechanism confirmed: `bt-agent.service` ran
-      `/usr/bin/bt-agent -c NoInputNoOutput` (bluez-tools) — auto-accepts
+      `/usr/bin/bt-agent -c NoInputNoOutput` (bluez-tools) - auto-accepts
       all pairing. Replaced by boompid's own `Agent1` (`NoInputNoOutput`) in
       Phase 3. (Deployed kiosk.sh/units drifted from git; the v1 image dump
       is the authoritative reference.)
-- [x] AirPlay 2 vs classic: **AirPlay 2** — Buildroot 2026.02 (LTS) ships
+- [x] AirPlay 2 vs classic: **AirPlay 2** - Buildroot 2026.02 (LTS) ships
       shairport-sync 4.3.7 + nqptp, so the packaging blocker that forced the
       original classic decision is gone (BR bump commit). The D-Bus
       integration was already coded against the 4.x property superset;
       ClientName gives real device names on AP2 sessions. Dev-Pi apt build
-      remains classic-only (Debian ships no nqptp) — AP2 testing happens on
+      remains classic-only (Debian ships no nqptp) - AP2 testing happens on
       the appliance image.
 - [ ] Full source-manager arbitration (pause-others, audio-flow-based claims
       via MediaTransport1.State). Interim shipped with AirPlay: sources only
       write track/source state while they own the display, and async art
       publishes are origin-gated (a late BT BIP thumbnail must not stomp an
       AirPlay cover). Note: iOS mirrors now-playing over AVRCP while
-      AirPlaying — the BT provider must never treat that chatter as a claim.
+      AirPlaying - the BT provider must never treat that chatter as a claim.
 - [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
 - [ ] Low-battery safeguard (new, motivated by Phase 0: the deeply
       discharged pack browned out the Pi and corrupted the SD mid-boot).
       v2 should surface a low-battery warning in the UI and consider a
-      safe-shutdown voltage threshold via the INA260 — v1 had neither.
+      safe-shutdown voltage threshold via the INA260 - v1 had neither.
 - [x] Pi 3 display rotation under Slint: `SLINT_KMS_ROTATION=270` env var
       (DRM panel-orientation hint is not auto-applied). Touch works
       unmodified alongside the existing DT touch transforms.

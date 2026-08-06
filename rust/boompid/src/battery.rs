@@ -3,7 +3,7 @@
 //! Runs on a dedicated thread (I2C reads are blocking). Poll cadence
 //! matches v1: 30 s normally, 1 s while any client fast-polls (battery
 //! panel open). Absent or unresponsive hardware disables the feature
-//! gracefully — the Pi 4 box may not have one.
+//! gracefully - the Pi 4 box may not have one.
 
 #![cfg(target_os = "linux")]
 

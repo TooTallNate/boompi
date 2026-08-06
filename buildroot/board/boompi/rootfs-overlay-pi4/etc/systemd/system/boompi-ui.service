@@ -2,7 +2,7 @@
 Description=Boompi touchscreen UI (Slint on DRM/KMS)
 After=boompid.service systemd-udevd.service
 
-# Pi 4 box: the 1024x600 HDMI panel is landscape-native — no rotation
+# Pi 4 box: the 1024x600 HDMI panel is landscape-native - no rotation
 # (the Pi 3 box's HyperPixel needs SLINT_KMS_ROTATION=270).
 [Service]
 Type=simple

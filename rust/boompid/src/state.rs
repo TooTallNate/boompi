@@ -51,7 +51,7 @@ pub type SharedApp = Arc<App>;
 
 pub struct App {
     /// Boot-time config. Runtime-mutable values (name, theme, ...) live in
-    /// `shared.settings` — read those, not this, for anything a user can
+    /// `shared.settings` - read those, not this, for anything a user can
     /// change; `cfg` remains for boot-time facts (battery bus, model, ...).
     pub cfg: crate::config::Config,
     /// Where to persist config changes (None = --config not given).
@@ -142,7 +142,7 @@ impl App {
     }
 
     /// Browser URL for the settings UI, from the LAN IP + bound port.
-    /// Recomputed per call — DHCP leases change. With no route to the
+    /// Recomputed per call - DHCP leases change. With no route to the
     /// internet (onboarding hotspot: NM shared mode, no uplink) fall back
     /// to the AP gateway address.
     pub fn settings_url(&self) -> Option<String> {
@@ -271,7 +271,7 @@ impl App {
 
     /// Route a command to the active source's channel. Volume goes to the
     /// Bluetooth/audio path regardless of source (it owns system volume and
-    /// AVRCP sync) — and *additionally* to the active non-Bluetooth source,
+    /// AVRCP sync) - and *additionally* to the active non-Bluetooth source,
     /// so the sender's own slider follows (AirPlay DACP `SetAirplayVolume`,
     /// Spotify Connect `Spirc::set_volume`); transport goes to whoever is
     /// actually playing.
@@ -454,7 +454,7 @@ impl App {
                 if renamed || airplay_model_changed {
                     // Sources re-announce under the new name/model (BT
                     // alias is updated in place; AirPlay/Spotify restart
-                    // discovery — the AirPlay conf embeds the model).
+                    // discovery - the AirPlay conf embeds the model).
                     self.cfg_generation.send_modify(|g| *g += 1);
                 }
             }
@@ -476,10 +476,9 @@ impl App {
                     }
                     // Deliberately idempotent: when setup finishes over the
                     // onboarding hotspot, tearing the AP down kills the
-                    // client's connection mid-request — it never sees the
+                    // client's connection mid-request - it never sees the
                     // response and may retry. Re-broadcasting and re-running
-                    // the AP teardown is harmless; silently no-oping left a
-                    // half-finished OOBE on the bench.
+                    // the AP teardown is harmless.
                     self.broadcast(ServerMessage::Setup(SetupState::default()));
                     #[cfg(target_os = "linux")]
                     tokio::spawn(async {
@@ -496,7 +495,7 @@ impl App {
                 }
             }
             ClientMessage::FactoryReset => {
-                tracing::warn!("factory reset requested — wiping /data and rebooting");
+                tracing::warn!("factory reset requested - wiping /data and rebooting");
                 #[cfg(target_os = "linux")]
                 tokio::spawn(async {
                     // Stop the state owners first so they can't flush their

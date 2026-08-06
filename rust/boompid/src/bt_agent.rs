@@ -4,13 +4,13 @@
 //! devices can only pair while the user has explicitly enabled pairing
 //! mode from the panel/web UI, and a device paired in that window is
 //! trusted (set by the bluetooth task on the Paired event). No
-//! per-connection prompts — we tried, and BlueZ holds the profile
+//! per-connection prompts - we tried, and BlueZ holds the profile
 //! connection hostage during the prompt, which makes Apple devices time
 //! out into a degraded bond.
 //!
 //! Capability is `NoInputNoOutput` (JustWorks), not `DisplayYesNo`: the
 //! boombox's USB dongle is a counterfeit CSR (0a12:0001) whose SSP
-//! implementation cannot complete MITM numeric comparison — advertising
+//! implementation cannot complete MITM numeric comparison - advertising
 //! display capability makes iOS request it and pairing dies at the radio
 //! layer before bluetoothd says a word (v1 worked because JustWorks never
 //! asks for it). `RequestConfirmation` stays wired (passkey modal on the
@@ -33,7 +33,7 @@ pub const AGENT_PATH: &str = "/com/boompi/agent";
 /// on screen; the bluetooth task takes the sender to resolve it.
 pub type DecisionSlot = Arc<Mutex<Option<oneshot::Sender<bool>>>>;
 
-/// BlueZ agent errors — the names (org.bluez.Error.*) are meaningful to
+/// BlueZ agent errors - the names (org.bluez.Error.*) are meaningful to
 /// bluetoothd, so they must survive the D-Bus round trip exactly.
 #[derive(Debug, zbus::DBusError)]
 #[zbus(prefix = "org.bluez.Error")]
@@ -107,7 +107,7 @@ impl Agent {
 
 #[zbus::interface(name = "org.bluez.Agent1")]
 impl Agent {
-    /// SSP numeric comparison — only reachable on adapters with real
+    /// SSP numeric comparison - only reachable on adapters with real
     /// display-capable SSP (not the counterfeit-CSR dongle).
     async fn request_confirmation(
         &self,
@@ -121,7 +121,7 @@ impl Agent {
         }
     }
 
-    /// JustWorks pairing consent — in practice bluetoothd auto-accepts
+    /// JustWorks pairing consent - in practice bluetoothd auto-accepts
     /// JustWorks with a NoInputNoOutput agent and never calls this, but
     /// keep it wired for stacks/paths that do.
     async fn request_authorization(&self, device: OwnedObjectPath) -> Result<(), AgentError> {
@@ -132,7 +132,7 @@ impl Agent {
         }
     }
 
-    /// Profile (A2DP/AVRCP/...) authorization — auto-accepted.
+    /// Profile (A2DP/AVRCP/...) authorization - auto-accepted.
     ///
     /// We tried gating this on a user prompt ("first-connect consent"),
     /// but BlueZ holds the profile connection hostage during the prompt:
@@ -149,7 +149,7 @@ impl Agent {
         Ok(())
     }
 
-    // Legacy PIN flows — a NoInputNoOutput agent shouldn't receive these, but answer
+    // Legacy PIN flows - a NoInputNoOutput agent shouldn't receive these, but answer
     // deterministically if an odd stack probes them.
     async fn request_pin_code(&self, _device: OwnedObjectPath) -> Result<String, AgentError> {
         Err(AgentError::Rejected("PIN pairing not supported".into()))
@@ -188,7 +188,7 @@ pub async fn register(
         conn: conn.clone(),
         decision,
     };
-    // `at` returns false when the interface is already served (restart) —
+    // `at` returns false when the interface is already served (restart) -
     // the existing instance holds stale channel refs, so replace it.
     let server = conn.object_server();
     let _ = server.remove::<Agent, _>(&path).await;

@@ -15,7 +15,7 @@
 #   scripts/deploy-appliance.sh --sysroot   # (re)fetch the sysroot only
 #
 # Env: PI (default root@boompi.local), BOOMPI_APPLIANCE_SYSROOT,
-#      BOOMPI_GLIBC (default 2.41 — Buildroot 2026.02 bootlin toolchain)
+#      BOOMPI_GLIBC (default 2.41 - Buildroot 2026.02 bootlin toolchain)
 set -euo pipefail
 
 PI="${PI:-root@boompi.local}"
@@ -55,7 +55,7 @@ if [ "${1:-}" = "--sysroot" ]; then
     exit 0
 fi
 
-[ -d "$SYS/usr/lib" ] || { echo "no sysroot at $SYS — run: $0 --sysroot" >&2; exit 1; }
+[ -d "$SYS/usr/lib" ] || { echo "no sysroot at $SYS - run: $0 --sysroot" >&2; exit 1; }
 
 export PKG_CONFIG_ALLOW_CROSS=1
 export PKG_CONFIG_SYSROOT_DIR="$SYS"

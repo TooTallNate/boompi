@@ -117,9 +117,9 @@ export component SettingsPanel inherits Rectangle {
                 Row {
                     label: "Bluetooth pairing";
                     sublabel: root.pairing-state == "discoverable"
-                        ? "Discoverable — check your phone's Bluetooth list"
+                        ? "Discoverable - check your phone's Bluetooth list"
                         : root.pairing-state == "unavailable"
-                        ? "Bluetooth unavailable — is the dongle plugged in?"
+                        ? "Bluetooth unavailable - is the dongle plugged in?"
                         : "Allow a new device to pair";
                     ActionButton {
                         text: root.pairing-state == "idle" || root.pairing-state == "unavailable"
@@ -153,7 +153,7 @@ export component SettingsPanel inherits Rectangle {
                         horizontal-alignment: center;
                     }
                     Text {
-                        text: "Name, Wi-Fi, clock, devices —\nscan with your phone:";
+                        text: "Name, Wi-Fi, clock, devices -\nscan with your phone:";
                         color: Theme.dimmer;
                         font-size: 13px;
                         horizontal-alignment: center;
