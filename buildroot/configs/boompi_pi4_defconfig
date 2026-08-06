@@ -52,6 +52,13 @@ BR2_PACKAGE_RPI_FIRMWARE_INSTALL_DTB_OVERLAYS=y
 BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/config.txt"
 BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/cmdline.txt"
 
+# TF-A BL31 armstub (armstub=bl31.bin in config.txt): PSCI for CPU
+# park/wake — without it the CPUs use spin-tables and kexec_load (the
+# A/B update trial boot) fails with EBUSY.
+BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
+BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="rpi4"
+BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31=y
+
 # System bits
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
 # kexec(8): chain-loads the candidate slot's kernel for A/B update

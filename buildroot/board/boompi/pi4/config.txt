@@ -8,6 +8,13 @@ fixup_file=fixup4.dat
 kernel=Image
 arm_64bit=1
 
+# TF-A BL31 as the armstub: provides PSCI so secondary CPUs can be
+# parked — required by kexec (the A/B update trial boot; spin-table
+# CPUs make kexec_load fail with EBUSY). TF-A also injects the psci
+# nodes into the DT before starting the kernel.
+armstub=bl31.bin
+enable_gic=1
+
 disable_overscan=1
 disable_splash=1
 boot_delay=0

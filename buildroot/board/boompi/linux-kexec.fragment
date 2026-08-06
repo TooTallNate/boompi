@@ -11,5 +11,8 @@
 #
 # CONFIG_SUSPEND: arm64 ARCH_SUPPORTS_KEXEC = PM_SLEEP_SMP, which needs
 # SUSPEND (bcm2711_defconfig leaves it off).
+# CONFIG_HOTPLUG_CPU: kexec parks secondary CPUs via hotplug; PSCI for
+# the actual park/wake comes from the TF-A BL31 armstub (config.txt).
 CONFIG_SUSPEND=y
+CONFIG_HOTPLUG_CPU=y
 CONFIG_KEXEC=y
