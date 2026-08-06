@@ -89,7 +89,8 @@ async fn capture(app: &SharedApp) -> anyhow::Result<()> {
 
         if last_frame.elapsed() >= FRAME_INTERVAL {
             last_frame = tokio::time::Instant::now();
-            let bars = analyzer.process(&ring);
+            let volume = app.shared.read().await.volume;
+            let bars = analyzer.process(&ring, volume);
             let active = bars.iter().any(|&b| b > 0);
             if active {
                 was_active = true;

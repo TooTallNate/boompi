@@ -90,7 +90,7 @@ struct ArtCache {
     order: std::collections::VecDeque<String>,
 }
 
-/// AVRCP thumbnails are ~10–30 KB; keep memory bounded regardless.
+/// AVRCP thumbnails are ~10-30 KB; keep memory bounded regardless.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const ART_CACHE_CAP: usize = 16;
 

@@ -1,0 +1,82 @@
+avrcp: backport the 5.82 AVRCP state (absolute volume with iOS)
+
+Backport of all avrcp.c changes between bluez 5.79 and 5.82. The
+headline fix is the inverted condition in target_init (upstream
+de1b3a5ac3, issue #1007) that kept EVENT_VOLUME_CHANGED out of the
+GetCapabilities reply, but iOS senders also gate absolute volume on
+the advertised profile versions, which 5.82 bumps (AVRCP TG 1.5 to
+1.6, AVCTP 1.3 to 1.4), and the SetAbsoluteVolume response echo fix
+matters for strict senders. Verified against a 5.82 bluetoothd on the
+device: with these behaviors the phone registers for volume-changed
+notifications and streams SetAbsoluteVolume; with the target_init fix
+alone it stays silent.
+
+--- a/profiles/audio/avrcp.c	2026-08-06 10:37:08
++++ b/profiles/audio/avrcp.c	2026-08-06 10:37:08
+@@ -138,7 +138,7 @@
+ 
+ #define AVRCP_BROWSING_TIMEOUT		1
+ #define AVRCP_CT_VERSION		0x0106
+-#define AVRCP_TG_VERSION		0x0105
++#define AVRCP_TG_VERSION		0x0106
+ 
+ #define AVRCP_SCOPE_MEDIA_PLAYER_LIST			0x00
+ #define AVRCP_SCOPE_MEDIA_PLAYER_VFS			0x01
+@@ -414,7 +414,7 @@
+ 	sdp_record_t *record;
+ 	sdp_data_t *psm[2], *version, *features;
+ 	uint16_t lp = AVCTP_CONTROL_PSM;
+-	uint16_t avctp_ver = 0x0103;
++	uint16_t avctp_ver = 0x0104;
+ 	uint16_t feat = ( AVRCP_FEATURE_CATEGORY_1 |
+ 					AVRCP_FEATURE_CATEGORY_2 |
+ 					AVRCP_FEATURE_CATEGORY_3 |
+@@ -493,7 +493,7 @@
+ 	sdp_record_t *record;
+ 	sdp_data_t *psm_control, *version, *features;
+ 	uint16_t lp = AVCTP_CONTROL_PSM;
+-	uint16_t avctp_ver = 0x0103;
++	uint16_t avctp_ver = 0x0104;
+ 	uint16_t feat = ( AVRCP_FEATURE_CATEGORY_1 |
+ 					AVRCP_FEATURE_CATEGORY_2 |
+ 					AVRCP_FEATURE_CATEGORY_3 |
+@@ -1793,7 +1793,7 @@
+ 		goto err;
+ 	}
+ 
+-	volume = pdu->params[0] & 0x7F;
++	volume = pdu->params[0] = pdu->params[0] & 0x7F;
+ 
+ 	media_transport_update_device_volume(session->dev, volume);
+ 
+@@ -1963,7 +1963,8 @@
+ 
+ 	if (be16_to_cpu(pdu->params_len) != operand_count) {
+ 		DBG("AVRCP PDU parameters length don't match");
+-		pdu->params_len = cpu_to_be16(operand_count);
++		pdu->params[0] = AVRCP_STATUS_PARAM_NOT_FOUND;
++		goto err_metadata;
+ 	}
+ 
+ 	for (handler = session->control_handlers; handler->pdu_id; handler++) {
+@@ -2660,6 +2661,11 @@
+ 	uint64_t items;
+ 	size_t i;
+ 	int err = 0;
++
++	if (player->p == NULL) {
++		media_player_list_complete(player->user_data, NULL, -EINVAL);
++		return FALSE;
++	}
+ 
+ 	if (pdu == NULL) {
+ 		err = -ETIMEDOUT;
+@@ -4268,7 +4274,7 @@
+ 	if (target->version < 0x0104)
+ 		return;
+ 
+-	if (!avrcp_volume_supported(target))
++	if (avrcp_volume_supported(target))
+ 		session->supported_events |=
+ 				(1 << AVRCP_EVENT_VOLUME_CHANGED);
+ 

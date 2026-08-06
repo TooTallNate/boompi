@@ -6,7 +6,7 @@
 //!
 //! - `org.bluez.Device1` - connect/disconnect + device alias
 //! - `org.bluez.MediaPlayer1` - track metadata, playback status, transport
-//! - `org.bluez.MediaTransport1` - AVRCP absolute volume (0–127)
+//! - `org.bluez.MediaTransport1` - AVRCP absolute volume (0-127)
 //!
 //! Plus the pairing agent (`bt_agent`, NoInputNoOutput/JustWorks with an
 //! explicit pairing window as the consent) and cover art (obexd/BIP, see
@@ -76,7 +76,7 @@ trait MediaTransport1 {
     fn set_volume(&self, volume: u16) -> zbus::Result<()>;
 }
 
-/// AVRCP absolute volume is 0–127.
+/// AVRCP absolute volume is 0-127.
 const AVRCP_MAX: f32 = 127.0;
 
 /// Mutable view of the currently connected phone/player.
@@ -953,12 +953,24 @@ fn prime_art_session(ctx: &Ctx, session: &Session) {
     });
 }
 
-/// Phone changed its volume (AVRCP absolute volume, 0–127): follow with the
-/// system volume and notify clients.
+/// Phone changed its volume (AVRCP absolute volume, 0 to 127): follow with
+/// the system volume and notify clients. The system sink is the only place
+/// volume is applied - PipeWire's own soft-scaling of the bluez stream is
+/// pinned back to 1.0 (twice: WirePlumber reacts to the same transport
+/// event and the ordering between us is unspecified).
 async fn apply_phone_volume(app: &SharedApp, avrcp: u16) {
     let level = (avrcp as f32 / AVRCP_MAX).clamp(0.0, 1.0);
     tracing::debug!(avrcp, level, "phone volume changed");
     app.apply_external_volume(level).await;
+    tokio::spawn(async {
+        if let Err(err) = crate::audio::reset_bt_stream_volume().await {
+            tracing::debug!(%err, "bt stream volume reset failed");
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        if let Err(err) = crate::audio::reset_bt_stream_volume().await {
+            tracing::debug!(%err, "bt stream volume reset failed (second pass)");
+        }
+    });
 }
 
 fn apply_track_dict(session: &mut Session, track: &HashMap<String, OwnedValue>) {

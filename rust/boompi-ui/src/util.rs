@@ -18,7 +18,7 @@ pub struct BatteryHistory {
 /// Rolling window width (matches the v1 chart's 3 minutes).
 const WINDOW_MS: u64 = 180_000;
 
-/// Chart domains. Voltage covers the 18–24.98 V pack with margin; amps are
+/// Chart domains. Voltage covers the 18-24.98 V pack with margin; amps are
 /// symmetric so charging (negative) has room below the axis.
 const VOLTS_MIN: f32 = 17.5;
 const VOLTS_MAX: f32 = 25.5;

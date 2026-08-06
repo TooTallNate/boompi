@@ -66,7 +66,7 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
   playback status, position, volume, artwork). A **source manager**
   arbitrates: last-active-wins, pauses others.
   - *bluetooth*: zbus proxies for `org.bluez.Device1`, `MediaTransport1`
-    (absolute volume 0–127), `MediaPlayer1` (transport + `Track` metadata),
+    (absolute volume 0-127), `MediaPlayer1` (transport + `Track` metadata),
     `Adapter1` (discoverable), `Agent1`/`AgentManager1` (pairing flow).
     Handles devices paired at runtime (v1 TODO). Register the agent with
     `NoInputNoOutput` capability (JustWorks; the explicit pairing window
@@ -106,7 +106,7 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
 - **visualizer**: PipeWire monitor capture → FFT (`realfft`) → N bars with
   cava-style smoothing/falloff → binary WS frames at ~30 fps.
 - **battery**: INA260 polling (30 s slow / 1 s fast-poll on request), linear
-  percentage between configured min/max voltages (v1: 18.0–24.98 V).
+  percentage between configured min/max voltages (v1: 18.0-24.98 V).
 - **setup**: first-boot state machine. Unconfigured → setup mode: Slint
   wizard (speaker name, output check) + `Boompi-Setup` Wi-Fi AP
   (hostapd/dnsmasq) with captive portal for Wi-Fi credentials from a phone.
@@ -140,7 +140,7 @@ Server → client:
   `state` snapshot, then deltas:
 - `source { active: "bluetooth"|"spotify"|"airplay"|null, device_name }`
 - `track { title, artist, album, duration_ms, position_ms, status, artwork_id?, updated_at }`
-- `volume { level }` (0.0–1.0)
+- `volume { level }` (0.0-1.0)
 - `battery { voltage, current, power, percentage, charging, ts }`
 - `pairing { state: "idle"|"discoverable"|"confirm", device_name?, passkey? }`
 - `setup { ... }` (first-boot flow)
@@ -169,7 +169,7 @@ and UI.
 | Display | HDMI monitor (KMS trivial) | Pimoroni HyperPixel 4.0 800×480, 18-bit DPI (`dpi_18bit_cpadhi_gpio0`), `dtoverlay=vc4-kms-dpi-hyperpixel4` + `dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x` ✔ confirmed from v1 card |
 | Touch | USB HID (from monitor) - libinput, no extra work | Goodix GT911 on overlay-created `i2c-gpio` bus (GPIO 10=SDA / 11=SCL, ~100 kHz) ✔ |
 | Audio | I2S DAC HAT - **model/overlay TBD** (read from Pi 4 v1 image dump) | USB audio |
-| INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | ✔ On the overlay's `i2c-gpio` bus (GPIO 10/11) = `/dev/i2c-11` (dynamic: DTB aliases reserve 0–10). v1's deployed `kiosk.sh` ran `ln -sf /dev/i2c-11 /dev/i2c-1` at boot so its hardcoded bus 1 worked. v2: config takes the real bus, and boompid should optionally locate the adapter **by name** (`/sys/class/i2c-adapter/*/name`) since i2c-gpio numbering is dynamic. |
+| INA260 | bus 1 @ 0x40 (confirm from Pi 4 card) | ✔ On the overlay's `i2c-gpio` bus (GPIO 10/11) = `/dev/i2c-11` (dynamic: DTB aliases reserve 0-10). v1's deployed `kiosk.sh` ran `ln -sf /dev/i2c-11 /dev/i2c-1` at boot so its hardcoded bus 1 worked. v2: config takes the real bus, and boompid should optionally locate the adapter **by name** (`/sys/class/i2c-adapter/*/name`) since i2c-gpio numbering is dynamic. |
 | v1 OS | (dump pending) | Raspberry Pi OS Bullseye 2022-04-04 (pi-gen stage4), kernel 5.15 ✔ |
 
 > The Pi 3's KMS status is a major Phase 0 de-risk: the panel already runs
@@ -265,7 +265,7 @@ its fontconfig is ours. Possible upstream Slint PR: expose fontique's
 One HTTP config surface (boompid, :80 on the appliance / :8080 dev) serves
 both onboarding and day-2 settings; the panel gets touch-appropriate
 controls plus a QR code pointing browsers at the web UI for keyboard-heavy
-input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
+input. Build order (1-4 are dev-Pi-testable; 5-6 need image loops):
 1. ✅ Config persistence (atomic TOML save) + `/api/state` + `/api/settings`
    + embedded Vite/React/Tailwind SPA (`web/`, dist committed, rust-embed)
    + speaker rename end-to-end (BT `Adapter1.Alias` in place; AirPlay +

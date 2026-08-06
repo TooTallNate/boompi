@@ -43,7 +43,7 @@ pub struct WifiStatus {
 #[derive(Debug, Clone, Serialize)]
 pub struct WifiNetwork {
     pub ssid: String,
-    /// 0–100.
+    /// 0-100.
     pub signal: u8,
     /// Human security summary ("WPA2", "WPA2 WPA3", "" = open).
     pub security: String,

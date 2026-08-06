@@ -28,7 +28,7 @@ pub struct SpectrumAnalyzer {
     window: Vec<f32>,
     /// Inclusive bin ranges per bar.
     bands: Vec<(usize, usize)>,
-    /// Per-bar smoothed levels (0.0–1.0).
+    /// Per-bar smoothed levels (0.0-1.0).
     smoothed: [f32; BARS],
     input: Vec<f32>,
     spectrum: Vec<realfft::num_complex::Complex<f32>>,
@@ -68,7 +68,13 @@ impl SpectrumAnalyzer {
 
     /// Analyze the most recent `FFT_SIZE` samples (i16 mono) and return the
     /// smoothed bars. Call at the frame rate (~30 fps).
-    pub fn process(&mut self, samples: &[i16]) -> [u16; BARS] {
+    ///
+    /// `volume` (0..=1, the system output volume) shifts the whole display
+    /// down by the equivalent dB so the bars show what is audibly playing,
+    /// not the pre-volume stream content. The sink monitor we capture taps
+    /// before the sink volume, so this is the only place volume can enter
+    /// the picture - and it keeps the display consistent across sources.
+    pub fn process(&mut self, samples: &[i16], volume: f32) -> [u16; BARS] {
         assert!(samples.len() >= FFT_SIZE, "need at least FFT_SIZE samples");
         let tail = &samples[samples.len() - FFT_SIZE..];
         for (dst, (&s, &w)) in self
@@ -95,7 +101,8 @@ impl SpectrumAnalyzer {
             for bin in &self.spectrum[lo..hi] {
                 peak = peak.max(bin.norm() * scale);
             }
-            let db = 20.0 * (peak + 1e-9).log10();
+            let db = 20.0 * (peak + 1e-9).log10()
+                + 20.0 * volume.clamp(0.001, 1.0).log10();
             // Slight tilt: music has less energy up high; lift the top bands
             // so the display looks balanced (cava does similar weighting).
             let tilt = 1.0 + 0.35 * (i as f32 / (BARS - 1) as f32);
@@ -147,7 +154,7 @@ mod tests {
         // Run a few frames so smoothing settles.
         let mut bars = [0u16; BARS];
         for _ in 0..8 {
-            bars = analyzer.process(&samples);
+            bars = analyzer.process(&samples, 1.0);
         }
         // 440 Hz falls in the band whose range contains it.
         let edge = |i: usize| 45.0 * (10_000.0f32 / 45.0).powf(i as f32 / BARS as f32);
@@ -164,11 +171,11 @@ mod tests {
         let rate = 22_050.0;
         let mut analyzer = SpectrumAnalyzer::new(rate);
         let loud = sine(1000.0, rate, 0.8, FFT_SIZE * 2);
-        analyzer.process(&loud);
+        analyzer.process(&loud, 1.0);
         let quiet = vec![0i16; FFT_SIZE * 2];
         let mut bars = [u16::MAX; BARS];
         for _ in 0..60 {
-            bars = analyzer.process(&quiet);
+            bars = analyzer.process(&quiet, 1.0);
         }
         assert_eq!(bars, [0u16; BARS], "should fully decay");
     }

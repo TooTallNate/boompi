@@ -95,7 +95,7 @@ pub struct Battery {
     pub current: f32,
     /// Watts.
     pub power: f32,
-    /// 0.0–1.0, linear between the configured min/max pack voltages.
+    /// 0.0-1.0, linear between the configured min/max pack voltages.
     pub percentage: f32,
     pub charging: bool,
     /// Unix timestamp (milliseconds).
