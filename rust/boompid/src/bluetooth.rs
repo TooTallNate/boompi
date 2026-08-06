@@ -958,11 +958,7 @@ fn prime_art_session(ctx: &Ctx, session: &Session) {
 async fn apply_phone_volume(app: &SharedApp, avrcp: u16) {
     let level = (avrcp as f32 / AVRCP_MAX).clamp(0.0, 1.0);
     tracing::debug!(avrcp, level, "phone volume changed");
-    if let Err(err) = crate::audio::set_system_volume(level).await {
-        tracing::warn!(%err, "failed to set system volume");
-    }
-    app.shared.write().await.volume = level;
-    app.broadcast(ServerMessage::Volume { level });
+    app.apply_external_volume(level).await;
 }
 
 fn apply_track_dict(session: &mut Session, track: &HashMap<String, OwnedValue>) {

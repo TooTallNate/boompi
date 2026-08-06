@@ -58,6 +58,17 @@ trait RemoteControl {
     fn pause(&self) -> zbus::Result<()>;
     fn next(&self) -> zbus::Result<()>;
     fn previous(&self) -> zbus::Result<()>;
+
+    /// Ask the *sender* to change its volume (DACP `dmcp.device-volume`);
+    /// the phone's slider follows and it echoes back via `AirplayVolume`.
+    fn set_airplay_volume(&self, volume: f64) -> zbus::Result<()>;
+
+    /// Sender-side volume in dB attenuation: 0 (max) … -30 (min),
+    /// -144 = mute. With `ignore_volume_control` set, shairport leaves the
+    /// PCM alone and this is purely a control signal (parity with AVRCP
+    /// absolute volume on the Bluetooth path).
+    #[zbus(property)]
+    fn airplay_volume(&self) -> zbus::Result<f64>;
     /// "Playing" / "Paused" / "Stopped" / "Not Available".
     #[zbus(property)]
     fn player_state(&self) -> zbus::Result<String>;
@@ -138,6 +149,7 @@ async fn run_once(
     let mut state_stream = rc.receive_player_state_changed().await;
     let mut meta_stream = rc.receive_metadata_changed().await;
     let mut progress_stream = rc.receive_progress_string_changed().await;
+    let mut volume_stream = rc.receive_airplay_volume_changed().await;
 
     let mut meta = MetaState::default();
 
@@ -150,6 +162,9 @@ async fn run_once(
         if let Ok(state) = rc.player_state().await {
             apply_player_state(app, &rc, &state).await;
         }
+        if let Ok(db) = rc.airplay_volume().await {
+            apply_airplay_volume(app, db).await;
+        }
     }
     loop {
         tokio::select! {
@@ -161,7 +176,13 @@ async fn run_once(
             }
             Some(active) = active_stream.next() => {
                 match active.get().await {
-                    Ok(true) => claim_source(app, &rc).await,
+                    Ok(true) => {
+                        claim_source(app, &rc).await;
+                        // Snap the speaker to the sender's slider position.
+                        if let Ok(db) = rc.airplay_volume().await {
+                            apply_airplay_volume(app, db).await;
+                        }
+                    }
                     Ok(false) => {
                         // NB: also fires once at startup when the property
                         // cache primes with the initial `false`.
@@ -191,6 +212,15 @@ async fn run_once(
                     apply_progress(app, &progress).await;
                 }
             }
+            Some(v) = volume_stream.next() => {
+                if let Ok(db) = v.get().await {
+                    // Guard on active source: the property can twitch
+                    // during session setup/teardown.
+                    if app.shared.read().await.source.active == Some(SourceKind::Airplay) {
+                        apply_airplay_volume(app, db).await;
+                    }
+                }
+            }
             _ = cfg_watch.changed() => {
                 tracing::info!("speaker renamed; restarting AirPlay receiver");
                 // kill_on_drop tears the shairport child down with us.
@@ -203,8 +233,11 @@ async fn run_once(
                     SourceCommand::Pause => rc.pause().await,
                     SourceCommand::Next => rc.next().await,
                     SourceCommand::Previous => rc.previous().await,
-                    // System volume is handled by the bluetooth/audio path.
-                    SourceCommand::SetVolume(_) => Ok(()),
+                    // The bluetooth/audio path already set the system
+                    // volume; here we just make the sender's slider follow.
+                    SourceCommand::SetVolume(level) => {
+                        rc.set_airplay_volume(level_to_airplay_db(level)).await
+                    }
                 };
                 if let Err(err) = result {
                     tracing::warn!(%err, ?cmd, "airplay remote command failed");
@@ -212,6 +245,27 @@ async fn run_once(
             }
         }
     }
+}
+
+/// Sender volume (dB attenuation, 0 max … -30 min, -144 mute) → 0..1.
+fn airplay_db_to_level(db: f64) -> f32 {
+    if db <= -140.0 {
+        return 0.0; // mute sentinel
+    }
+    (((db + 30.0) / 30.0) as f32).clamp(0.0, 1.0)
+}
+
+/// 0..1 → sender volume in dB (never the -144 mute sentinel; 0.0 maps to
+/// the -30 dB floor so unmuting from the phone still works).
+fn level_to_airplay_db(level: f32) -> f64 {
+    (f64::from(level.clamp(0.0, 1.0)) * 30.0) - 30.0
+}
+
+/// The AirPlay sender moved its volume: follow with the system volume.
+async fn apply_airplay_volume(app: &SharedApp, db: f64) {
+    let level = airplay_db_to_level(db);
+    tracing::debug!(db, level, "airplay sender volume changed");
+    app.apply_external_volume(level).await;
 }
 
 /// Aborts the wrapped task when the session scope unwinds.
@@ -230,6 +284,11 @@ fn write_config(name: &str) -> anyhow::Result<()> {
 general = {{
   name = "{escaped}";
   output_backend = "pipe";
+  // Don't software-attenuate the PCM: the sender's volume drives the
+  // system volume instead (AirplayVolume watcher), matching how AVRCP
+  // absolute volume works on the Bluetooth path. Without this the
+  // speaker has two volumes in series and the panel slider never moves.
+  ignore_volume_control = "yes";
 }};
 pipe = {{
   name = "{FIFO_PATH}";
@@ -276,16 +335,23 @@ async fn wait_for_bus_name(conn: &zbus::Connection) -> anyhow::Result<()> {
     anyhow::bail!("org.gnome.ShairportSync never appeared on the system bus (dbus policy?)")
 }
 
-/// FIFO → `pw-cat --playback` (streaming WAV). One pw-cat per AirPlay
+/// FIFO → `pw-cat --playback` (raw PCM pipe). One pw-cat per AirPlay
 /// session: the read side blocks until shairport opens the pipe (session
-/// start) and sees EOF when it closes it (session end). The WAV header
-/// carries the format — pw-cat < 1.4 has no --raw (see audio.rs).
+/// start) and sees EOF when it closes it (session end).
+///
+/// NB: no `--raw` flag — it doesn't exist before PipeWire 1.4 and makes
+/// 1.2.x print usage and exit. Stdin is always treated as a raw pipe
+/// whose parameters come from the CLI args, and the rate REALLY matters:
+/// pw-cat defaults to 48000, which plays 44100 content 8.8% fast (+1.5
+/// semitones — the first bench test of this path shipped that).
 async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
     loop {
         // Blocks (on the blocking pool) until a writer appears.
         let mut pipe = tokio::fs::File::open(&fifo).await?;
         let mut pwcat = tokio::process::Command::new("pw-cat")
-            .args(["--playback", "-"])
+            .args([
+                "--playback", "--rate", "44100", "--channels", "2", "--format", "s16", "-",
+            ])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -295,9 +361,6 @@ async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
             .stdin
             .take()
             .ok_or_else(|| anyhow::anyhow!("pw-cat stdin missing"))?;
-        stdin
-            .write_all(&crate::audio::wav_stream_header(44100, 2))
-            .await?;
         tracing::debug!("airplay audio session started");
         let mut buf = vec![0u8; 16 * 1024];
         loop {

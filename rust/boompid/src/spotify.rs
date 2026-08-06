@@ -24,7 +24,7 @@ use librespot::playback::audio_backend::{Sink, SinkError, SinkResult};
 use librespot::playback::config::{Bitrate, PlayerConfig};
 use librespot::playback::convert::Converter;
 use librespot::playback::decoder::AudioPacket;
-use librespot::playback::mixer::{self, MixerConfig};
+use librespot::playback::mixer::{self, MixerConfig, NoOpVolume};
 use librespot::playback::player::{Player, PlayerEvent};
 use std::hash::{Hash, Hasher};
 use std::io::Write;
@@ -111,10 +111,15 @@ async fn run_once(
         bitrate: Bitrate::Bitrate320,
         ..PlayerConfig::default()
     };
+    // NoOpVolume: don't software-attenuate the PCM. The mixer still tracks
+    // the Connect device volume (and Spirc reports it to the app), but the
+    // audible volume is the *system* volume, driven from VolumeChanged
+    // events below — parity with the Bluetooth (AVRCP) and AirPlay (DACP)
+    // paths, so the phone app, the panel slider and the web UI all agree.
     let player = Player::new(
         player_config,
         session.clone(),
-        mixer.get_soft_volume(),
+        Box::new(NoOpVolume),
         || Box::new(PwCatSink::default()),
     );
     let mut events = player.get_player_event_channel();
@@ -168,8 +173,11 @@ async fn run_once(
                     SourceCommand::Pause => spirc.pause(),
                     SourceCommand::Next => spirc.next(),
                     SourceCommand::Previous => spirc.prev(),
-                    // System volume is handled by the bluetooth/audio path.
-                    SourceCommand::SetVolume(_) => Ok(()),
+                    // The bluetooth/audio path already set the system
+                    // volume; this makes the Spotify app's slider follow.
+                    SourceCommand::SetVolume(level) => {
+                        spirc.set_volume((level.clamp(0.0, 1.0) * f32::from(u16::MAX)).round() as u16)
+                    }
                 };
                 if let Err(err) = result {
                     tracing::warn!(%err, ?cmd, "spirc command failed");
@@ -232,6 +240,17 @@ async fn handle_player_event(app: &SharedApp, ev: PlayerEvent) {
         PlayerEvent::SessionDisconnected { .. } => {
             tracing::info!("Spotify session disconnected");
             clear_if_active(app).await;
+        }
+        PlayerEvent::VolumeChanged { volume } => {
+            // Connect device volume (0..=65535) → system volume. `None`
+            // is allowed so a pre-playback volume drag still lands; other
+            // active sources must not be yanked around by the app.
+            let active = app.shared.read().await.source.active;
+            if matches!(active, Some(SourceKind::Spotify) | None) {
+                let level = f32::from(volume) / f32::from(u16::MAX);
+                tracing::debug!(volume, level, "spotify connect volume changed");
+                app.apply_external_volume(level).await;
+            }
         }
         _ => {}
     }
@@ -345,8 +364,10 @@ fn stable_device_id(name: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Audio sink: s16le PCM behind a streaming WAV header → `pw-cat --playback`
-// → PipeWire default sink. (No --raw: pw-cat < 1.4 lacks it, see audio.rs.)
+// Audio sink: s16le PCM → `pw-cat --playback` (raw pipe) → PipeWire default
+// sink. No `--raw` flag (absent before PipeWire 1.4; 1.2.x exits with
+// usage), and the explicit --rate is load-bearing: stdin is a raw pipe
+// whose parameters come from the CLI, default rate 48000 ≠ 44100.
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
@@ -366,19 +387,16 @@ impl PwCatSink {
 impl Sink for PwCatSink {
     fn start(&mut self) -> SinkResult<()> {
         if self.child.is_none() {
-            let mut child = std::process::Command::new("pw-cat")
-                .args(["--playback", "-"])
+            let child = std::process::Command::new("pw-cat")
+                .args([
+                    "--playback", "--rate", "44100", "--channels", "2", "--format", "s16",
+                    "-",
+                ])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| SinkError::ConnectionRefused(format!("pw-cat spawn: {e}")))?;
-            child
-                .stdin
-                .as_mut()
-                .expect("piped stdin")
-                .write_all(&crate::audio::wav_stream_header(44100, 2))
-                .map_err(|e| SinkError::OnWrite(format!("wav header: {e}")))?;
             self.child = Some(child);
         }
         Ok(())

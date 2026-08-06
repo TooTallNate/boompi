@@ -255,15 +255,38 @@ impl App {
         self.source_cmds.lock().unwrap().insert(kind, tx);
     }
 
+    /// A source reported the sender-side volume (AVRCP absolute volume,
+    /// AirPlay DACP): apply it to the system output and tell every UI.
+    #[cfg(target_os = "linux")]
+    pub async fn apply_external_volume(&self, level: f32) {
+        let level = level.clamp(0.0, 1.0);
+        if let Err(err) = crate::audio::set_system_volume(level).await {
+            tracing::warn!(%err, "failed to set system volume");
+        }
+        self.shared.write().await.volume = level;
+        self.broadcast(ServerMessage::Volume { level });
+    }
+
     /// Route a command to the active source's channel. Volume goes to the
     /// Bluetooth/audio path regardless of source (it owns system volume and
-    /// AVRCP sync); transport goes to whoever is actually playing.
+    /// AVRCP sync) — and *additionally* to the active non-Bluetooth source,
+    /// so the sender's own slider follows (AirPlay DACP `SetAirplayVolume`,
+    /// Spotify Connect `Spirc::set_volume`); transport goes to whoever is
+    /// actually playing.
     async fn forward_to_source(&self, cmd: SourceCommand) -> bool {
+        let active = self.shared.read().await.source.active;
         let target = match cmd {
             SourceCommand::SetVolume(_) => Some(SourceKind::Bluetooth),
-            _ => self.shared.read().await.source.active,
+            _ => active,
         };
         let guard = self.source_cmds.lock().unwrap();
+        if let SourceCommand::SetVolume(level) = cmd {
+            if let Some(kind) = active.filter(|k| *k != SourceKind::Bluetooth) {
+                if let Some(tx) = guard.get(&kind) {
+                    let _ = tx.send(SourceCommand::SetVolume(level));
+                }
+            }
+        }
         let tx = target
             .and_then(|kind| guard.get(&kind))
             .or_else(|| guard.get(&SourceKind::Bluetooth));
