@@ -129,13 +129,23 @@ BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 # Pi 4 box has no USB dongle — v1 used the onboard radio.
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
-# UI runtime deps (Slint linuxkms, software renderer for now)
+# UI runtime deps (Slint linuxkms + Skia GPU renderer: EGL/GLES on
+# KMS/GBM via mesa V3D — smooth 60fps, border-radius clipping, drop
+# shadows and color emoji, none of which the software renderer does).
 BR2_PACKAGE_LIBINPUT=y
 BR2_PACKAGE_LIBXKBCOMMON=y
 BR2_PACKAGE_FONTCONFIG=y
+BR2_PACKAGE_MESA3D=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_V3D=y
+BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_VC4=y
+BR2_PACKAGE_MESA3D_GBM=y
+BR2_PACKAGE_MESA3D_OPENGL_EGL=y
+BR2_PACKAGE_MESA3D_OPENGL_ES=y
 
-# Dev access
+# Dev access + bench quality-of-life
 BR2_PACKAGE_OPENSSH=y
+BR2_PACKAGE_VIM=y
+BR2_PACKAGE_HTOP=y
 
 # Filesystem / image
 BR2_TARGET_ROOTFS_EXT2=y

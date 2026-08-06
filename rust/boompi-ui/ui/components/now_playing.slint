@@ -50,6 +50,16 @@ export component NowPlaying inherits VerticalLayout {
         spacing: 24px;
 
         // Album art (AVRCP cover art via boompid; note icon when absent).
+        // The glow needs to live on an outer rectangle: drop shadows and
+        // `clip: true` don't combine on one element.
+        Rectangle {
+            width: 180px;
+            height: 180px;
+            border-radius: 12px;
+            drop-shadow-color: Theme.accent.transparentize(0.6);
+            drop-shadow-blur: 28px;
+            drop-shadow-offset-x: 0;
+            drop-shadow-offset-y: 0;
         Rectangle {
             width: 180px;
             height: 180px;
@@ -69,6 +79,7 @@ export component NowPlaying inherits VerticalLayout {
                 height: 64px;
                 icon-color: Theme.faint;
             }
+        }
         }
 
         VerticalLayout {

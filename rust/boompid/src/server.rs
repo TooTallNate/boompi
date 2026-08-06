@@ -185,7 +185,20 @@ async fn api_wifi_action(
     #[cfg(target_os = "linux")]
     {
         let result = match &action {
-            WifiAction::Connect { ssid, psk } => crate::wifi::connect(ssid, psk.as_deref()).await,
+            WifiAction::Connect { ssid, psk } => {
+                let res = crate::wifi::connect(ssid, psk.as_deref()).await;
+                // Joining from the captive portal tears the hotspot down
+                // (single radio). If the join failed while still in
+                // first-boot setup, bring the hotspot back so the phone
+                // auto-rejoins and the user can retry the password.
+                if res.is_err() && app.snapshot().await.setup.required {
+                    let name = app.speaker_name().await;
+                    if let Err(err) = crate::wifi::start_ap(&name).await {
+                        tracing::warn!(%err, "failed to restore onboarding AP after join failure");
+                    }
+                }
+                res
+            }
             WifiAction::Forget { name } => crate::wifi::forget(name).await,
             WifiAction::Radio { enabled } => crate::wifi::set_radio(*enabled).await,
             WifiAction::Ap { enabled: true } => {

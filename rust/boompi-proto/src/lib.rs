@@ -166,6 +166,11 @@ pub struct Settings {
     /// When a source provides no album art, look it up online
     /// (iTunes Search / Cover Art Archive) by artist+album.
     pub online_art_fallback: bool,
+    /// Advertised AirPlay device model (mDNS `am=`/`model=`): senders pick
+    /// their AirPlay-picker icon from it. Empty = shairport default
+    /// (generic speaker). E.g. "AudioAccessory5,1" shows a HomePod mini.
+    #[serde(default)]
+    pub airplay_model: String,
 }
 
 /// Partial settings update; `None` fields are left unchanged.
@@ -178,6 +183,8 @@ pub struct SettingsPatch {
     pub name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<Theme>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub airplay_model: Option<String>,
 }
 
 /// First-boot setup state.
@@ -296,6 +303,10 @@ pub enum ClientMessage {
     },
     SetSettings(SettingsPatch),
     Setup(SetupCommand),
+    /// Wipe all persistent state (config, Wi-Fi, Bluetooth pairings,
+    /// caches) and reboot into first-boot setup. The OS slots are
+    /// untouched — this is a data reset, not a reflash.
+    FactoryReset,
 }
 
 // ---------------------------------------------------------------------------

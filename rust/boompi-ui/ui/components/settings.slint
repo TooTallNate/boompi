@@ -32,7 +32,12 @@ component Row inherits Rectangle {
             }
         }
         Rectangle { }
-        @children
+        // Center fixed-height controls (buttons, toggles) vertically in
+        // the row instead of letting the layout pin them to the top.
+        VerticalLayout {
+            alignment: center;
+            @children
+        }
     }
 }
 

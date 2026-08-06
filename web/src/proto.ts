@@ -4,12 +4,16 @@
 export type Theme = "dark" | "light";
 
 export interface Settings {
+  /** Advertised AirPlay model — senders pick their picker icon from it.
+      "" = generic speaker. */
+  airplay_model: string;
   name: string;
   theme: Theme;
   online_art_fallback: boolean;
 }
 
 export interface SettingsPatch {
+  airplay_model?: string;
   name?: string;
   theme?: Theme;
   online_art_fallback?: boolean;
@@ -71,4 +75,5 @@ export type ServerMessage =
 /** Client → server WebSocket messages used by the settings UI. */
 export type ClientMessage =
   | { type: "pairing"; action: PairingAction }
-  | { type: "bt_device"; address: string; action: BtDeviceAction };
+  | { type: "bt_device"; address: string; action: BtDeviceAction }
+  | { type: "factory_reset" };

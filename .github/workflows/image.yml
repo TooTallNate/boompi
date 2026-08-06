@@ -131,18 +131,37 @@ jobs:
           export RUSTFLAGS="-L $STAGING/usr/lib"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid
+          # pi4: Skia GPU renderer (GLES/EGL via mesa V3D — smooth frames,
+          # rounded art, drop shadows, color emoji). The Skia prebuilt is
+          # C++ built against GNU libstdc++; zig substitutes its own libc++
+          # for `-lstdc++`, so link the real staging libstdc++ by path.
+          # pi3: software renderer (no GL stack in that image yet).
+          if [ "$BOARD" = pi4 ]; then
+            UI_FEATURES=kms-skia
+            LIBSTDCPP="$(find -L "$STAGING" -name 'libstdc++.so.6' | head -1)"
+            export RUSTFLAGS="$RUSTFLAGS -C link-arg=$LIBSTDCPP"
+          else
+            UI_FEATURES=kms
+          fi
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" \
-            -p boompi-ui --no-default-features --features kms
+            -p boompi-ui --no-default-features --features "$UI_FEATURES"
 
       - name: Inject binaries + emoji font into the image overlay
         run: |
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
-          # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
-          curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \
-            "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+          if [ "$BOARD" = pi4 ]; then
+            # Color Noto Emoji (Skia renderer; rootfs-overlay-pi4 fontconfig
+            # prefers "Noto Color Emoji").
+            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf"
+          else
+            # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
+            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \
+              "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
+          fi
 
       - name: Build image (pass 2, picks up the overlay)
         run: make -C "$OUTPUT" -j"$(nproc)"

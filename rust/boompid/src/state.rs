@@ -116,6 +116,7 @@ impl App {
             name: cfg.name.clone(),
             theme: cfg.settings.theme,
             online_art_fallback: cfg.settings.online_art_fallback,
+            airplay_model: cfg.settings.airplay_model.clone(),
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -197,6 +198,7 @@ impl App {
             cfg.name = s.settings.name.clone();
             cfg.settings.theme = s.settings.theme;
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
+            cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.setup_complete = !s.setup.required;
         }
         match crate::config::save(&cfg, path) {
@@ -427,6 +429,7 @@ impl App {
                 }
             }
             ClientMessage::SetSettings(patch) => {
+                let mut airplay_model_changed = false;
                 let settings = {
                     let mut s = self.shared.write().await;
                     if let Some(v) = patch.online_art_fallback {
@@ -434,6 +437,11 @@ impl App {
                     }
                     if let Some(theme) = patch.theme {
                         s.settings.theme = theme;
+                    }
+                    if let Some(model) = patch.airplay_model {
+                        let model = model.trim().to_string();
+                        airplay_model_changed = model != s.settings.airplay_model;
+                        s.settings.airplay_model = model;
                     }
                     s.settings.clone()
                 };
@@ -443,9 +451,10 @@ impl App {
                     None => false,
                 };
                 self.persist_config().await;
-                if renamed {
-                    // Sources re-announce under the new name (BT alias is
-                    // updated in place; AirPlay/Spotify restart discovery).
+                if renamed || airplay_model_changed {
+                    // Sources re-announce under the new name/model (BT
+                    // alias is updated in place; AirPlay/Spotify restart
+                    // discovery — the AirPlay conf embeds the model).
                     self.cfg_generation.send_modify(|g| *g += 1);
                 }
             }
@@ -485,6 +494,30 @@ impl App {
                 if renamed {
                     self.cfg_generation.send_modify(|g| *g += 1);
                 }
+            }
+            ClientMessage::FactoryReset => {
+                tracing::warn!("factory reset requested — wiping /data and rebooting");
+                #[cfg(target_os = "linux")]
+                tokio::spawn(async {
+                    // Stop the state owners first so they can't flush their
+                    // in-memory view back over the wipe during shutdown.
+                    // Contents only: /data/bluetooth is a live bind-mount
+                    // source and the dirs are recreated by tmpfiles.d on
+                    // the next boot anyway.
+                    let _ = tokio::process::Command::new("sh")
+                        .arg("-c")
+                        .arg(concat!(
+                            "systemctl stop bluetooth NetworkManager ",
+                            "var-lib-bluetooth.mount; ",
+                            "rm -rf /data/boompi.toml /data/cache ",
+                            "/data/bluetooth/* /data/nm-connections/*; ",
+                            "sync; systemctl reboot",
+                        ))
+                        .status()
+                        .await;
+                });
+                #[cfg(not(target_os = "linux"))]
+                tracing::warn!("factory reset is a no-op off-appliance (--sim)");
             }
         }
     }

@@ -109,6 +109,8 @@ pub struct SettingsConfig {
     pub online_art_fallback: bool,
     /// Panel UI theme ("dark" / "light").
     pub theme: boompi_proto::Theme,
+    /// Advertised AirPlay device model ("" = shairport default).
+    pub airplay_model: String,
 }
 
 /// Load config from `path`, falling back to a read-only `seed` when the

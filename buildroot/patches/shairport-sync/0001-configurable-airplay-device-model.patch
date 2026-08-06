@@ -1,0 +1,112 @@
+Make the advertised AirPlay device model configurable
+
+shairport-sync hardcodes "Shairport Sync" as the model in the mDNS TXT
+records (am=/model=) and the AirPlay 2 /info plist. Senders derive the
+device icon in their AirPlay picker from this string, so a configurable
+model lets the speaker choose its icon (e.g. "AudioAccessory5,1" shows
+a HomePod mini). New option: general.airplay_device_model, default
+unchanged.
+
+Upstream has declined an option for this; carried locally by boompi.
+
+--- a/common.h	2025-01-31 06:57:31
++++ b/common.h	2026-08-06 02:40:48
+@@ -134,6 +134,8 @@
+   char *password;
+   char *service_name; // the name for the shairport service, e.g. "Shairport Sync Version %v running
+                       // on host %h"
++  char *airplay_device_model; // advertised model ("am="/"model=" TXT records and the AirPlay 2
++                              // /info plist). Senders pick their device icon from this.
+ 
+ #ifdef CONFIG_PA
+   char *pa_server;           // the pulseaudio server address that Shairport Sync will play on.
+--- a/shairport.c	2025-01-31 06:57:31
++++ b/shairport.c	2026-08-06 02:40:48
+@@ -588,6 +588,13 @@
+       if (config_lookup_string(config.cfg, "general.name", &str)) {
+         raw_service_name = (char *)str;
+       }
++
++      /* Get the advertised AirPlay device model, e.g. "AudioAccessory5,1".
++         Senders derive the device icon shown in their AirPlay picker from
++         this; default is "Shairport Sync" (generic speaker icon). */
++      if (config_lookup_string(config.cfg, "general.airplay_device_model", &str)) {
++        config.airplay_device_model = (char *)str;
++      }
+ #ifdef CONFIG_LIBDAEMON
+       /* Get the Daemonize setting. */
+       config_set_lookup_bool(config.cfg, "sessioncontrol.daemonize_with_pid_file", &daemonisewith);
+--- a/rtsp.c	2025-01-31 06:57:31
++++ b/rtsp.c	2026-08-06 02:40:48
+@@ -282,7 +282,10 @@
+   else
+     txt_records[entry_number++] = "md=0,1,2";
+ #endif
+-  txt_records[entry_number++] = "am=Shairport Sync";
++  static char amString[272] = "";
++  snprintf(amString, sizeof(amString), "am=%s",
++           config.airplay_device_model ? config.airplay_device_model : "Shairport Sync");
++  txt_records[entry_number++] = amString;
+   txt_records[entry_number++] = "sf=0x4";
+   txt_records[entry_number++] = "tp=UDP";
+   txt_records[entry_number++] = "vn=65537";
+@@ -294,7 +297,10 @@
+   // here, just replicate what happens in mdns.h when using those #defines
+   txt_records[entry_number++] = "sf=0x4";
+   txt_records[entry_number++] = firmware_version;
+-  txt_records[entry_number++] = "am=ShairportSync";
++  static char amStringClassic[272] = "";
++  snprintf(amStringClassic, sizeof(amStringClassic), "am=%s",
++           config.airplay_device_model ? config.airplay_device_model : "ShairportSync");
++  txt_records[entry_number++] = amStringClassic;
+   txt_records[entry_number++] = "vs=105.1";
+   txt_records[entry_number++] = "tp=TCP,UDP";
+   txt_records[entry_number++] = "vn=65537";
+@@ -338,7 +344,10 @@
+   secondary_txt_records[entry_number++] = "acl=0";
+   secondary_txt_records[entry_number++] = "rsf=0x0";
+   secondary_txt_records[entry_number++] = firmware_version;
+-  secondary_txt_records[entry_number++] = "model=Shairport Sync";
++  static char modelString[272] = "";
++  snprintf(modelString, sizeof(modelString), "model=%s",
++           config.airplay_device_model ? config.airplay_device_model : "Shairport Sync");
++  secondary_txt_records[entry_number++] = modelString;
+   snprintf(piString, sizeof(piString), "pi=%s", config.airplay_pi);
+   secondary_txt_records[entry_number++] = piString;
+   if ((conn != NULL) && (conn->airplay_gid != 0)) {
+@@ -1749,7 +1758,10 @@
+       if (add_pstring_to_malloc("flags=0x4", &qualifier_response_data,
+                                 &qualifier_response_data_length) == 0)
+         debug(1, "Problem");
+-      if (add_pstring_to_malloc("model=Shairport Sync", &qualifier_response_data,
++      char modelPString[272];
++      snprintf(modelPString, sizeof(modelPString), "model=%s",
++               config.airplay_device_model ? config.airplay_device_model : "Shairport Sync");
++      if (add_pstring_to_malloc(modelPString, &qualifier_response_data,
+                                 &qualifier_response_data_length) == 0)
+         debug(1, "Problem");
+       if (add_pstring_to_malloc("manufacturer=", &qualifier_response_data,
+@@ -1792,7 +1804,10 @@
+       plist_dict_set_item(response_plist, "name", plist_new_string(config.service_name));
+       char *vs = get_version_string();
+       //      plist_dict_set_item(response_plist, "model", plist_new_string(vs));
+-      plist_dict_set_item(response_plist, "model", plist_new_string("Shairport Sync"));
++      plist_dict_set_item(response_plist, "model",
++                        plist_new_string(config.airplay_device_model
++                                             ? config.airplay_device_model
++                                             : "Shairport Sync"));
+       free(vs);
+       // pkString_make(pkString, sizeof(pkString), config.airplay_device_id);
+       // plist_dict_set_item(response_plist, "pk", plist_new_string(pkString));
+@@ -1822,7 +1837,10 @@
+     plist_dict_set_item(response_plist, "name", plist_new_string(config.service_name));
+     char *vs = get_version_string();
+     // plist_dict_set_item(response_plist, "model", plist_new_string(vs));
+-    plist_dict_set_item(response_plist, "model", plist_new_string("Shairport Sync"));
++    plist_dict_set_item(response_plist, "model",
++                        plist_new_string(config.airplay_device_model
++                                             ? config.airplay_device_model
++                                             : "Shairport Sync"));
+     free(vs);
+     // pkString_make(pkString, sizeof(pkString), config.airplay_device_id);
+     // plist_dict_set_item(response_plist, "pk", plist_new_string(pkString));

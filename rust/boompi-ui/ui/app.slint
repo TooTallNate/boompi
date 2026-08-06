@@ -93,13 +93,24 @@ export component AppWindow inherits Window {
     callback pairing-reject();
 
     // ---- background visualizer --------------------------------------------
+    // Synthwave-ish: rounded bars with an accent→base vertical gradient and
+    // a soft neon glow. The glow only renders on the Skia (GPU) backend;
+    // the software renderer skips drop shadows, which is fine — it can't
+    // sustain the fill rate for this anyway.
     HorizontalLayout {
         spacing: 6px;
         for level in root.bars: Rectangle {
             Rectangle {
                 y: parent.height - self.height;
                 height: parent.height * level;
-                background: Theme.bar;
+                border-radius: 3px;
+                background: @linear-gradient(180deg,
+                    Theme.accent.transparentize(0.35) 0%,
+                    Theme.bar 55%);
+                drop-shadow-color: Theme.accent.transparentize(0.75);
+                drop-shadow-blur: 14px;
+                drop-shadow-offset-x: 0;
+                drop-shadow-offset-y: 0;
             }
         }
     }

@@ -58,6 +58,7 @@ export default function App() {
             <NameSection settings={settings} onSaved={applySettings} />
             <AppearanceSection settings={settings} onSaved={applySettings} />
             <ArtSection settings={settings} onSaved={applySettings} />
+            <AirplayIconSection settings={settings} onSaved={applySettings} />
           </>
         )}
 
@@ -72,6 +73,7 @@ export default function App() {
 
         <WifiSection />
         <ClockSection />
+        <DangerSection />
       </main>
     </div>
   );
@@ -174,15 +176,17 @@ function WifiSection() {
 
           {wifi.ap_active && (
             <p className="py-1.5 text-sm text-dim">
-              You’re connected through the speaker’s setup hotspot, so nearby
-              networks can’t be scanned right now. Skip this step and connect
-              the speaker to Wi-Fi later from this page — over your home
-              network or Ethernet.
+              You’re connected through the speaker’s setup hotspot. The
+              networks below were found just before the hotspot started.
+              Joining one switches the hotspot off while the speaker
+              connects — rejoin your normal Wi-Fi afterwards. If the
+              password is wrong, the hotspot comes back within a minute so
+              you can retry. You can also skip this and set up Wi-Fi later
+              from this page over your home network or Ethernet.
             </p>
           )}
 
           {wifi.enabled &&
-            !wifi.ap_active &&
             wifi.networks.map((n) => (
               <div
                 key={n.ssid}
@@ -712,6 +716,98 @@ function ArtSection({ settings, onSaved }: SectionProps) {
         />
       </div>
       <StatusText status={status} />
+    </Section>
+  );
+}
+
+const AIRPLAY_MODELS: { label: string; value: string }[] = [
+  { label: "Generic speaker", value: "" },
+  { label: "HomePod mini", value: "AudioAccessory5,1" },
+  { label: "HomePod", value: "AudioAccessory1,1" },
+  { label: "Apple TV", value: "AppleTV3,2" },
+];
+
+function AirplayIconSection({ settings, onSaved }: SectionProps) {
+  const { status, save } = useSave(onSaved);
+  const preset = AIRPLAY_MODELS.some((m) => m.value === settings.airplay_model);
+
+  return (
+    <Section title="AirPlay device icon">
+      <p className="mb-2 text-sm text-dim">
+        Phones choose the icon in their AirPlay list from the advertised
+        model. Apple models mimic their product icons; anything else shows
+        the generic speaker. Senders may need to rediscover the speaker
+        (toggle Wi-Fi or wait a minute) after changing this.
+      </p>
+      <div className="flex items-center justify-between gap-3 py-1.5">
+        <span>Advertised model</span>
+        <select
+          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+          value={preset ? settings.airplay_model : "custom"}
+          onChange={(e) => {
+            if (e.target.value !== "custom") save({ airplay_model: e.target.value });
+          }}
+        >
+          {AIRPLAY_MODELS.map((m) => (
+            <option key={m.label} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+          {!preset && <option value="custom">Custom: {settings.airplay_model}</option>}
+        </select>
+      </div>
+      <StatusText status={status} />
+    </Section>
+  );
+}
+
+function DangerSection() {
+  const [arm, setArm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function reset() {
+    setBusy(true);
+    try {
+      await sendCommand({ type: "factory_reset" });
+    } catch {
+      /* the box reboots out from under the request */
+    }
+  }
+
+  return (
+    <Section title="Danger zone">
+      {!arm ? (
+        <button
+          className="rounded-lg border border-err/50 px-4 py-2 text-sm text-err hover:bg-err/10"
+          onClick={() => setArm(true)}
+        >
+          Factory reset…
+        </button>
+      ) : (
+        <div className="rounded-lg border border-err/40 bg-err/10 p-3">
+          <p className="text-sm">
+            This erases the speaker name, Wi-Fi networks, Bluetooth pairings,
+            caches and settings, then reboots into first-boot setup. The OS
+            itself is untouched.
+          </p>
+          <div className="mt-3 flex gap-3">
+            <button
+              className="rounded-lg bg-err px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-40"
+              disabled={busy}
+              onClick={reset}
+            >
+              {busy ? "Resetting…" : "Erase everything & reboot"}
+            </button>
+            <button
+              className="rounded-lg border border-line px-4 py-2 text-sm text-dim hover:text-fg"
+              disabled={busy}
+              onClick={() => setArm(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </Section>
   );
 }

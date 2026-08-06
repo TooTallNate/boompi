@@ -17,6 +17,11 @@ use tokio::process::Command;
 /// NM connection id (profile name) used for the onboarding access point.
 pub const AP_CONNECTION: &str = "boompi-ap";
 
+/// Last real scan results. A single radio can't scan while it hosts the
+/// onboarding hotspot, so the captive-portal Wi-Fi step serves this cache
+/// (refreshed just before the AP goes up) instead of an empty list.
+static SCAN_CACHE: std::sync::Mutex<Vec<WifiNetwork>> = std::sync::Mutex::new(Vec::new());
+
 #[derive(Debug, Default, Serialize)]
 pub struct WifiStatus {
     /// A Wi-Fi capable device exists.
@@ -135,7 +140,16 @@ pub async fn status(scan: bool) -> anyhow::Result<WifiStatus> {
             }
         }
         best.sort_by(|a, b| b.in_use.cmp(&a.in_use).then(b.signal.cmp(&a.signal)));
+        *SCAN_CACHE.lock().unwrap() = best.clone();
         st.networks = best;
+    } else if scan && st.enabled && st.ap_active {
+        // Hotspot up: serve the pre-AP scan (nothing is "in use" — the
+        // radio is busy being the hotspot).
+        let mut cached = SCAN_CACHE.lock().unwrap().clone();
+        for n in &mut cached {
+            n.in_use = false;
+        }
+        st.networks = cached;
     }
     Ok(st)
 }
@@ -178,6 +192,11 @@ pub async fn set_radio(enabled: bool) -> anyhow::Result<()> {
 /// Bring up the onboarding access point (open network, NM shared IPv4 —
 /// NM runs its own DHCP). Creates the profile on first use.
 pub async fn start_ap(ssid: &str) -> anyhow::Result<()> {
+    // Refresh the scan cache while the radio can still scan: the captive
+    // portal's Wi-Fi step shows these networks (see SCAN_CACHE).
+    if let Err(err) = status(true).await {
+        tracing::debug!(%err, "pre-AP scan failed (continuing)");
+    }
     let have_profile = nmcli(&["-t", "-f", "NAME", "con", "show"])
         .await?
         .lines()
