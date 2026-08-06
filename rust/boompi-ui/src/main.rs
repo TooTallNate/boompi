@@ -51,7 +51,13 @@ struct Cli {
 #[cfg(target_os = "linux")]
 fn register_emoji_fallback() {
     use slint::fontique_010::fontique;
-    for name in ["NotoColorEmoji.ttf", "NotoEmoji.ttf"] {
+    // Twemoji (COLRv0) first: it's the color format that renders through
+    // the prebuilt Skia + runtime registration. Noto Color Emoji (CBDT and
+    // COLRv1 flavors) loads but draws empty glyphs on this path, and the
+    // Debian build even corrupts glyph-run typeface selection; keep those
+    // out until the upstream story improves. Monochrome Noto is the
+    // outline fallback for software-rendered boards.
+    for name in ["TwemojiMozilla.ttf", "NotoEmoji.ttf"] {
         let path = std::path::Path::new("/usr/share/fonts").join(name);
         let Ok(bytes) = std::fs::read(&path) else {
             continue;

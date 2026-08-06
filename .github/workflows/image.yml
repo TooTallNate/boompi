@@ -153,10 +153,11 @@ jobs:
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
           if [ "$BOARD" = pi4 ]; then
-            # Color Noto Emoji (Skia renderer; rootfs-overlay-pi4 fontconfig
-            # prefers "Noto Color Emoji").
-            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
-              "https://github.com/google/fonts/raw/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf"
+            # Color emoji for the Skia renderer. Twemoji (COLRv0) is the
+            # format that renders via Slint's runtime font registration;
+            # Noto Color Emoji (CBDT/COLRv1) draws empty glyphs there.
+            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/TwemojiMozilla.ttf" \
+              "https://github.com/mozilla/twemoji-colr/releases/download/v0.7.0/Twemoji.Mozilla.ttf"
           else
             # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
             curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \
