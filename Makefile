@@ -26,8 +26,8 @@ sim:
 ui:
 	cargo run --manifest-path $(MANIFEST) -p boompi-ui -- --backend $(BACKEND)
 
-# Rebuild the settings web UI (web/dist is committed and embedded into
-# boompid, so this only needs to run when web/src changes).
+# Build the settings web UI (web/dist is a build artifact, embedded into
+# boompid via rust-embed; cargo builds of boompid need it present).
 web:
 	cd web && pnpm install --frozen-lockfile && pnpm build
 

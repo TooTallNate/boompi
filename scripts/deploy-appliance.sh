@@ -62,6 +62,10 @@ export PKG_CONFIG_SYSROOT_DIR="$SYS"
 export PKG_CONFIG_LIBDIR="$SYS/usr/lib/pkgconfig"
 export RUSTFLAGS="-L $SYS/usr/lib ${RUSTFLAGS:-}"
 
+# web/dist is a build artifact (not committed); boompid embeds it.
+echo "== building web/dist =="
+(cd "$REPO_ROOT/web" && pnpm install --frozen-lockfile --silent && pnpm build)
+
 echo "== cross-building boompid (embeds web/dist) + boompi-ui =="
 cargo zigbuild --manifest-path "$REPO_ROOT/rust/Cargo.toml" \
     --target "$TARGET.$GLIBC" --release -p boompid

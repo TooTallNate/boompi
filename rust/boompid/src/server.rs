@@ -15,8 +15,8 @@ use axum::{Json, Router};
 use boompi_proto::{ClientMessage, Hello, ServerMessage, SettingsPatch, PROTO_VERSION};
 use std::net::SocketAddr;
 
-/// The Vite/React settings SPA (`web/dist`, committed prebuilt so cargo
-/// and Buildroot builds don't need a Node toolchain; `make web` refreshes).
+/// The Vite/React settings SPA (`web/dist`, a build artifact: run
+/// `make web` before building boompid; CI's shared `web` job provides it).
 #[derive(rust_embed::Embed)]
 #[folder = "../../web/dist"]
 struct WebAssets;

@@ -8,8 +8,10 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-# dist is committed: boompid embeds it (rust-embed), so cargo/Buildroot
-# builds never need Node. Regenerate with `make web`.
+# Build artifact: boompid embeds it (rust-embed). Local builds run
+# `make web` first (deploy-appliance.sh does this automatically); CI
+# builds it in the shared `web` job and the image jobs download it.
+dist
 dist-ssr
 *.local
 

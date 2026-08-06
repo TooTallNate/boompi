@@ -17,6 +17,7 @@ on:
     # Docs-only commits shouldn't trigger multi-hour image builds.
     paths:
       - "rust/**"
+      - "web/**"
       - "buildroot/**"
       - "scripts/**"
       - ".github/workflows/image.yml"
@@ -34,7 +35,42 @@ env:
   BR_VERSION: "2026.02"
 
 jobs:
+  # web/dist is a build artifact (boompid embeds it via rust-embed).
+  # Build it once here; both board jobs download it before the Rust
+  # cross-build.
+  web:
+    name: web
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build web UI
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Upload web dist
+        uses: actions/upload-artifact@v7
+        with:
+          name: boompi-web-dist
+          path: web/dist
+          if-no-files-found: error
+          retention-days: 14
+
   image:
+    needs: web
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +144,13 @@ jobs:
           # The pip package pulls in `ziglang` (zig itself) as a dependency;
           # pipx isolation would hide it from cargo-zigbuild's discovery.
           pip install --break-system-packages cargo-zigbuild
+
+      # boompid's rust-embed reads web/dist at compile time.
+      - name: Fetch web dist
+        uses: actions/download-artifact@v7
+        with:
+          name: boompi-web-dist
+          path: web/dist
 
       - name: Cross-build boompid + boompi-ui against staging
         run: |
