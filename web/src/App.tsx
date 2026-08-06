@@ -745,20 +745,23 @@ function ArtSection({ settings, onSaved }: SectionProps) {
   );
 }
 
-// Values are mDNS `model=` strings sniffed from real devices. Senders
-// resolve Apple model strings to product icons; the bookshelf icon is
-// keyed off AirPlay feature bit 26 (ThirdPartySpeaker), which boompid
-// advertises alongside any non-Apple model. The empty default draws
-// the plain speaker glyph.
+// Values are mDNS `model=` strings. Senders resolve Apple model strings
+// to product icons (only the HomePods and Apple TV have any; AirPort,
+// Mac, iPhone and Vision models all draw the generic glyph). Non-Apple
+// models draw the bookshelf icon via feature bit 26 (ThirdPartySpeaker)
+// or the TV icon via bits 26+49 (ThirdPartyTV); boompid advertises the
+// bits for non-Apple models ("TV" in the name selects the TV bits).
 const AIRPLAY_MODELS: { label: string; value: string }[] = [
   { label: "Generic speaker", value: "" },
   { label: "Bookshelf speaker", value: "WiiM Amp" },
+  { label: "TV", value: "HiSense TV" },
   { label: "HomePod mini", value: "AudioAccessory5,1" },
   { label: "HomePod", value: "AudioAccessory1,1" },
-  { label: "Apple TV", value: "AppleTV3,2" },
+  { label: "Apple TV", value: "AppleTV14,1" },
 ];
 
-// Hand-drawn approximations of the icons iOS shows for each model.
+// Approximations of the icons iOS draws for each model, matched against
+// picker screenshots.
 function AirplayModelIcon({ model }: { model: string }) {
   const stroke = {
     fill: "none",
@@ -769,49 +772,68 @@ function AirplayModelIcon({ model }: { model: string }) {
   } as const;
   let art: ReactNode;
   switch (model) {
-    case "WiiM Amp": // bookshelf speaker: cabinet, tweeter, woofer
+    case "WiiM Amp": // bookshelf: squarish cabinet, tweeter dot, woofer ring
       art = (
         <>
-          <rect x="7" y="2.75" width="10" height="18.5" rx="2" {...stroke} />
-          <circle cx="12" cy="7.75" r="1.5" {...stroke} />
-          <circle cx="12" cy="15" r="3.25" {...stroke} />
+          <rect x="6" y="3.5" width="12" height="17" rx="2.5" {...stroke} />
+          <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="14.5" r="2.9" {...stroke} />
         </>
       );
       break;
-    case "AudioAccessory5,1": // HomePod mini: ball on a flat base
+    case "HiSense TV": // TV: display with a bottom chin line
+      art = (
+        <>
+          <rect x="3" y="5.5" width="18" height="12.5" rx="2" {...stroke} />
+          <path d="M8.5 21h7" {...stroke} />
+        </>
+      );
+      break;
+    case "AudioAccessory5,1": // HomePod mini: ball, flattened bottom
+      art = (
+        <path
+          d="M5.25 12.5a6.75 6.75 0 0 1 13.5 0c0 3.1-2 5.8-4.5 6.75h-4.5c-2.5-.95-4.5-3.65-4.5-6.75Z"
+          {...stroke}
+        />
+      );
+      break;
+    case "AudioAccessory1,1": // HomePod: cylinder, domed top, mesh hints
       art = (
         <>
           <path
-            d="M5.5 12a6.5 6.5 0 0 1 13 0c0 2.5-1.4 4.7-3.5 5.8h-6c-2.1-1.1-3.5-3.3-3.5-5.8Z"
+            d="M6.5 8.5c0-3.2 2.4-5.25 5.5-5.25s5.5 2.05 5.5 5.25v9c0 2-1.4 3.25-3.25 3.25h-4.5c-1.85 0-3.25-1.25-3.25-3.25v-9Z"
             {...stroke}
           />
-          <path d="M8 20.75h8" {...stroke} />
+          <path d="M9 6.75c1.7-1.3 4.3-1.3 6 0" {...stroke} />
         </>
       );
       break;
-    case "AudioAccessory1,1": // HomePod: tall rounded cylinder + mesh hint
+    case "AppleTV14,1": // Apple TV: rounded badge with the "tv" wordmark
       art = (
         <>
-          <rect x="7" y="2.75" width="10" height="18.5" rx="5" {...stroke} />
-          <path d="M9 6.5c1.6-1.1 4.4-1.1 6 0" {...stroke} />
-          <path d="M9 17.5c1.6 1.1 4.4 1.1 6 0" {...stroke} />
+          <rect x="3" y="5" width="18" height="14" rx="3.5" {...stroke} />
+          <text
+            x="12"
+            y="15.4"
+            textAnchor="middle"
+            fontSize="8"
+            fontWeight="600"
+            fill="currentColor"
+            stroke="none"
+            fontFamily="-apple-system, system-ui, sans-serif"
+          >
+            tv
+          </text>
         </>
       );
       break;
-    case "AppleTV3,2": // Apple TV: the puck with its status LED
+    default: // generic: speaker with two sound waves
       art = (
         <>
-          <rect x="4.5" y="7.5" width="15" height="9" rx="2.5" {...stroke} />
-          <circle cx="16.25" cy="13.75" r="0.4" fill="currentColor" stroke="none" />
+          <path d="M3.75 9.5v5h3l4.5 4V5.5l-4.5 4h-3Z" {...stroke} />
+          <path d="M14.5 9.75a3.2 3.2 0 0 1 0 4.5" {...stroke} />
+          <path d="M17.25 7.5a6.4 6.4 0 0 1 0 9" {...stroke} />
         </>
-      );
-      break;
-    default: // generic speaker cone
-      art = (
-        <path
-          d="M4.75 9.5v5h3.5l5 4.25V5.25l-5 4.25h-3.5Z M16.5 9.25a4 4 0 0 1 0 5.5"
-          {...stroke}
-        />
       );
   }
   return (
@@ -832,7 +854,7 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
         model. Senders may need to rediscover the speaker (toggle Wi-Fi or
         wait a minute) after changing this.
       </p>
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
         {AIRPLAY_MODELS.map((m) => {
           const selected = settings.airplay_model === m.value;
           return (

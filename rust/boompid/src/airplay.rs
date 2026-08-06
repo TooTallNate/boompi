@@ -283,23 +283,26 @@ fn write_config(name: &str, airplay_model: &str) -> anyhow::Result<()> {
     // Advertised model → the sender's AirPlay-picker icon (patched-in
     // shairport options; see buildroot/patches/shairport-sync). Empty =
     // shairport's default (generic speaker icon). Senders resolve Apple
-    // model strings to product icons; for anything else the bookshelf
-    // third-party-speaker icon needs feature bit 26 advertised too, so
-    // claim it for non-Apple models (Apple strings win over the bit).
+    // model strings to product icons; anything else needs feature bit 26
+    // (ThirdPartySpeaker → bookshelf icon), plus bit 49 for the TV icon
+    // (ThirdPartyTV). Apple strings win over the bits, so advertising
+    // them only matters for non-Apple models.
     let model_line = if airplay_model.is_empty() {
         String::new()
     } else {
         let apple_model =
             airplay_model.starts_with("AudioAccessory") || airplay_model.starts_with("AppleTV");
-        let third_party = if apple_model {
+        let features_or = if apple_model {
             ""
+        } else if airplay_model.to_ascii_uppercase().contains("TV") {
+            "  airplay_features_or = \"0x2000004000000\";\n" // bits 26 + 49
         } else {
-            "  airplay_third_party_speaker = \"yes\";\n"
+            "  airplay_features_or = \"0x4000000\";\n" // bit 26
         };
         format!(
             "  airplay_device_model = \"{}\";\n{}",
             airplay_model.replace('\\', "\\\\").replace('"', "\\\""),
-            third_party
+            features_or
         )
     };
     let conf = format!(

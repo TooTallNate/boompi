@@ -1,0 +1,38 @@
+Make extra AirPlay feature bits advertisable
+
+Senders pick the AirPlay-picker icon like this (verified empirically
+with synthetic mDNS registrations against iOS):
+
+- Apple model strings map to product icons and win over feature bits
+  (AudioAccessory5,1 / 1,1 / 6,1 and AppleTV models each have icons;
+  AirPort, Mac, iPhone and RealityDevice models do not - they draw the
+  plain generic speaker glyph in the audio picker).
+- Otherwise bit 26 (Authentication_8, MFi) classifies the receiver as
+  ThirdPartySpeaker (bookshelf icon; Sonos and WiiM advertise it), and
+  bit 26 + bit 49 (SupportsAirPlayVideoV2) as ThirdPartyTV (TV icon).
+  Bit 0 (video v1) does not trigger the TV classification.
+
+shairport-sync hardcodes its features mask. New option:
+general.airplay_features_or, a hex bitmask OR'd into the mask; default
+unchanged. Companion to 0001 (general.airplay_device_model); carried
+locally by boompi.
+
+--- a/shairport.c	2026-08-06 02:40:48
++++ b/shairport.c	2026-08-06 16:20:00
+@@ -595,6 +595,16 @@
+       if (config_lookup_string(config.cfg, "general.airplay_device_model", &str)) {
+         config.airplay_device_model = (char *)str;
+       }
++
++#ifdef CONFIG_AIRPLAY_2
++      /* Extra AirPlay feature bits (hex, OR'd into the advertised mask).
++         Bit 26 (Authentication_8, MFi) draws the third-party bookshelf
++         speaker icon in senders' pickers; bits 26+49 draw the TV icon.
++         Apple model strings still take precedence over the bits. */
++      if (config_lookup_string(config.cfg, "general.airplay_features_or", &str)) {
++        config.airplay_features |= strtoull(str, NULL, 16);
++      }
++#endif
+ #ifdef CONFIG_LIBDAEMON
+       /* Get the Daemonize setting. */
+       config_set_lookup_bool(config.cfg, "sessioncontrol.daemonize_with_pid_file", &daemonisewith);
