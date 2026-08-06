@@ -96,7 +96,11 @@ async fn main() -> anyhow::Result<()> {
                 let app = app.clone();
                 tokio::spawn(async move {
                     match audio::get_system_volume().await {
-                        Ok(level) => app.shared.write().await.volume = level,
+                        Ok(level) => {
+                            let mut s = app.shared.write().await;
+                            s.volume = level;
+                            s.sink_volume = level;
+                        }
                         Err(err) => tracing::warn!(%err, "could not read system volume"),
                     }
                 });

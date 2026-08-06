@@ -99,7 +99,15 @@ const ART_CACHE_CAP: usize = 16;
 pub struct Shared {
     pub source: SourceInfo,
     pub track: Option<Track>,
+    /// The user-facing volume: what the sliders show. Equals the sink
+    /// volume for locally-scaled sources (Spotify, AirPlay); mirrors the
+    /// phone's slider for Bluetooth, where iOS scales the PCM itself.
     pub volume: f32,
+    /// The actual PipeWire sink volume. Pinned to 1.0 while Bluetooth is
+    /// the active source (the samples already carry the phone's volume);
+    /// the visualizer offsets its bars by this, not `volume`, so the
+    /// display always shows what is audibly playing.
+    pub sink_volume: f32,
     pub battery: Option<Battery>,
     pub pairing: Pairing,
     pub bt_devices: Vec<BtDevice>,
@@ -128,6 +136,7 @@ impl App {
             started: Instant::now(),
             shared: RwLock::new(Shared {
                 volume: 0.5,
+                sink_volume: 0.5,
                 settings,
                 setup,
                 ..Shared::default()
@@ -257,14 +266,28 @@ impl App {
         self.source_cmds.lock().unwrap().insert(kind, tx);
     }
 
-    /// A source reported the sender-side volume (AVRCP absolute volume,
-    /// AirPlay DACP): apply it to the system output and tell every UI.
+    /// A source reported the sender-side volume (AirPlay DACP, Spotify
+    /// Connect): apply it to the system output and tell every UI.
     #[cfg(target_os = "linux")]
     pub async fn apply_external_volume(&self, level: f32) {
         let level = level.clamp(0.0, 1.0);
         if let Err(err) = crate::audio::set_system_volume(level).await {
             tracing::warn!(%err, "failed to set system volume");
         }
+        let mut s = self.shared.write().await;
+        s.volume = level;
+        s.sink_volume = level;
+        drop(s);
+        self.broadcast(ServerMessage::Volume { level });
+    }
+
+    /// A source reported a volume that is already applied inside the
+    /// audio it sends (iOS Bluetooth: the phone scales its PCM and the
+    /// AVRCP value is position sync only). Update the displayed volume
+    /// without touching the sink.
+    #[cfg(target_os = "linux")]
+    pub async fn apply_remote_volume_display(&self, level: f32) {
+        let level = level.clamp(0.0, 1.0);
         self.shared.write().await.volume = level;
         self.broadcast(ServerMessage::Volume { level });
     }

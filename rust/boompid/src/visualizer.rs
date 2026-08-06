@@ -89,7 +89,11 @@ async fn capture(app: &SharedApp) -> anyhow::Result<()> {
 
         if last_frame.elapsed() >= FRAME_INTERVAL {
             last_frame = tokio::time::Instant::now();
-            let volume = app.shared.read().await.volume;
+            // Offset by the *sink* volume: for Bluetooth the phone's
+            // volume is already inside the samples and the sink sits at
+            // reference, so the capture equals the audible output on
+            // every source.
+            let volume = app.shared.read().await.sink_volume;
             let bars = analyzer.process(&ring, volume);
             let active = bars.iter().any(|&b| b > 0);
             if active {

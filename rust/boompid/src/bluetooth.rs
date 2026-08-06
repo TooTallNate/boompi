@@ -519,18 +519,40 @@ async fn handle_properties_changed(
 async fn handle_command(ctx: &Ctx, session: &Session, cmd: SourceCommand) -> anyhow::Result<()> {
     match cmd {
         SourceCommand::SetVolume(level) => {
-            // System (PipeWire) volume...
-            crate::audio::set_system_volume(level).await?;
-            // ...and AVRCP absolute volume on the phone, like v1.
-            if let Some(path) = &session.transport_path {
-                let proxy = MediaTransport1Proxy::builder(&ctx.conn)
-                    .path(path.clone())?
-                    .build()
-                    .await?;
-                let _ = proxy.set_volume((level * AVRCP_MAX).round() as u16).await;
+            let bt_active = ctx.app.shared.read().await.source.active
+                == Some(SourceKind::Bluetooth);
+            tracing::debug!(
+                level,
+                bt_active,
+                transport = ?session.transport_path,
+                "SetVolume routed to bluetooth path"
+            );
+            if bt_active && session.transport_path.is_some() {
+                // The phone owns the loudness (it scales its PCM); send
+                // AVRCP only and let its echo update the display. The
+                // sink stays at reference.
+                if let Some(path) = &session.transport_path {
+                    let proxy = MediaTransport1Proxy::builder(&ctx.conn)
+                        .path(path.clone())?
+                        .build()
+                        .await?;
+                    if let Err(err) =
+                        proxy.set_volume((level * AVRCP_MAX).round() as u16).await
+                    {
+                        tracing::warn!(%err, ?path, "AVRCP set_volume failed");
+                    }
+                }
+                ctx.app.shared.write().await.volume = level;
+                ctx.app.broadcast(ServerMessage::Volume { level });
+            } else {
+                // No Bluetooth session playing: this path owns the sink.
+                crate::audio::set_system_volume(level).await?;
+                let mut s = ctx.app.shared.write().await;
+                s.volume = level;
+                s.sink_volume = level;
+                drop(s);
+                ctx.app.broadcast(ServerMessage::Volume { level });
             }
-            ctx.app.shared.write().await.volume = level;
-            ctx.app.broadcast(ServerMessage::Volume { level });
         }
         transport => {
             let Some(path) = &session.player_path else {
@@ -593,6 +615,13 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     };
     ctx.app.shared.write().await.source = source.clone();
     ctx.app.broadcast(ServerMessage::Source(source));
+
+    // Bluetooth playback carries the phone's volume inside the samples;
+    // the sink must sit at reference or volume applies twice.
+    if let Err(err) = crate::audio::set_system_volume(1.0).await {
+        tracing::warn!(%err, "failed to set sink to reference for bluetooth");
+    }
+    ctx.app.shared.write().await.sink_volume = 1.0;
 }
 
 async fn handle_bt_command(
@@ -953,24 +982,16 @@ fn prime_art_session(ctx: &Ctx, session: &Session) {
     });
 }
 
-/// Phone changed its volume (AVRCP absolute volume, 0 to 127): follow with
-/// the system volume and notify clients. The system sink is the only place
-/// volume is applied - PipeWire's own soft-scaling of the bluez stream is
-/// pinned back to 1.0 (twice: WirePlumber reacts to the same transport
-/// event and the ordering between us is unspecified).
+/// Phone changed its volume (AVRCP absolute volume, 0 to 127). iOS scales
+/// the PCM it streams according to its own volume curve and uses AVRCP
+/// purely as position sync (measured on the bench: stream energy follows
+/// the slider while the sink and bluez node volumes sit untouched), so
+/// this must only update the displayed volume - applying it to the sink
+/// as well attenuates twice.
 async fn apply_phone_volume(app: &SharedApp, avrcp: u16) {
     let level = (avrcp as f32 / AVRCP_MAX).clamp(0.0, 1.0);
-    tracing::debug!(avrcp, level, "phone volume changed");
-    app.apply_external_volume(level).await;
-    tokio::spawn(async {
-        if let Err(err) = crate::audio::reset_bt_stream_volume().await {
-            tracing::debug!(%err, "bt stream volume reset failed");
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        if let Err(err) = crate::audio::reset_bt_stream_volume().await {
-            tracing::debug!(%err, "bt stream volume reset failed (second pass)");
-        }
-    });
+    tracing::debug!(avrcp, level, "phone volume changed (display sync)");
+    app.apply_remote_volume_display(level).await;
 }
 
 fn apply_track_dict(session: &mut Session, track: &HashMap<String, OwnedValue>) {
