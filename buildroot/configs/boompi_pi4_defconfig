@@ -26,6 +26,8 @@ BR2_INIT_SYSTEMD=y
 # BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-pi4 $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
+# Package patches (e.g. the bluez 5.79 AVRCP absolute-volume backport).
+BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_BOOMPI_PATH)/patches"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/post-image.sh"
 
