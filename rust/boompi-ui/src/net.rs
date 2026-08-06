@@ -90,8 +90,10 @@ async fn session(
                                 .iter()
                                 .map(|&b| b as f32 / u16::MAX as f32)
                                 .collect();
+                            // Raw targets only: the render-rate tween in
+                            // main.rs turns these into `bars` + `peaks`.
                             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
-                                ui.set_bars(ModelRc::new(VecModel::from(bars)));
+                                ui.set_bar_targets(ModelRc::new(VecModel::from(bars)));
                             });
                         }
                     }
@@ -328,7 +330,10 @@ fn set_connected(ctx: &NetCtx, connected: bool) {
             ui.set_has_track(false);
             ui.set_device_name("".into());
             ui.set_source_kind("".into());
-            ui.set_bars(ModelRc::new(VecModel::from(Vec::<f32>::new())));
+            // Reset the *targets* only: `bars`/`peaks` are owned by the
+            // render-rate tween in main.rs (replacing them would orphan
+            // its models), and it animates everything down to zero.
+            ui.set_bar_targets(ModelRc::new(VecModel::from(Vec::<f32>::new())));
         }
     });
 }

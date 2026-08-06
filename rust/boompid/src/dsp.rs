@@ -101,10 +101,12 @@ impl SpectrumAnalyzer {
             let tilt = 1.0 + 0.35 * (i as f32 / (BARS - 1) as f32);
             let level = (((db - DB_FLOOR) / DB_RANGE) * tilt).clamp(0.0, 1.0);
 
-            // Fast attack, slower decay.
+            // Fast attack, slower decay. The panel adds its own render-rate
+            // tween on top, so keep the attack punchy here - double
+            // smoothing reads as lag.
             let prev = self.smoothed[i];
             self.smoothed[i] = if level > prev {
-                prev + (level - prev) * 0.55
+                prev + (level - prev) * 0.7
             } else {
                 prev * 0.78
             };

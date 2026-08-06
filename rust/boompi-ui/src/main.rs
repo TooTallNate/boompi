@@ -42,9 +42,100 @@ struct Cli {
     size: Option<String>,
 }
 
+/// Render-rate motion for the spectrum bars. boompid streams raw frames
+/// at ~30 fps; drawing them directly looks steppy. A 60 fps timer tweens
+/// each bar (fast attack, constant-rate fall) and drives the peak-hold
+/// caps: a cap rides the bar's maximum, hangs for a moment, then falls
+/// with gravity - the classic analyzer effect.
+fn start_bar_tween(ui: &AppWindow) -> slint::Timer {
+    use slint::{Model, ModelRc, Timer, TimerMode, VecModel};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::time::Instant;
+
+    const TICK: Duration = Duration::from_millis(16);
+    const ATTACK: f32 = 0.45; // fraction of the gap closed per tick
+    const FALL_RATE: f32 = 1.9; // bar fall, full scale per second
+    const HOLD: Duration = Duration::from_millis(280);
+    const GRAVITY: f32 = 5.0; // cap acceleration, full scale per s^2
+    const FADE_TIME: f32 = 0.4; // cap fade-out while falling, seconds
+
+    struct CapState {
+        vel: f32,
+        held_since: Instant,
+    }
+
+    let bars_model = Rc::new(VecModel::<f32>::default());
+    let peaks_model = Rc::new(VecModel::<f32>::default());
+    let fades_model = Rc::new(VecModel::<f32>::default());
+    ui.set_bars(ModelRc::from(bars_model.clone()));
+    ui.set_peaks(ModelRc::from(peaks_model.clone()));
+    ui.set_peak_fades(ModelRc::from(fades_model.clone()));
+
+    let caps: Rc<RefCell<Vec<CapState>>> = Rc::new(RefCell::new(Vec::new()));
+    let weak = ui.as_weak();
+    let timer = Timer::default();
+    timer.start(TimerMode::Repeated, TICK, move || {
+        let Some(ui) = weak.upgrade() else { return };
+        let targets = ui.get_bar_targets();
+        // (Re)size on first frame or bar-count change. When targets are
+        // absent (backend restart, ws reconnect) keep ticking over the
+        // existing bars with target 0 so they decay instead of freezing.
+        while bars_model.row_count() < targets.row_count() {
+            bars_model.push(0.0);
+            peaks_model.push(0.0);
+            fades_model.push(1.0);
+            caps.borrow_mut().push(CapState { vel: 0.0, held_since: Instant::now() });
+        }
+        let n = bars_model.row_count();
+        let dt = TICK.as_secs_f32();
+        let now = Instant::now();
+        let mut caps = caps.borrow_mut();
+        for i in 0..n {
+            let target = targets.row_data(i).unwrap_or(0.0);
+            let cur = bars_model.row_data(i).unwrap_or(0.0);
+            let next = if target >= cur {
+                cur + (target - cur) * ATTACK
+            } else {
+                (cur - FALL_RATE * dt).max(target)
+            };
+            if (next - cur).abs() > 0.001 {
+                bars_model.set_row_data(i, next);
+            }
+
+            let peak = peaks_model.row_data(i).unwrap_or(0.0);
+            let fade = fades_model.row_data(i).unwrap_or(1.0);
+            let cap = &mut caps[i];
+            let (new_peak, new_fade) = if next >= peak {
+                // Riding the bar: fully opaque, hold timer rearmed.
+                cap.vel = 0.0;
+                cap.held_since = now;
+                (next, 1.0)
+            } else if now.duration_since(cap.held_since) > HOLD {
+                // Falling: accelerate and fade towards transparent.
+                cap.vel += GRAVITY * dt;
+                ((peak - cap.vel * dt).max(next), (fade - dt / FADE_TIME).max(0.0))
+            } else {
+                (peak, fade)
+            };
+            // Drop the cap once everything is silent so it doesn't hover
+            // over an empty display.
+            let new_peak = if target <= 0.001 && next <= 0.005 { 0.0 } else { new_peak };
+            if (new_peak - peak).abs() > 0.001 {
+                peaks_model.set_row_data(i, new_peak);
+            }
+            if (new_fade - fade).abs() > 0.005 {
+                fades_model.set_row_data(i, new_fade);
+            }
+        }
+    });
+    timer
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let ui = AppWindow::new()?;
+    let _bar_tween = start_bar_tween(&ui);
     ui.set_screen(cli.screen.clone().into());
     if let Some(size) = &cli.size {
         if let Some((w, h)) = size.split_once('x') {

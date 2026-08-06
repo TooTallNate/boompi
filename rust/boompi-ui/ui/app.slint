@@ -47,7 +47,16 @@ export component AppWindow inherits Window {
     in property <string> elapsed: "--:--";
     in property <string> remaining: "--:--";
     in-out property <float> volume: 0;
+    // Raw analyzer frames from boompid (~30 fps). The Rust side tweens
+    // these into `bars` and `peaks` at render rate; slint code should
+    // only ever draw the tweened values.
+    in-out property <[float]> bar-targets: [];
     in property <[float]> bars: [];
+    // Peak-hold caps: the classic analyzer effect where a thin slice
+    // lingers at the recent maximum, then falls with gravity, fading
+    // towards transparent on the way down.
+    in property <[float]> peaks: [];
+    in property <[float]> peak-fades: [];
     in property <image> artwork;
     in property <bool> has-artwork: false;
 
@@ -99,7 +108,7 @@ export component AppWindow inherits Window {
     // sustain the fill rate for this anyway.
     HorizontalLayout {
         spacing: 6px;
-        for level in root.bars: Rectangle {
+        for level[bar-idx] in root.bars: Rectangle {
             Rectangle {
                 y: parent.height - self.height;
                 height: parent.height * level;
@@ -109,6 +118,18 @@ export component AppWindow inherits Window {
                     Theme.bar 55%);
                 drop-shadow-color: Theme.accent.transparentize(0.75);
                 drop-shadow-blur: 14px;
+                drop-shadow-offset-x: 0;
+                drop-shadow-offset-y: 0;
+            }
+            // Peak-hold cap.
+            if root.peaks[bar-idx] > 0.015: Rectangle {
+                y: parent.height * (1 - root.peaks[bar-idx]) - self.height;
+                height: 3px;
+                border-radius: 1.5px;
+                opacity: root.peak-fades[bar-idx];
+                background: Theme.accent.transparentize(0.15);
+                drop-shadow-color: Theme.accent.transparentize(0.55);
+                drop-shadow-blur: 8px;
                 drop-shadow-offset-x: 0;
                 drop-shadow-offset-y: 0;
             }
