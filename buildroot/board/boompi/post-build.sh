@@ -66,6 +66,11 @@ if [ -x "${TARGET_DIR}/usr/bin/boompi-update-slot" ]; then
          "${TARGET_DIR}/bin" "${TARGET_DIR}/sbin" \
          -maxdepth 1 -name kexec 2>/dev/null | grep -q . \
         || fail "kexec missing (A/B trial boot needs it)"
+
+    # Pi 4 box: onboard Bluetooth (BCM43455) — the UART BT firmware must
+    # ship or hci0 never appears (and pairing shows "unavailable").
+    find "${TARGET_DIR}/lib/firmware" -name "BCM4345C0*.hcd" 2>/dev/null | grep -q . \
+        || fail "BCM4345C0.hcd missing (onboard Bluetooth firmware)"
 fi
 
 echo "post-build assertions OK"

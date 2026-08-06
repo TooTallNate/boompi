@@ -188,6 +188,10 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
         ServerMessage::Settings(settings) => {
             let light = settings.theme == boompi_proto::Theme::Light;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                // Keep the displayed speaker name live: Hello only arrives
+                // on (re)connect, so a rename mid-session (e.g. during
+                // OOBE) must land through this broadcast too.
+                ui.set_speaker_name(settings.name.into());
                 ui.set_online_art(settings.online_art_fallback);
                 ui.global::<crate::Theme>().set_light(light);
             });
@@ -310,6 +314,7 @@ fn pairing_str(state: PairingState) -> &'static str {
         PairingState::Idle => "idle",
         PairingState::Discoverable => "discoverable",
         PairingState::Confirm => "confirm",
+        PairingState::Unavailable => "unavailable",
     }
 }
 

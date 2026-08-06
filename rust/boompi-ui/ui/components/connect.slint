@@ -33,12 +33,19 @@ export component ConnectScreen inherits VerticalLayout {
         horizontal-alignment: center;
     }
 
+    if root.pairing-state == "unavailable": Text {
+        text: "Bluetooth is unavailable — is the dongle plugged in?";
+        color: Theme.bad;
+        horizontal-alignment: center;
+    }
+
     HorizontalLayout {
         alignment: center;
         ActionButton {
-            text: root.pairing-state == "idle" ? "Pair a new device" : "Cancel pairing";
+            text: root.pairing-state == "idle" || root.pairing-state == "unavailable"
+                ? "Pair a new device" : "Cancel pairing";
             clicked => {
-                if (root.pairing-state == "idle") {
+                if (root.pairing-state == "idle" || root.pairing-state == "unavailable") {
                     root.pairing-enable();
                 } else {
                     root.pairing-cancel();

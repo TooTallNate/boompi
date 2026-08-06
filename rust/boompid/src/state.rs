@@ -431,16 +431,24 @@ impl App {
                     Some(name) => self.apply_rename(name).await,
                     None => false,
                 };
-                let completed = cmd.complete == Some(true) && {
+                let complete = cmd.complete == Some(true);
+                let was_required = complete && {
                     let mut s = self.shared.write().await;
                     let was = s.setup.required;
                     s.setup.required = false;
                     was
                 };
-                if completed {
-                    tracing::info!("first-boot setup completed");
+                if complete {
+                    if was_required {
+                        tracing::info!("first-boot setup completed");
+                    }
+                    // Deliberately idempotent: when setup finishes over the
+                    // onboarding hotspot, tearing the AP down kills the
+                    // client's connection mid-request — it never sees the
+                    // response and may retry. Re-broadcasting and re-running
+                    // the AP teardown is harmless; silently no-oping left a
+                    // half-finished OOBE on the bench.
                     self.broadcast(ServerMessage::Setup(SetupState::default()));
-                    // The onboarding hotspot has served its purpose.
                     #[cfg(target_os = "linux")]
                     tokio::spawn(async {
                         if let Err(err) = crate::wifi::stop_ap().await {
@@ -448,7 +456,7 @@ impl App {
                         }
                     });
                 }
-                if renamed || completed {
+                if renamed || was_required {
                     self.persist_config().await;
                 }
                 if renamed {

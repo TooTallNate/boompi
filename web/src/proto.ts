@@ -15,7 +15,7 @@ export interface SettingsPatch {
   online_art_fallback?: boolean;
 }
 
-export type PairingState = "idle" | "discoverable" | "confirm";
+export type PairingState = "idle" | "discoverable" | "confirm" | "unavailable";
 
 export interface Pairing {
   state: PairingState;

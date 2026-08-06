@@ -157,17 +157,32 @@ function WifiSection() {
               )}
               {wifi.ap_active && (
                 <span className="text-[13px] text-accent">
-                  — hotspot mode (onboarding)
+                  — setup hotspot active
                 </span>
               )}
             </span>
-            <Toggle
-              checked={wifi.enabled}
-              onChange={(v) => act({ action: "radio", enabled: v })}
-            />
+            {/* No radio toggle while the setup hotspot is up: turning the
+                radio off would kill this very connection (and the captive
+                portal with it). */}
+            {!wifi.ap_active && (
+              <Toggle
+                checked={wifi.enabled}
+                onChange={(v) => act({ action: "radio", enabled: v })}
+              />
+            )}
           </div>
 
+          {wifi.ap_active && (
+            <p className="py-1.5 text-sm text-dim">
+              You’re connected through the speaker’s setup hotspot, so nearby
+              networks can’t be scanned right now. Skip this step and connect
+              the speaker to Wi-Fi later from this page — over your home
+              network or Ethernet.
+            </p>
+          )}
+
           {wifi.enabled &&
+            !wifi.ap_active &&
             wifi.networks.map((n) => (
               <div
                 key={n.ssid}
@@ -331,13 +346,21 @@ function BluetoothSection({
 }) {
   return (
     <Section title="Bluetooth">
-      {pairing.state === "idle" && (
+      {(pairing.state === "idle" || pairing.state === "unavailable") && (
         <button
           className="mb-2 rounded-lg bg-accent px-5 py-2.5 text-[15px] font-semibold text-accent-ink"
           onClick={() => send({ type: "pairing", action: "enable" })}
         >
           Pair a device
         </button>
+      )}
+      {pairing.state === "unavailable" && (
+        <div className="mb-2 rounded-lg border border-err/40 bg-err/10 p-3">
+          <p className="text-sm">
+            Bluetooth is unavailable — no adapter was found. Check that the
+            Bluetooth dongle is plugged in.
+          </p>
+        </div>
       )}
       {pairing.state === "discoverable" && (
         <div className="mb-2 flex items-center justify-between gap-3 rounded-lg border border-accent/40 bg-accent/10 p-3">
@@ -442,7 +465,7 @@ function SetupWizard({
   currentName: string;
   onRenamed: (name: string) => void;
 }) {
-  const [step, setStep] = useState<"name" | "wifi">("name");
+  const [step, setStep] = useState<"name" | "wifi" | "done">("name");
   const [name, setName] = useState(currentName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -465,13 +488,19 @@ function SetupWizard({
   async function finish() {
     setBusy(true);
     setError(null);
+    // Show the terminal step *before* the request settles: when this page
+    // is served over the setup hotspot, finishing tears the hotspot down
+    // and the HTTP response never arrives — which looks like a hang or an
+    // error even though setup completed. (The server treats the command
+    // as idempotent, so a retry after a real failure is also fine.)
+    setStep("done");
     try {
-      // The setup broadcast flips `required` and this wizard unmounts
-      // into the regular settings page.
+      // On networks that survive (Ethernet / home Wi-Fi), the setup
+      // broadcast flips `required` and this wizard unmounts into the
+      // regular settings page moments later.
       await sendCommand({ type: "setup", complete: true });
-    } catch (e) {
-      setError(String(e));
-      setBusy(false);
+    } catch {
+      /* expected when the hotspot drops out from under us */
     }
   }
 
@@ -536,6 +565,20 @@ function SetupWizard({
               {error && <span className="text-[13px] text-err">{error}</span>}
             </div>
           </>
+        )}
+
+        {step === "done" && (
+          <Section title="Setup complete 🎉">
+            <p className="text-sm text-dim">
+              “{trimmed}” is ready. If you were connected to the speaker’s
+              setup hotspot, it has switched off — rejoin your normal
+              Wi-Fi network.
+            </p>
+            <p className="mt-2 text-sm text-dim">
+              If the speaker’s screen still shows the setup message, reload
+              this page and press “Finish setup” again.
+            </p>
+          </Section>
         )}
       </main>
     </div>

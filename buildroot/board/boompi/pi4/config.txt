@@ -33,6 +33,9 @@ dtparam=audio=off
 # INA260 battery monitor on the standard I2C bus.
 dtparam=i2c_arm=on
 
-# USB Bluetooth dongle only; onboard radio disabled (same rationale as
-# the Pi 3 box: shared antenna stutters).
-dtoverlay=disable-bt
+# Onboard Bluetooth (BCM43455, UART-attached). Unlike the Pi 3 box —
+# which uses a USB dongle and disables the onboard radio — the Pi 4 box
+# has no dongle and v1 shipped with onboard BT active (verified from the
+# v1 SD dump: no disable-bt). Needs BCM4345C0.hcd from
+# BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT; the kernel attaches hci0
+# via serdev automatically.

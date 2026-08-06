@@ -113,11 +113,14 @@ export component SettingsPanel inherits Rectangle {
                     label: "Bluetooth pairing";
                     sublabel: root.pairing-state == "discoverable"
                         ? "Discoverable — check your phone's Bluetooth list"
+                        : root.pairing-state == "unavailable"
+                        ? "Bluetooth unavailable — is the dongle plugged in?"
                         : "Allow a new device to pair";
                     ActionButton {
-                        text: root.pairing-state == "idle" ? "Pair device" : "Cancel";
+                        text: root.pairing-state == "idle" || root.pairing-state == "unavailable"
+                            ? "Pair device" : "Cancel";
                         clicked => {
-                            if (root.pairing-state == "idle") {
+                            if (root.pairing-state == "idle" || root.pairing-state == "unavailable") {
                                 root.pairing-enable();
                             } else {
                                 root.pairing-cancel();

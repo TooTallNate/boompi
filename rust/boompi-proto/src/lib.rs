@@ -111,6 +111,10 @@ pub enum PairingState {
     Discoverable,
     /// A device requested pairing; awaiting on-screen confirmation.
     Confirm,
+    /// No Bluetooth adapter present (dongle unplugged / bluetoothd down).
+    /// Broadcast instead of silently ignoring a pairing request — a dead
+    /// button is indistinguishable from a bug (first Pi 4 OOBE lesson).
+    Unavailable,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

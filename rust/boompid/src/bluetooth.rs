@@ -282,6 +282,12 @@ async fn handle_interface_added(
     match iface {
         "org.bluez.Adapter1" => {
             session.adapter_path = Some(path.clone());
+            // Late-enumerating or hot-plugged adapter: advertise the
+            // configured speaker name right away (startup ordering means
+            // the boot-time alias set can race the adapter's appearance),
+            // and clear any `Unavailable` pairing state shown to the UIs.
+            apply_adapter_alias(ctx, session, &ctx.app.speaker_name().await).await;
+            crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
         }
         "org.bluez.Device1" => {
             refresh_devices(ctx).await;
@@ -600,6 +606,21 @@ async fn handle_bt_command(
     };
     match cmd {
         BtCommand::Pairing(PairingAction::Enable) => {
+            // No adapter (dongle unplugged, bluetoothd down): say so
+            // instead of silently doing nothing — a dead pairing button
+            // reads as a boompid bug (first Pi 4 OOBE).
+            if session.adapter_path.is_none() {
+                tracing::warn!("pairing requested but no BT adapter present");
+                crate::bt_agent::set_pairing(
+                    &ctx.app,
+                    Pairing {
+                        state: PairingState::Unavailable,
+                        ..Pairing::default()
+                    },
+                )
+                .await;
+                return;
+            }
             // Entering pairing mode releases current connections: the user
             // is explicitly adding a new device, and the dongle struggles
             // to accept pairings while servicing an A2DP link anyway.

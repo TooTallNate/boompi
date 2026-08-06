@@ -122,6 +122,9 @@ BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
+# Onboard Bluetooth (BCM43455): UART BT firmware (BCM4345C0.hcd). The
+# Pi 4 box has no USB dongle — v1 used the onboard radio.
+BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
 # UI runtime deps (Slint linuxkms, software renderer for now)
 BR2_PACKAGE_LIBINPUT=y
