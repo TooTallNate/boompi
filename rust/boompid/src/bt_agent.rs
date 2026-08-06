@@ -149,7 +149,7 @@ impl Agent {
         Ok(())
     }
 
-    // Legacy PIN flows — DisplayYesNo shouldn't receive these, but answer
+    // Legacy PIN flows — a NoInputNoOutput agent shouldn't receive these, but answer
     // deterministically if an odd stack probes them.
     async fn request_pin_code(&self, _device: OwnedObjectPath) -> Result<String, AgentError> {
         Err(AgentError::Rejected("PIN pairing not supported".into()))

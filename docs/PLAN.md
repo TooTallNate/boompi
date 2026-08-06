@@ -69,7 +69,8 @@ shairport-sync ──────┴─→ boompid (Rust) ─WS─┤
     (absolute volume 0–127), `MediaPlayer1` (transport + `Track` metadata),
     `Adapter1` (discoverable), `Agent1`/`AgentManager1` (pairing flow).
     Handles devices paired at runtime (v1 TODO). Register the agent with
-    `DisplayYesNo` capability to drive the on-screen confirm; v1 ran
+    `NoInputNoOutput` capability (JustWorks; the explicit pairing window
+    is the consent — on-screen confirm was abandoned); v1 ran
     bluez-tools `bt-agent -c NoInputNoOutput` (auto-accept everything).
   - *spotify*: librespot (subprocess with event hooks first; embed-as-crate
     is a later option). Art via metadata CDN URLs.
@@ -269,7 +270,7 @@ input. Build order (1–4 are dev-Pi-testable; 5–6 need image loops):
    + embedded Vite/React/Tailwind SPA (`web/`, dist committed, rust-embed)
    + speaker rename end-to-end (BT `Adapter1.Alias` in place; AirPlay +
    Spotify restart discovery via a config-generation watch channel).
-2. ✅ BT device management + real pairing agent (`Agent1` `DisplayYesNo`,
+2. ✅ BT device management + real pairing agent (`Agent1` `NoInputNoOutput`,
    passkey confirm on panel+web; list/disconnect/remove) replacing the
    auto-accept bt-agent. *(Pairing confirm needs a hands-on phone test.)*
 3. ✅ Theme (light palette) end-to-end + clock/timezone via
@@ -350,7 +351,7 @@ CI image builds with ccache. Tag v2.0.
 - [x] HyperPixel touch variant: touch (Goodix GT911, per KMS overlay)
 - [x] v1 pairing mechanism confirmed: `bt-agent.service` ran
       `/usr/bin/bt-agent -c NoInputNoOutput` (bluez-tools) — auto-accepts
-      all pairing. Replaced by boompid's own `Agent1` (`DisplayYesNo`) in
+      all pairing. Replaced by boompid's own `Agent1` (`NoInputNoOutput`) in
       Phase 3. (Deployed kiosk.sh/units drifted from git; the v1 image dump
       is the authoritative reference.)
 - [x] AirPlay 2 vs classic: **AirPlay 2** — Buildroot 2026.02 (LTS) ships

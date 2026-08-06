@@ -8,7 +8,9 @@
 //! - `org.bluez.MediaPlayer1` — track metadata, playback status, transport
 //! - `org.bluez.MediaTransport1` — AVRCP absolute volume (0–127)
 //!
-//! Pairing agent (`Agent1`) and cover art (obexd/BIP) land in Phase 3.
+//! Plus the pairing agent (`bt_agent`, NoInputNoOutput/JustWorks with an
+//! explicit pairing window as the consent) and cover art (obexd/BIP, see
+//! `artwork`).
 
 #![cfg(target_os = "linux")]
 

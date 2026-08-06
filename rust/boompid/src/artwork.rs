@@ -12,8 +12,12 @@
 //! - Sessions can go stale (phone reconnect/idle); a failed fetch drops the
 //!   cached session and retries once with a fresh one.
 //!
-//! obexd normally lives on the session bus (dev setup); the appliance image
-//! runs `obexd --system-bus`, so we fall back to the system bus.
+//! obexd is hardcoded to a session bus. On the dev Pi (RPi OS) that's the
+//! real user session bus; the appliance has no session bus, so the image
+//! runs a private one (`obex-bus.service`, unix:path=/run/obex-bus) with
+//! obexd on it, and boompid.service points DBUS_SESSION_BUS_ADDRESS at it —
+//! `Connection::session()` below then lands on the right bus in both
+//! worlds. (The system-bus fallback is a last resort and normally unused.)
 
 #![cfg(target_os = "linux")]
 

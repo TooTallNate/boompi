@@ -78,7 +78,8 @@ BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
 # bluez-tools (bt-agent) retired: boompid registers its own Agent1
-# (DisplayYesNo) with an on-screen confirm instead of auto-accepting.
+# (NoInputNoOutput/JustWorks). Consent = the explicit pairing window:
+# while it's open, any pairing is accepted; no on-screen confirm.
 
 # Audio: PipeWire + WirePlumber + SBC codec (A2DP).
 # NB (first Pi 4 bench boot): Kconfig silently drops packages with unmet

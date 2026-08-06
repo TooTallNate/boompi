@@ -1,0 +1,15 @@
+# BlueZ obexd: the BIP client for AVRCP cover art. boompid drives it
+# (CreateSession/GetThumbnail) over the private obex-bus.
+[Unit]
+Description=BlueZ OBEX daemon (AVRCP cover art)
+Requires=obex-bus.service
+After=obex-bus.service bluetooth.service
+
+[Service]
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus
+Environment=HOME=/root
+ExecStart=/usr/libexec/bluetooth/obexd -n
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

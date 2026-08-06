@@ -1,6 +1,6 @@
 [Unit]
 Description=Boompi backend daemon
-After=pipewire.service wireplumber.service bluetooth.service network.target systemd-tmpfiles-setup.service
+After=pipewire.service wireplumber.service bluetooth.service obexd.service network.target systemd-tmpfiles-setup.service
 RequiresMountsFor=/data
 
 [Service]
@@ -12,6 +12,9 @@ ExecStart=/usr/bin/boompid --config /data/boompi.toml --config-seed /etc/boompi/
 Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
 Environment=XDG_RUNTIME_DIR=/run/pipewire
 Environment=XDG_CACHE_HOME=/data/cache
+# Cover art: zbus Connection::session() resolves to the private obexd
+# bus (see obex-bus.service / obexd.service).
+Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus
 Environment=RUST_LOG=boompid=info
 Restart=always
 RestartSec=2

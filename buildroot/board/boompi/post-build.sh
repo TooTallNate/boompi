@@ -57,6 +57,17 @@ for bin in nmcli wireplumber wpctl pw-cat pw-record \
         || fail "runtime binary '$bin' missing from the image"
 done
 
+# --- AVRCP cover art plumbing (both boards). ---------------------------------
+# obexd only speaks to a session bus; the image runs a private one
+# (obex-bus.service). Missing pieces here = silently no cover art.
+[ -x "${TARGET_DIR}/usr/libexec/bluetooth/obexd" ] \
+    || fail "obexd binary missing (AVRCP cover art)"
+[ -f "${TARGET_DIR}/etc/systemd/system/obexd.service" ] \
+    || fail "obexd.service missing (AVRCP cover art)"
+grep -q "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus" \
+    "${TARGET_DIR}/etc/systemd/system/boompid.service" \
+    || fail "boompid.service lacks the obex bus environment"
+
 # --- A/B update mechanism (boards with the pi4 overlay). ---------------------
 # The trial boot is kexec-based (firmware tryboot is unusable: Pi 4B
 # pre-1.4 reboots power-cycle and wipe the flag; Pi 3 has no tryboot

@@ -25,7 +25,7 @@ BR2_INIT_SYSTEMD=y
 # (and its wait-online unit fails the boot health picture).
 # BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
-BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-pi3 $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi3/post-image.sh"
 
@@ -65,7 +65,8 @@ BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
 # bluez-tools (bt-agent) retired: boompid registers its own Agent1
-# (DisplayYesNo) with an on-screen confirm instead of auto-accepting.
+# (NoInputNoOutput/JustWorks). Consent = the explicit pairing window:
+# while it's open, any pairing is accepted; no on-screen confirm.
 
 # Audio: PipeWire + WirePlumber + SBC codec (A2DP).
 # NB (first Pi 4 bench boot): Kconfig silently drops packages with unmet

@@ -1,0 +1,14 @@
+# Private D-Bus "session" bus for obexd. obexd is hardcoded to a session
+# bus, which an appliance has none of — so give it (and boompid) a
+# dedicated one at a fixed socket path. Without this, AVRCP cover art is
+# dead: org.bluez.obex is unreachable and boompid logs
+# "BIP session prime failed ... ServiceUnknown".
+[Unit]
+Description=Private D-Bus bus for obexd (AVRCP cover art)
+
+[Service]
+ExecStart=/usr/bin/dbus-daemon --session --address=unix:path=/run/obex-bus --nofork --nopidfile
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
