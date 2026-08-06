@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Over-the-air OS update for the Pi 4 boombox (A/B tryboot slots).
+# Over-the-air OS update for the Pi 4 boombox (A/B slots, kexec trial).
 #
 # Fetches the newest green pi4 update bundle from CI (or takes a local
 # bundle dir), pushes it to the box, and stages it into the inactive
-# slot. The box reboots into the candidate exactly once; it commits
-# only after boompid answers healthz, else the next reboot falls back.
+# slot. The box kexecs into the candidate without touching autoboot.txt;
+# it commits only after boompid answers healthz, else any reboot or
+# power-cycle falls back to the old slot.
 #
 # Usage:
 #   scripts/update-appliance.sh                # latest CI bundle
@@ -34,10 +35,10 @@ echo "pushing bundle to $PI"
 ssh "$PI" 'rm -rf /tmp/boompi-update && mkdir -p /tmp/boompi-update'
 scp -q "$BUNDLE"/rootfs.ext4 "$BUNDLE"/boot-a.vfat "$BUNDLE"/boot-b.vfat "$PI:/tmp/boompi-update/"
 
-echo "staging into inactive slot + tryboot (box reboots now)"
-ssh "$PI" 'boompi-update-slot /tmp/boompi-update' || true  # ssh drops at reboot
+echo "staging into inactive slot + kexec trial (box reboots now)"
+ssh "$PI" 'boompi-update-slot /tmp/boompi-update' || true  # ssh drops at kexec
 
 echo
-echo "Box is rebooting into the candidate slot. Verify in ~60s:"
+echo "Box is kexec'ing into the candidate slot. Verify in ~60s:"
 echo "  ssh $PI cat /proc/cmdline           # new slot's root device"
 echo "  ssh $PI systemctl status boompi-boot-commit   # committed?"

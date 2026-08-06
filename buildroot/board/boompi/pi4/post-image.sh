@@ -15,12 +15,12 @@ echo "${BASE_CMDLINE}" | sed 's|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p3|' \
 echo "${BASE_CMDLINE}" | sed 's|root=/dev/mmcblk0p[0-9]*|root=/dev/mmcblk0p5|' \
 	> "${BINARIES_DIR}/cmdline-b.txt"
 
-# Initial boot selection: slot A active, tryboot lands on slot B.
+# Initial boot selection: slot A. Updates are trialled via kexec
+# (boompi-update-slot) and committed by rewriting this file — no
+# [tryboot] section; firmware tryboot is unusable on this hardware.
 cat > "${BINARIES_DIR}/autoboot.txt" <<EOF
 [all]
 boot_partition=1
-[tryboot]
-boot_partition=2
 EOF
 
 # genimage copies rootpath into its tmp dir; we only stitch prebuilt

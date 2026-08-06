@@ -57,4 +57,15 @@ for bin in nmcli wireplumber wpctl pw-cat pw-record \
         || fail "runtime binary '$bin' missing from the image"
 done
 
+# --- A/B update mechanism (boards with the pi4 overlay). ---------------------
+# The trial boot is kexec-based (firmware tryboot is unusable: Pi 4B
+# pre-1.4 reboots power-cycle and wipe the flag; Pi 3 has no tryboot
+# EEPROM). An A/B image without kexec cannot take updates safely.
+if [ -x "${TARGET_DIR}/usr/bin/boompi-update-slot" ]; then
+    find "${TARGET_DIR}/usr/bin" "${TARGET_DIR}/usr/sbin" \
+         "${TARGET_DIR}/bin" "${TARGET_DIR}/sbin" \
+         -maxdepth 1 -name kexec 2>/dev/null | grep -q . \
+        || fail "kexec missing (A/B trial boot needs it)"
+fi
+
 echo "post-build assertions OK"

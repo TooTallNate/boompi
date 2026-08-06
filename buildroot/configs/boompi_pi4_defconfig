@@ -35,6 +35,9 @@ BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,576cc10e1ed50a9eacffc7a05c796051d7343ea4)/linux-576cc10e1ed50a9eacffc7a05c796051d7343ea4.tar.gz"
 BR2_LINUX_KERNEL_DEFCONFIG="bcm2711"
+# kexec for A/B trial boots — firmware tryboot is unusable on this
+# hardware (see board/boompi/linux-kexec.fragment).
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_INTREE_DTS_NAME="broadcom/bcm2711-rpi-4-b"
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
@@ -51,6 +54,9 @@ BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/
 
 # System bits
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
+# kexec(8): chain-loads the candidate slot's kernel for A/B update
+# trials (boompi-update-slot) without touching autoboot.txt.
+BR2_PACKAGE_KEXEC=y
 BR2_PACKAGE_KMOD=y
 BR2_PACKAGE_KMOD_TOOLS=y
 BR2_PACKAGE_XZ=y

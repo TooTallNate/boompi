@@ -1,8 +1,9 @@
-# Commits a successful tryboot (A/B update candidate) — see
+# Commits (or rolls back) an A/B update trial — see
 # /usr/bin/boompi-boot-commit. No-op on normal boots.
 [Unit]
-Description=Commit A/B boot slot after successful tryboot
-After=multi-user.target boompid.service
+Description=Commit or roll back A/B update trial boot
+After=multi-user.target boompid.service data.mount
+RequiresMountsFor=/data
 
 [Service]
 Type=oneshot

@@ -1,0 +1,15 @@
+# kexec support for the A/B update trial boot (boompi-update-slot).
+#
+# Firmware-level one-shot boot (tryboot / PM_RSTS partition reboot) is
+# unusable on our hardware: Pi 4B boards before rev 1.4 power-cycle on
+# every reboot (firmware GPIO-expander reset), wiping PM_RSTS and the
+# mailbox reboot flags; the firmware only persists tryboot state to
+# EEPROM on rev 1.0/1.1 (verified lost on the bench rev 1.2 box), and
+# the Pi 3 has no tryboot-capable boot EEPROM at all. kexec chain-loads
+# the candidate kernel with no firmware involvement, so it works
+# identically on every board.
+#
+# CONFIG_SUSPEND: arm64 ARCH_SUPPORTS_KEXEC = PM_SLEEP_SMP, which needs
+# SUSPEND (bcm2711_defconfig leaves it off).
+CONFIG_SUSPEND=y
+CONFIG_KEXEC=y

@@ -1,19 +1,37 @@
 #!/bin/sh
-# Write an OS update into the inactive A/B slot and tryboot into it.
+# Write an OS update into the inactive A/B slot and kexec into it (trial).
 #
 # Usage: boompi-update-slot <bundle-dir>
 #   where <bundle-dir> contains: rootfs.ext4, boot-a.vfat, boot-b.vfat
 #   (the CI update bundle, decompressed).
 #
-# The new slot boots exactly once (`tryboot`); boompi-boot-commit makes
-# it permanent only after the system proves healthy. /data is untouched.
+# Why kexec and not firmware tryboot: Pi 4B boards before rev 1.4
+# power-cycle on every reboot (firmware GPIO-expander reset), which wipes
+# PM_RSTS and the mailbox reboot flags; the firmware only persists the
+# tryboot flag to EEPROM on rev 1.0/1.1. Verified on the bench rev 1.2
+# box: the flag never survives (see also raspberrypi/firmware#2038).
+# The Pi 3 has no tryboot EEPROM at all. So instead we chain-load the
+# candidate kernel with kexec and leave autoboot.txt UNTOUCHED: if the
+# candidate crashes or hangs, any reset or power-cycle boots the old
+# slot. boompi-boot-commit makes the candidate permanent only after the
+# system proves healthy. /data (p6) is never touched.
 set -eu
 
 BUNDLE="${1:?usage: boompi-update-slot <bundle-dir>}"
+MARKER=/data/boompi-trial
 
 for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
     [ -f "$BUNDLE/$f" ] || { echo "missing $BUNDLE/$f" >&2; exit 1; }
 done
+
+# Never overwrite the fallback slot while a trial is still uncommitted:
+# if we are *running* the trial right now, the "inactive" slot is the
+# only known-good system we have.
+if [ -f "$MARKER" ]; then
+    echo "trial of $(cat "$MARKER") still pending (marker present);" \
+         "commit or reboot first" >&2
+    exit 1
+fi
 
 # Active slot from the kernel cmdline (p3 = slot A, p5 = slot B).
 case "$(cat /proc/cmdline)" in
@@ -24,31 +42,55 @@ esac
 
 if [ "$ACTIVE" = A ]; then
     TARGET_BOOT=/dev/mmcblk0p2; TARGET_ROOT=/dev/mmcblk0p5
-    BOOT_IMG="$BUNDLE/boot-b.vfat"; CURRENT_PART=1; TRY_PART=2
+    BOOT_IMG="$BUNDLE/boot-b.vfat"; CURRENT_PART=1
 else
     TARGET_BOOT=/dev/mmcblk0p1; TARGET_ROOT=/dev/mmcblk0p3
-    BOOT_IMG="$BUNDLE/boot-a.vfat"; CURRENT_PART=2; TRY_PART=1
+    BOOT_IMG="$BUNDLE/boot-a.vfat"; CURRENT_PART=2
 fi
 
 echo "active slot: $ACTIVE — writing update to $TARGET_ROOT / $TARGET_BOOT"
 dd if="$BUNDLE/rootfs.ext4" of="$TARGET_ROOT" bs=4M conv=fsync status=none
 dd if="$BOOT_IMG" of="$TARGET_BOOT" bs=4M conv=fsync status=none
 
-# Writing boot-a.vfat to p1 replaced autoboot.txt with the image default;
-# restore the truth: current slot stays active, tryboot targets the new one.
+# Verify the writes end-to-end before daring to boot them.
+verify() { # <source-file> <block-dev>
+    want=$(sha256sum "$1" | cut -d' ' -f1)
+    got=$(head -c "$(stat -c %s "$1")" "$2" | sha256sum | cut -d' ' -f1)
+    [ "$want" = "$got" ] || { echo "verify FAILED: $2 != $1" >&2; exit 1; }
+}
+verify "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
+verify "$BOOT_IMG" "$TARGET_BOOT"
+echo "slot verified (sha256)"
+
+# Writing boot-a.vfat to p1 replaced autoboot.txt with the image default
+# (boot_partition=1, i.e. the *candidate*) — restore the truth: the
+# current slot stays the default until boompi-boot-commit flips it.
 if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
     MNT=$(mktemp -d)
     mount /dev/mmcblk0p1 "$MNT"
-    cat > "$MNT/autoboot.txt" <<EOF
-[all]
-boot_partition=$CURRENT_PART
-[tryboot]
-boot_partition=$TRY_PART
-EOF
+    printf '[all]\nboot_partition=%s\n' "$CURRENT_PART" > "$MNT/autoboot.txt"
     umount "$MNT"
     rmdir "$MNT"
 fi
 
+# Trial marker on persistent /data: tells boompi-boot-commit on the next
+# boot that a candidate is under trial, and which slot it is.
+echo "$TARGET_ROOT" > "$MARKER"
 sync
-echo "update staged; rebooting into candidate slot (tryboot)"
-systemctl reboot --reboot-argument="0 tryboot"
+
+# Chain-load the candidate: its kernel, the running (firmware-fixed-up)
+# device tree, and the current cmdline with the root device swapped —
+# the firmware-injected parameters (video=, vc_mem, MAC, ...) are
+# hardware-static, so reusing them matches what a real boot would get.
+MNT=$(mktemp -d)
+mount -o ro "$TARGET_BOOT" "$MNT"
+cp "$MNT/Image" /tmp/boompi-trial-Image
+umount "$MNT"
+rmdir "$MNT"
+
+CMDLINE="$(sed "s|root=/dev/mmcblk0p[0-9]*|root=$TARGET_ROOT|" /proc/cmdline)"
+kexec -l /tmp/boompi-trial-Image \
+      --dtb=/sys/firmware/fdt \
+      --command-line="$CMDLINE"
+echo "update staged + verified; kexec'ing into candidate ($TARGET_ROOT)"
+systemctl kexec

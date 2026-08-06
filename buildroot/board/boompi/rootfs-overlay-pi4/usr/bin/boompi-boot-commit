@@ -1,49 +1,73 @@
 #!/bin/sh
-# A/B slot commit: when this boot came from the `tryboot` one-shot (an
-# update candidate), wait until the system proves healthy, then rewrite
-# autoboot.txt so the candidate slot becomes permanent. If we never get
-# here (crash, hang, boompid dead), the next reboot falls back to the
-# previous slot automatically — that is the whole point.
+# A/B slot commit / rollback — runs once per boot.
+#
+# boompi-update-slot kexec-chains into the candidate slot WITHOUT
+# touching autoboot.txt; the only record of the trial is the marker on
+# persistent /data. On the boot after, three cases:
+#
+#   running the candidate, healthy -> rewrite autoboot.txt (commit)
+#   running the candidate, sick    -> clear marker + reboot; the
+#                                     power-cycle reset boots the old
+#                                     slot (autoboot.txt never changed)
+#   running the old slot           -> the trial crashed/hung and a
+#                                     reset/power-cycle fell back; just
+#                                     clear the marker
+#
+# Residual risk (accepted): the kexec trial exercises kernel + rootfs +
+# userspace but not the candidate's config.txt/firmware files; gross
+# corruption there is covered by boompi-update-slot's sha256 verify and
+# the bootloader's failover-to-partition-1 for unbootable partitions.
 set -eu
 
-TRYBOOT_FLAG=/proc/device-tree/chosen/bootloader/tryboot
-PART_FILE=/proc/device-tree/chosen/bootloader/partition
+MARKER=/data/boompi-trial
 
-if [ ! -e "$TRYBOOT_FLAG" ]; then
-    echo "normal boot (no tryboot); nothing to commit"
+if [ ! -f "$MARKER" ]; then
+    echo "no trial in progress; nothing to commit"
     exit 0
 fi
 
+TARGET_ROOT="$(cat "$MARKER")"
+
+case "$TARGET_ROOT" in
+    /dev/mmcblk0p3) BOOT_PART=1 ;;
+    /dev/mmcblk0p5) BOOT_PART=2 ;;
+    *) echo "bogus trial marker '$TARGET_ROOT'; clearing" >&2
+       rm -f "$MARKER"; sync; exit 1 ;;
+esac
+
+case "$(cat /proc/cmdline)" in
+    *"root=$TARGET_ROOT "*|*"root=$TARGET_ROOT") ;;
+    *)
+        rm -f "$MARKER"; sync
+        echo "trial of $TARGET_ROOT failed (running old slot); marker cleared" >&2
+        exit 0 ;;
+esac
+
 # Health gate: boompid must come up and answer before we commit.
-echo "tryboot boot detected; waiting for system health before commit"
+echo "trial boot of $TARGET_ROOT detected; waiting for system health"
+HEALTHY=0
 for i in $(seq 1 60); do
     if wget -q -T 2 -O /dev/null http://127.0.0.1:3001/healthz 2>/dev/null; then
+        HEALTHY=1
         break
-    fi
-    if [ "$i" = 60 ]; then
-        echo "system never became healthy; NOT committing (will fall back on reboot)" >&2
-        exit 1
     fi
     sleep 2
 done
 
-# Which boot partition are we running from? (firmware-provided, u32 BE)
-CURRENT=$(od -A n -t u1 "$PART_FILE" | tr -s ' ' '\n' | grep -v '^$' | tail -1)
-case "$CURRENT" in
-    1) OTHER=2 ;;
-    2) OTHER=1 ;;
-    *) echo "unexpected boot partition '$CURRENT'" >&2; exit 1 ;;
-esac
+if [ "$HEALTHY" = 0 ]; then
+    rm -f "$MARKER"; sync
+    echo "candidate never became healthy; rebooting to previous slot" >&2
+    systemctl reboot
+    exit 1
+fi
 
-# autoboot.txt always lives on p1, whichever slot is active.
+# Commit: the candidate becomes the default. autoboot.txt always lives
+# on p1, whichever slot is active.
 MNT=$(mktemp -d)
 mount /dev/mmcblk0p1 "$MNT"
-cat > "$MNT/autoboot.txt" <<EOF
-[all]
-boot_partition=$CURRENT
-[tryboot]
-boot_partition=$OTHER
-EOF
+printf '[all]\nboot_partition=%s\n' "$BOOT_PART" > "$MNT/autoboot.txt"
 umount "$MNT"
 rmdir "$MNT"
-echo "committed: boot_partition=$CURRENT (tryboot -> $OTHER)"
+rm -f "$MARKER"
+sync
+echo "committed: boot_partition=$BOOT_PART"
