@@ -42,46 +42,9 @@ struct Cli {
     size: Option<String>,
 }
 
-/// Register the appliance's on-disk emoji font as the emoji/symbol
-/// fallback. The image ships it under /usr/share/fonts (color Noto on
-/// GPU-rendered boards, monochrome on software-rendered ones), but
-/// fontique's system font discovery doesn't find it there, so user
-/// content with emoji (speaker name, track titles) renders as tofu
-/// without this. Desktop builds use the host's native emoji font.
-#[cfg(target_os = "linux")]
-fn register_emoji_fallback() {
-    use slint::fontique_010::fontique;
-    // Twemoji (COLRv0) first: it's the color format that renders through
-    // the prebuilt Skia + runtime registration. Noto Color Emoji (CBDT and
-    // COLRv1 flavors) loads but draws empty glyphs on this path, and the
-    // Debian build even corrupts glyph-run typeface selection; keep those
-    // out until the upstream story improves. Monochrome Noto is the
-    // outline fallback for software-rendered boards.
-    for name in ["TwemojiMozilla.ttf", "NotoEmoji.ttf"] {
-        let path = std::path::Path::new("/usr/share/fonts").join(name);
-        let Ok(bytes) = std::fs::read(&path) else {
-            continue;
-        };
-        let blob = fontique::Blob::new(std::sync::Arc::new(bytes));
-        let mut collection = slint::fontique_010::shared_collection();
-        let fonts = collection.register_fonts(blob, None);
-        for script in ["Zsye", "Zsym"] {
-            collection.append_fallbacks(
-                fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None),
-                fonts.iter().map(|f| f.0),
-            );
-        }
-        eprintln!("emoji fallback registered: {}", path.display());
-        return;
-    }
-    eprintln!("no emoji font found in /usr/share/fonts");
-}
-
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let ui = AppWindow::new()?;
-    #[cfg(target_os = "linux")]
-    register_emoji_fallback();
     ui.set_screen(cli.screen.clone().into());
     if let Some(size) = &cli.size {
         if let Some((w, h)) = size.split_once('x') {

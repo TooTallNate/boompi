@@ -135,6 +135,10 @@ BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 BR2_PACKAGE_LIBINPUT=y
 BR2_PACKAGE_LIBXKBCOMMON=y
 BR2_PACKAGE_FONTCONFIG=y
+# libpng: freetype only decodes CBDT color-emoji bitmaps (Noto Color
+# Emoji) when built with PNG support; without it the glyphs are found
+# but rasterize as empty.
+BR2_PACKAGE_LIBPNG=y
 BR2_PACKAGE_MESA3D=y
 BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_V3D=y
 BR2_PACKAGE_MESA3D_GALLIUM_DRIVER_VC4=y
