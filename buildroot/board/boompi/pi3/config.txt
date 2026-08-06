@@ -7,6 +7,14 @@ fixup_file=fixup.dat
 kernel=Image
 arm_64bit=1
 
+# TF-A BL31 armstub (armstub8.bin, auto-loaded by name for arm_64bit):
+# provides PSCI so secondary CPUs can be parked - required by kexec
+# (the A/B update trial boot). The rpi3 TF-A port uses fixed load
+# addresses: kernel and DTB locations must match the PRELOADED_BL33_BASE
+# and RPI3_PRELOADED_DTB_BASE build options in the defconfig.
+kernel_address=0x02000000
+device_tree_address=0x01000000
+
 disable_overscan=1
 disable_splash=1
 boot_delay=0

@@ -180,13 +180,13 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      # OTA bundle for the A/B updater (Pi 4's SD card is inaccessible once
-      # assembled - see boompi-update-slot / scripts/update-appliance.sh).
-      - name: Upload update bundle (pi4)
-        if: matrix.board == 'pi4'
+      # OTA bundle for the A/B updater (the SD cards are inaccessible once
+      # the boxes are assembled - see boompi-update-slot /
+      # scripts/update-appliance.sh). Both boards use the same layout.
+      - name: Upload update bundle
         uses: actions/upload-artifact@v7
         with:
-          name: boompi-pi4-update
+          name: boompi-${{ matrix.board }}-update
           path: |
             /home/runner/br-output/images/rootfs.ext4
             /home/runner/br-output/images/boot-a.vfat

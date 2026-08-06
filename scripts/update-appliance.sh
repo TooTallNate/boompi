@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Over-the-air OS update for the Pi 4 boombox (A/B slots, kexec trial).
 #
-# Fetches the newest green pi4 update bundle from CI (or takes a local
+# Fetches the newest green update bundle from CI (or takes a local
 # bundle dir), pushes it to the box, and stages it into the inactive
 # slot. The box kexecs into the candidate without touching autoboot.txt;
 # it commits only after boompid answers healthz, else any reboot or
@@ -11,18 +11,20 @@
 #   scripts/update-appliance.sh                # latest CI bundle
 #   scripts/update-appliance.sh <bundle-dir>   # local bundle
 #
-# Env: PI (default root@boompi.local), REPO (default TooTallNate/boompi)
+# Env: PI (default root@boompi.local), REPO (default TooTallNate/boompi),
+#      BOARD (pi4 default; pi3 for the Pi 3 box - same layout + scripts)
 set -euo pipefail
 
 PI="${PI:-root@boompi.local}"
 REPO="${REPO:-TooTallNate/boompi}"
+BOARD="${BOARD:-pi4}"
 BUNDLE="${1:-}"
 
 if [ -z "$BUNDLE" ]; then
     BUNDLE="$(mktemp -d)/bundle"
     RUN=$(gh run list --repo "$REPO" --workflow image --status success --limit 1 --json databaseId --jq '.[0].databaseId')
-    echo "downloading pi4 update bundle from run $RUN"
-    gh run download "$RUN" --repo "$REPO" -n boompi-pi4-update -D "$BUNDLE"
+    echo "downloading $BOARD update bundle from run $RUN"
+    gh run download "$RUN" --repo "$REPO" -n "boompi-$BOARD-update" -D "$BUNDLE"
     # Artifact files may arrive xz-compressed.
     for f in "$BUNDLE"/*.xz; do [ -e "$f" ] && xz -d "$f"; done
 fi

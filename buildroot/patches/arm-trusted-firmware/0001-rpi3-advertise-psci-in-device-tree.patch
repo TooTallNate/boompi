@@ -1,0 +1,84 @@
+rpi3: advertise PSCI in the device tree like the rpi4 port
+
+The rpi3 BL31 setup only fixes up memreserve regions in the preloaded
+DTB; unlike rpi4 it never adds the psci node or rewrites the cpu
+enable-methods, so a kernel booted through this port keeps using
+spin-tables and its CPUs can never be parked (kexec_load fails with
+EBUSY, CPU hotplug is unavailable). Port the two fdt_fixup calls from
+rpi4_prepare_dtb, growing the tree in place first.
+
+diff -ur a/plat/rpi/rpi3/platform.mk b/plat/rpi/rpi3/platform.mk
+--- a/plat/rpi/rpi3/platform.mk	2026-08-06 09:56:14
++++ b/plat/rpi/rpi3/platform.mk	2026-08-06 09:56:14
+@@ -46,6 +46,8 @@
+ 				plat/rpi/common/rpi3_io_storage.c
+ 
+ BL31_SOURCES		+=	lib/cpus/aarch64/cortex_a53.S		\
++				common/fdt_fixup.c			\
++				common/fdt_wrappers.c			\
+ 				plat/common/plat_gicv2.c		\
+ 				plat/common/plat_psci_common.c		\
+ 				plat/rpi/rpi3/rpi3_bl31_setup.c		\
+diff -ur a/plat/rpi/rpi3/rpi3_bl31_setup.c b/plat/rpi/rpi3/rpi3_bl31_setup.c
+--- a/plat/rpi/rpi3/rpi3_bl31_setup.c	2026-08-06 09:56:14
++++ b/plat/rpi/rpi3/rpi3_bl31_setup.c	2026-08-06 09:56:14
+@@ -11,8 +11,9 @@
+ #include <platform_def.h>
+ 
+ #include <common/bl_common.h>
+-#include <lib/xlat_tables/xlat_mmu_helpers.h>
++#include <common/fdt_fixup.h>
+ #include <lib/xlat_tables/xlat_tables_defs.h>
++#include <lib/xlat_tables/xlat_mmu_helpers.h>
+ #include <plat/common/platform.h>
+ 
+ #include <rpi_shared.h>
+@@ -156,6 +157,40 @@
+  * Add information to the device tree (if any) about the reserved DRAM used by
+  * the Trusted Firmware.
+  */
++/*
++ * Advertise PSCI in the device tree (psci node + cpu enable-methods),
++ * like the rpi4 port does. Without this the kernel keeps using the
++ * spin-table enable method and CPUs can never be parked, which breaks
++ * kexec among other things.
++ */
++static void rpi3_dtb_add_psci(void)
++{
++	void *dtb = (void *)RPI3_PRELOADED_DTB_BASE;
++	int ret;
++
++	if (fdt_check_header(dtb) != 0)
++		return;
++
++	/* Grow the in-place tree so the new nodes fit. */
++	ret = fdt_open_into(dtb, dtb, 0x100000);
++	if (ret < 0) {
++		ERROR("rpi3: Invalid Device Tree at %p: error %d\n", dtb, ret);
++		return;
++	}
++
++	if (dt_add_psci_node(dtb)) {
++		ERROR("rpi3: Failed to add PSCI Device Tree node\n");
++		return;
++	}
++
++	if (dt_add_psci_cpu_enable_methods(dtb)) {
++		ERROR("rpi3: Failed to add PSCI cpu enable methods in Device Tree\n");
++		return;
++	}
++
++	INFO("rpi3: PSCI Device Tree nodes added\n");
++}
++
+ static void rpi3_dtb_add_mem_rsv(void)
+ {
+ 	int i, regions, rc;
+@@ -221,6 +256,7 @@
+ {
+ #ifdef RPI3_PRELOADED_DTB_BASE
+ 	/* Only modify a DTB if we know where to look for it */
++	rpi3_dtb_add_psci();
+ 	rpi3_dtb_add_mem_rsv();
+ #endif
+ }
