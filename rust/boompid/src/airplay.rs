@@ -276,18 +276,16 @@ async fn wait_for_bus_name(conn: &zbus::Connection) -> anyhow::Result<()> {
     anyhow::bail!("org.gnome.ShairportSync never appeared on the system bus (dbus policy?)")
 }
 
-/// FIFO → `pw-cat --playback --raw`. One pw-cat per AirPlay session: the
-/// read side blocks until shairport opens the pipe (session start) and sees
-/// EOF when it closes it (session end).
+/// FIFO → `pw-cat --playback` (streaming WAV). One pw-cat per AirPlay
+/// session: the read side blocks until shairport opens the pipe (session
+/// start) and sees EOF when it closes it (session end). The WAV header
+/// carries the format — pw-cat < 1.4 has no --raw (see audio.rs).
 async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
     loop {
         // Blocks (on the blocking pool) until a writer appears.
         let mut pipe = tokio::fs::File::open(&fifo).await?;
         let mut pwcat = tokio::process::Command::new("pw-cat")
-            .args([
-                "--playback", "--raw", "--format", "s16", "--rate", "44100", "--channels", "2",
-                "-",
-            ])
+            .args(["--playback", "-"])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -297,6 +295,9 @@ async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
             .stdin
             .take()
             .ok_or_else(|| anyhow::anyhow!("pw-cat stdin missing"))?;
+        stdin
+            .write_all(&crate::audio::wav_stream_header(44100, 2))
+            .await?;
         tracing::debug!("airplay audio session started");
         let mut buf = vec![0u8; 16 * 1024];
         loop {

@@ -345,7 +345,8 @@ fn stable_device_id(name: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Audio sink: raw PCM → `pw-cat --playback --raw` → PipeWire default sink.
+// Audio sink: s16le PCM behind a streaming WAV header → `pw-cat --playback`
+// → PipeWire default sink. (No --raw: pw-cat < 1.4 lacks it, see audio.rs.)
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
@@ -365,23 +366,19 @@ impl PwCatSink {
 impl Sink for PwCatSink {
     fn start(&mut self) -> SinkResult<()> {
         if self.child.is_none() {
-            let child = std::process::Command::new("pw-cat")
-                .args([
-                    "--playback",
-                    "--raw",
-                    "--format",
-                    "s16",
-                    "--rate",
-                    "44100",
-                    "--channels",
-                    "2",
-                    "-",
-                ])
+            let mut child = std::process::Command::new("pw-cat")
+                .args(["--playback", "-"])
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| SinkError::ConnectionRefused(format!("pw-cat spawn: {e}")))?;
+            child
+                .stdin
+                .as_mut()
+                .expect("piped stdin")
+                .write_all(&crate::audio::wav_stream_header(44100, 2))
+                .map_err(|e| SinkError::OnWrite(format!("wav header: {e}")))?;
             self.child = Some(child);
         }
         Ok(())

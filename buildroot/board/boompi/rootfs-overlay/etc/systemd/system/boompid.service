@@ -18,6 +18,10 @@ Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus
 Environment=RUST_LOG=boompid=info
 Restart=always
 RestartSec=2
+# The AirPlay FIFO bridge blocks in open() on the blocking pool and can't
+# be cancelled, so a clean stop stalls; don't let restarts hang for the
+# default 90s (this delayed a deploy long enough to muddy bench testing).
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target
