@@ -70,4 +70,10 @@ umount "$MNT"
 rmdir "$MNT"
 rm -f "$MARKER"
 sync
-echo "committed: boot_partition=$BOOT_PART"
+echo "committed: boot_partition=$BOOT_PART; rebooting onto a firmware boot"
+
+# The kexec trial environment is not quite a real boot (e.g. a CPU can
+# fail to come back online across the PSCI off/on cycle) — finish the
+# update with a firmware boot of the now-committed slot. The marker is
+# gone, so this run's successor is a no-op.
+systemctl reboot
