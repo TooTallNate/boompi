@@ -208,6 +208,32 @@ impl App {
         self.cfg_generation.subscribe()
     }
 
+    /// Mark first-boot setup finished. Deliberately idempotent: when
+    /// setup ends over the onboarding hotspot (the finish tap, or a
+    /// Wi-Fi join that tears the AP down mid-flight), the client may
+    /// never see a response and can retry; re-broadcasting and
+    /// re-running the AP teardown are harmless. Returns whether a
+    /// pending setup was actually completed (callers persist).
+    pub async fn complete_setup(&self) -> bool {
+        let was_required = {
+            let mut s = self.shared.write().await;
+            let was = s.setup.required;
+            s.setup.required = false;
+            was
+        };
+        if was_required {
+            tracing::info!("first-boot setup completed");
+        }
+        self.broadcast(ServerMessage::Setup(SetupState::default()));
+        #[cfg(target_os = "linux")]
+        tokio::spawn(async {
+            if let Err(err) = crate::wifi::stop_ap().await {
+                tracing::debug!(%err, "onboarding AP teardown (may not be up)");
+            }
+        });
+        was_required
+    }
+
     /// Persist the current runtime settings back to the config file.
     pub async fn persist_config(&self) {
         let Some(path) = &self.config_path else {
@@ -502,30 +528,11 @@ impl App {
                     Some(name) => self.apply_rename(name).await,
                     None => false,
                 };
-                let complete = cmd.complete == Some(true);
-                let was_required = complete && {
-                    let mut s = self.shared.write().await;
-                    let was = s.setup.required;
-                    s.setup.required = false;
-                    was
+                let was_required = if cmd.complete == Some(true) {
+                    self.complete_setup().await
+                } else {
+                    false
                 };
-                if complete {
-                    if was_required {
-                        tracing::info!("first-boot setup completed");
-                    }
-                    // Deliberately idempotent: when setup finishes over the
-                    // onboarding hotspot, tearing the AP down kills the
-                    // client's connection mid-request - it never sees the
-                    // response and may retry. Re-broadcasting and re-running
-                    // the AP teardown is harmless.
-                    self.broadcast(ServerMessage::Setup(SetupState::default()));
-                    #[cfg(target_os = "linux")]
-                    tokio::spawn(async {
-                        if let Err(err) = crate::wifi::stop_ap().await {
-                            tracing::debug!(%err, "onboarding AP teardown (may not be up)");
-                        }
-                    });
-                }
                 if renamed || was_required {
                     self.persist_config().await;
                 }

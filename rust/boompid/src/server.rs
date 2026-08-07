@@ -197,6 +197,17 @@ async fn api_wifi_action(
                         tracing::warn!(%err, "failed to restore onboarding AP after join failure");
                     }
                 }
+                // A successful join is the last real onboarding step, and
+                // it kills the hotspot the wizard is served over - the
+                // "Finish setup" tap can never arrive (the name step is
+                // already behind the user; the skip-wifi path still ends
+                // via the finish button, where the AP survives).
+                if res.is_ok() && app.snapshot().await.setup.required {
+                    tracing::info!("wifi joined during setup; completing onboarding");
+                    if app.complete_setup().await {
+                        app.persist_config().await;
+                    }
+                }
                 res
             }
             WifiAction::Forget { name } => crate::wifi::forget(name).await,
