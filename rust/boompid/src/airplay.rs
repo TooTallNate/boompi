@@ -87,7 +87,10 @@ pub fn spawn(app: SharedApp) {
     }
     // Probe for the binary up front: an appliance image always ships it, and
     // on a dev box a missing install shouldn't spam the restart loop.
-    match std::process::Command::new("shairport-sync").arg("-V").output() {
+    match std::process::Command::new("shairport-sync")
+        .arg("-V")
+        .output()
+    {
         Ok(out) => {
             let version = String::from_utf8_lossy(&out.stdout);
             tracing::info!(version = %version.trim(), "shairport-sync found");
@@ -340,7 +343,11 @@ fn make_fifo(path: &Path) -> anyhow::Result<()> {
     let cpath = std::ffi::CString::new(path.as_os_str().as_encoded_bytes())?;
     // SAFETY: cpath is a valid NUL-terminated path.
     if unsafe { libc::mkfifo(cpath.as_ptr(), 0o600) } != 0 {
-        anyhow::bail!("mkfifo {}: {}", path.display(), std::io::Error::last_os_error());
+        anyhow::bail!(
+            "mkfifo {}: {}",
+            path.display(),
+            std::io::Error::last_os_error()
+        );
     }
     Ok(())
 }
@@ -376,7 +383,14 @@ async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
         let mut pipe = tokio::fs::File::open(&fifo).await?;
         let mut pwcat = tokio::process::Command::new("pw-cat")
             .args([
-                "--playback", "--rate", "44100", "--channels", "2", "--format", "s16", "-",
+                "--playback",
+                "--rate",
+                "44100",
+                "--channels",
+                "2",
+                "--format",
+                "s16",
+                "-",
             ])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::null())
@@ -662,9 +676,11 @@ fn md_track_id(md: &HashMap<String, OwnedValue>) -> Option<String> {
 /// `mpris:length` is int64 microseconds.
 fn md_length_ms(md: &HashMap<String, OwnedValue>) -> Option<u32> {
     let v = md.get("mpris:length")?;
-    let us = i64::try_from(v.clone())
-        .ok()
-        .or_else(|| u64::try_from(v.clone()).ok().and_then(|u| i64::try_from(u).ok()))?;
+    let us = i64::try_from(v.clone()).ok().or_else(|| {
+        u64::try_from(v.clone())
+            .ok()
+            .and_then(|u| i64::try_from(u).ok())
+    })?;
     if us <= 0 {
         return None;
     }

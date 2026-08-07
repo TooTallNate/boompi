@@ -203,10 +203,26 @@ pub async fn start_ap(ssid: &str) -> anyhow::Result<()> {
         .any(|l| split_terse(l).first().map(String::as_str) == Some(AP_CONNECTION));
     if !have_profile {
         nmcli(&[
-            "con", "add", "type", "wifi", "ifname", "wlan0", "con-name", AP_CONNECTION,
-            "autoconnect", "no", "ssid", ssid,
-            "802-11-wireless.mode", "ap", "802-11-wireless.band", "bg",
-            "ipv4.method", "shared", "ipv6.method", "disabled",
+            "con",
+            "add",
+            "type",
+            "wifi",
+            "ifname",
+            "wlan0",
+            "con-name",
+            AP_CONNECTION,
+            "autoconnect",
+            "no",
+            "ssid",
+            ssid,
+            "802-11-wireless.mode",
+            "ap",
+            "802-11-wireless.band",
+            "bg",
+            "ipv4.method",
+            "shared",
+            "ipv6.method",
+            "disabled",
         ])
         .await?;
     } else {

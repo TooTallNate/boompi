@@ -116,12 +116,9 @@ async fn run_once(
     // audible volume is the *system* volume, driven from VolumeChanged
     // events below - parity with the Bluetooth (AVRCP) and AirPlay (DACP)
     // paths, so the phone app, the panel slider and the web UI all agree.
-    let player = Player::new(
-        player_config,
-        session.clone(),
-        Box::new(NoOpVolume),
-        || Box::new(PwCatSink::default()),
-    );
+    let player = Player::new(player_config, session.clone(), Box::new(NoOpVolume), || {
+        Box::new(PwCatSink::default())
+    });
     let mut events = player.get_player_event_channel();
 
     let connect_config = ConnectConfig {
@@ -389,7 +386,13 @@ impl Sink for PwCatSink {
         if self.child.is_none() {
             let child = std::process::Command::new("pw-cat")
                 .args([
-                    "--playback", "--rate", "44100", "--channels", "2", "--format", "s16",
+                    "--playback",
+                    "--rate",
+                    "44100",
+                    "--channels",
+                    "2",
+                    "--format",
+                    "s16",
                     "-",
                 ])
                 .stdin(Stdio::piped())

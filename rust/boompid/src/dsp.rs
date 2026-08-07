@@ -101,8 +101,7 @@ impl SpectrumAnalyzer {
             for bin in &self.spectrum[lo..hi] {
                 peak = peak.max(bin.norm() * scale);
             }
-            let db = 20.0 * (peak + 1e-9).log10()
-                + 20.0 * volume.clamp(0.001, 1.0).log10();
+            let db = 20.0 * (peak + 1e-9).log10() + 20.0 * volume.clamp(0.001, 1.0).log10();
             // Slight tilt: music has less energy up high; lift the top bands
             // so the display looks balanced (cava does similar weighting).
             let tilt = 1.0 + 0.35 * (i as f32 / (BARS - 1) as f32);
