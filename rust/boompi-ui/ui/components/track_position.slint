@@ -25,16 +25,38 @@ export component TrackPosition inherits VerticalLayout {
     }
 
     HorizontalLayout {
-        Text {
-            text: root.elapsed;
-            color: Theme.dim;
-            font-size: 0.7778rem;
+        Rectangle {
+            width: t1.preferred-width;
+            height: t1.preferred-height;
+            Text {
+                x: 0.09rem;
+                y: 0.09rem;
+                text: root.elapsed;
+                color: Theme.bg.transparentize(0.25);
+                font-size: 0.7778rem;
+            }
+            t1 := Text {
+                text: root.elapsed;
+                color: Theme.dim;
+                font-size: 0.7778rem;
+            }
         }
         Rectangle { }
-        Text {
-            text: root.remaining;
-            color: Theme.dim;
-            font-size: 0.7778rem;
+        Rectangle {
+            width: t2.preferred-width;
+            height: t2.preferred-height;
+            Text {
+                x: 0.09rem;
+                y: 0.09rem;
+                text: root.remaining;
+                color: Theme.bg.transparentize(0.25);
+                font-size: 0.7778rem;
+            }
+            t2 := Text {
+                text: root.remaining;
+                color: Theme.dim;
+                font-size: 0.7778rem;
+            }
         }
     }
 }
