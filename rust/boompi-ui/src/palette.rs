@@ -7,8 +7,10 @@
 //! photographic and gradient-heavy covers: their color mass shatters
 //! across hundreds of nearby RGB bins (no single bin looks dominant)
 //! while concentrating tightly in hue. Near-black/near-white pixels
-//! are discounted, and grayscale art returns None - the stock theme
-//! is better than a mud-colored one.
+//! are discounted. Monochrome art is a palette too: covers without a
+//! dominant saturated arc get a white/gray theme (subtly tinted when a
+//! faint cast exists, e.g. sepia scans) - the stock neon theme is
+//! reserved for the no-artwork state.
 
 use image::RgbaImage;
 
@@ -64,6 +66,7 @@ pub fn extract(img: &RgbaImage) -> Option<ArtPalette> {
 
     let mut buckets = [Bucket::default(); BUCKETS];
     let mut total = 0u32;
+    let mut val_sum = 0f32;
     let mut y = 0;
     while y < h {
         let mut x = 0;
@@ -72,6 +75,7 @@ pub fn extract(img: &RgbaImage) -> Option<ArtPalette> {
             if p[3] >= 128 {
                 total += 1;
                 let (hh, ss, vv) = rgb_to_hsv(p[0], p[1], p[2]);
+                val_sum += vv;
                 // Saturation is the star; very dark or blown-out pixels
                 // rarely make good accents.
                 let luma_weight = if !(0.12..=0.97).contains(&vv) {
@@ -102,10 +106,37 @@ pub fn extract(img: &RgbaImage) -> Option<ArtPalette> {
     let i1 =
         (0..BUCKETS).max_by(|&a, &b| window(&buckets, a).0.total_cmp(&window(&buckets, b).0))?;
     let (m1, h1, s1, v1) = window(&buckets, i1);
-    // Grayscale/mud art: a meaningful accent needs real saturated mass
-    // (3% of the image at full saturation, or equivalent) in one arc.
+    // Monochrome art (no arc carries the equivalent of 3% of the image
+    // at full saturation): theme in white/gray instead of bailing -
+    // tinted faintly by any sub-threshold cast (sepia scans), never by
+    // tiny accents like a lone red word on a grayscale cover.
     if m1 < total as f32 * 0.03 || s1 < 0.25 {
-        return None;
+        let mean_v = val_sum / total as f32;
+        let tint_hue = h1;
+        // Tint only for a genuine cast (low saturation spread across the
+        // image, e.g. sepia scans) - never for a small saturated object
+        // like one red word on a grayscale cover.
+        let tint = if s1 < 0.35 && m1 > total as f32 * 0.01 {
+            (s1 * 0.35).min(0.08)
+        } else {
+            0.0
+        };
+        let color = |h: f32, s: f32, v: f32| {
+            let (r, g, b) = hsv_to_rgb(h, s, v);
+            slint::Color::from_rgb_u8(r, g, b)
+        };
+        return Some(ArtPalette {
+            accent_dark: color(tint_hue, tint, 0.85 + 0.1 * mean_v),
+            accent2_dark: color(tint_hue, tint, 0.6),
+            accent_light: color(tint_hue, tint, 0.28),
+            accent2_light: color(tint_hue, tint, 0.45),
+            // Brighter covers get a slightly lighter wash so the panel
+            // reflects the art's tonal character.
+            bg_top_dark: color(tint_hue, tint * 0.7, 0.16 + 0.16 * mean_v),
+            bg_bottom_dark: color(tint_hue, tint * 0.7, 0.05 + 0.06 * mean_v),
+            bg_top_light: color(tint_hue, tint * 0.5, 0.98),
+            bg_bottom_light: color(tint_hue, tint * 0.5, 0.9),
+        });
     }
 
     // Second hue: strongest arc at least 50deg away; otherwise a
@@ -278,9 +309,71 @@ mod tests {
         );
     }
 
+    fn channel_spread(c: slint::Color) -> i32 {
+        let (r, g, b) = (c.red() as i32, c.green() as i32, c.blue() as i32);
+        r.max(g).max(b) - r.min(g).min(b)
+    }
+
     #[test]
-    fn grayscale_album_yields_none() {
+    fn grayscale_album_yields_neutral_theme() {
         let img = RgbaImage::from_pixel(64, 64, image::Rgba([120, 120, 120, 255]));
-        assert!(extract(&img).is_none());
+        let p = extract(&img).expect("monochrome art themes in gray");
+        assert!(channel_spread(p.accent_dark) <= 8, "{:?}", p.accent_dark);
+        assert!(p.accent_dark.red() > 200, "accent should be light");
+    }
+
+    #[test]
+    fn bw_photo_with_tiny_red_text_stays_neutral() {
+        // Grayscale concert photo with a small red word (~1% of pixels):
+        // the red must not hijack the accent.
+        let mut img = RgbaImage::new(100, 100);
+        let mut k = 7u32;
+        for y in 0..100u32 {
+            for x in 0..100u32 {
+                k = k.wrapping_mul(1664525).wrapping_add(1013904223);
+                let noise = (k >> 24) as f32 / 255.0;
+                let px = if y == 10 && x < 100 {
+                    let (r, g, b) = super::hsv_to_rgb(0.0, 0.85, 0.7); // red strip = 1%
+                    image::Rgba([r, g, b, 255])
+                } else {
+                    let v = (40.0 + 180.0 * noise) as u8;
+                    image::Rgba([v, v, v, 255])
+                };
+                img.put_pixel(x, y, px);
+            }
+        }
+        let p = extract(&img).expect("monochrome art themes in gray");
+        assert!(channel_spread(p.accent_dark) <= 12, "{:?}", p.accent_dark);
+    }
+
+    #[test]
+    fn white_wall_cover_yields_light_wash() {
+        // Near-white textured wall + black stencil: neutral accent and a
+        // lighter background wash than a dark cover would get.
+        let mut img = RgbaImage::new(100, 100);
+        let mut k = 3u32;
+        for y in 0..100u32 {
+            for x in 0..100u32 {
+                k = k.wrapping_mul(1664525).wrapping_add(1013904223);
+                let noise = (k >> 24) as f32 / 255.0;
+                let px = if (30..45).contains(&x) && y > 20 {
+                    image::Rgba([15, 15, 18, 255]) // stencil
+                } else {
+                    let v = (215.0 + 35.0 * noise) as u8;
+                    image::Rgba([v, v.saturating_sub(3), v, 255])
+                };
+                img.put_pixel(x, y, px);
+            }
+        }
+        let p = extract(&img).expect("monochrome art themes in gray");
+        assert!(channel_spread(p.accent_dark) <= 12, "{:?}", p.accent_dark);
+        let dark = RgbaImage::from_pixel(32, 32, image::Rgba([25, 25, 25, 255]));
+        let pd = extract(&dark).expect("dark mono art themes too");
+        assert!(
+            p.bg_top_dark.red() > pd.bg_top_dark.red(),
+            "brighter cover should get a lighter wash ({:?} vs {:?})",
+            p.bg_top_dark,
+            pd.bg_top_dark
+        );
     }
 }
