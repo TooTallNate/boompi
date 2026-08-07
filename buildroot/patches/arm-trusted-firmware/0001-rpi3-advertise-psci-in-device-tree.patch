@@ -7,6 +7,25 @@ spin-tables and its CPUs can never be parked (kexec_load fails with
 EBUSY, CPU hotplug is unavailable). Port the two fdt_fixup calls from
 rpi4_prepare_dtb, growing the tree in place first.
 
+The stock MAP_NS_DTB window is only 64KB; a firmware-merged tree (base
+DTB + vc4/panel overlays) plus the fdt_open_into rewrite can exceed
+that, and BL31 writes beyond its mapping data-abort in EL3 with the
+MMU on (bench symptom: dead ACT LED, CPU parked in the exception
+handler). Widen the window to 1MB to match the grow size - the DTB
+sits at 16MB and the kernel at 32MB, so there is room.
+
+diff -ur a/plat/rpi/common/rpi3_common.c b/plat/rpi/common/rpi3_common.c
+--- a/plat/rpi/common/rpi3_common.c	2026-08-06 09:56:14
++++ b/plat/rpi/common/rpi3_common.c	2026-08-07 08:20:00
+@@ -28,7 +28,7 @@
+ #endif
+ 
+ #ifdef RPI3_PRELOADED_DTB_BASE
+-#define MAP_NS_DTB	MAP_REGION_FLAT(RPI3_PRELOADED_DTB_BASE, 0x10000, \
++#define MAP_NS_DTB	MAP_REGION_FLAT(RPI3_PRELOADED_DTB_BASE, 0x100000, \
+ 					MT_MEMORY | MT_RW | MT_NS)
+ #endif
+ 
 diff -ur a/plat/rpi/rpi3/platform.mk b/plat/rpi/rpi3/platform.mk
 --- a/plat/rpi/rpi3/platform.mk	2026-08-06 09:56:14
 +++ b/plat/rpi/rpi3/platform.mk	2026-08-06 09:56:14

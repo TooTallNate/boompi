@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board)) }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board), 'buildroot/buildroot-patches/*.patch') }}
           restore-keys: |
             br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-
             br-dl-${{ env.BR_VERSION }}-
@@ -128,6 +128,12 @@ jobs:
         run: |
           curl -fsSL "https://buildroot.org/downloads/buildroot-${BR_VERSION}.tar.xz" | tar -xJ -C "$HOME"
           mv "$HOME/buildroot-${BR_VERSION}" "$HOME/buildroot"
+          # Local fixes to the Buildroot tree itself (e.g. the rpi-firmware
+          # version bump - the BR2_EXTERNAL mechanism cannot override
+          # package versions).
+          for p in "$GITHUB_WORKSPACE"/buildroot/buildroot-patches/*.patch; do
+            patch -d "$HOME/buildroot" -p1 < "$p"
+          done
 
       - name: Configure
         # The defconfig is generated: shared fragment + board hardware
@@ -241,7 +247,7 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles(format('buildroot/configs/boompi_{0}_defconfig', matrix.board)) }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board), 'buildroot/buildroot-patches/*.patch') }}
 
       - name: Save ccache
         if: always()
