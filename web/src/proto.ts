@@ -41,6 +41,25 @@ export interface BtDevice {
   volume_mode_auto: BtVolumeMode;
 }
 
+export interface EmojiFontInfo {
+  id: string;
+  label: string;
+  license: string;
+  installed: boolean;
+  active: boolean;
+  builtin: boolean;
+  size: number;
+}
+
+export interface EmojiFontsState {
+  fonts: EmojiFontInfo[];
+  downloading: string | null;
+  progress: number | null;
+  error: string | null;
+}
+
+export type EmojiFontAction = "download" | "select" | "remove";
+
 export type BtDeviceAction =
   | "connect"
   | "disconnect"
@@ -61,6 +80,7 @@ export interface AppState {
   pairing: Pairing;
   bt_devices: BtDevice[];
   setup: { required: boolean };
+  emoji_fonts: EmojiFontsState;
   // Present but unused by the settings UI so far:
   source: unknown;
   track: unknown;
@@ -77,6 +97,7 @@ export type ServerMessage =
   | ({ type: "hello" } & Hello)
   | { type: "state"; [k: string]: unknown }
   | ({ type: "settings" } & Settings)
+  | ({ type: "emoji_fonts" } & EmojiFontsState)
   | ({ type: "pairing" } & Pairing)
   | { type: "bt_devices"; devices: BtDevice[] }
   | { type: "volume"; level: number }
@@ -84,6 +105,7 @@ export type ServerMessage =
 
 /** Client → server WebSocket messages used by the settings UI. */
 export type ClientMessage =
+  | { type: "emoji_font"; action: EmojiFontAction; id: string }
   | { type: "pairing"; action: PairingAction }
   | { type: "bt_device"; address: string; action: BtDeviceAction }
   | { type: "factory_reset" };

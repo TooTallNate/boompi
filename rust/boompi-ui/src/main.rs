@@ -172,21 +172,14 @@ fn register_emoji_fallback() {
     // points at the host's emoji font (Apple Color Emoji on macOS).
     // Overriding the generic is what actually makes the bundled font
     // win everywhere.
-    collection.set_generic_families(
-        fontique::GenericFamily::Emoji,
-        fonts.iter().map(|f| f.0),
-    );
+    collection.set_generic_families(fontique::GenericFamily::Emoji, fonts.iter().map(|f| f.0));
     // Belt and braces for symbol clusters that don't take the emoji
     // path: put the bundled font first in the script fallbacks our text
     // realistically hits, keeping the host's chain behind it.
     for script in ["Latn", "Cyrl", "Grek", "Zsye", "Zsym"] {
-        let key =
-            fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None);
+        let key = fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None);
         let system: Vec<_> = collection.fallback_families(key).collect();
-        collection.set_fallbacks(
-            key,
-            fonts.iter().map(|f| f.0).chain(system.iter().copied()),
-        );
+        collection.set_fallbacks(key, fonts.iter().map(|f| f.0).chain(system.iter().copied()));
     }
 }
 
@@ -295,6 +288,20 @@ fn main() -> anyhow::Result<()> {
         ui.on_pairing_reject(move || {
             let _ = tx.send(ClientMessage::Pairing {
                 action: PairingAction::Reject,
+            });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_emoji_font_tapped(move |id, status| {
+            let action = match status.as_str() {
+                "installed" => boompi_proto::EmojiFontAction::Select,
+                "missing" => boompi_proto::EmojiFontAction::Download,
+                _ => return,
+            };
+            let _ = tx.send(ClientMessage::EmojiFont {
+                action,
+                id: id.to_string(),
             });
         });
     }

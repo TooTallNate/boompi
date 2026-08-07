@@ -295,6 +295,38 @@ pub struct Hello {
     pub settings_url: Option<String>,
 }
 
+/// One emoji font in the selection catalog (see boompid's fonts.rs).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct EmojiFontInfo {
+    pub id: String,
+    pub label: String,
+    pub license: String,
+    pub installed: bool,
+    pub active: bool,
+    pub builtin: bool,
+    /// Download size in bytes (0 for the built-in).
+    pub size: u64,
+}
+
+/// Emoji font catalog + download state, mirrored to all clients.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct EmojiFontsState {
+    pub fonts: Vec<EmojiFontInfo>,
+    /// Font id currently downloading, if any.
+    pub downloading: Option<String>,
+    /// Download progress 0.0-1.0 while `downloading` is set.
+    pub progress: Option<f32>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EmojiFontAction {
+    Download,
+    Select,
+    Remove,
+}
+
 /// Full state snapshot; sent after [`Hello`] and available on demand.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct State {
@@ -308,6 +340,8 @@ pub struct State {
     pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
+    #[serde(default)]
+    pub emoji_fonts: EmojiFontsState,
 }
 
 /// Server → client messages (JSON text frames).
@@ -326,6 +360,7 @@ pub enum ServerMessage {
     BtDevices { devices: Vec<BtDevice> },
     Settings(Settings),
     Setup(SetupState),
+    EmojiFonts(EmojiFontsState),
 }
 
 /// Client → server messages (JSON text frames).
@@ -334,6 +369,11 @@ pub enum ServerMessage {
 pub enum ClientMessage {
     Play,
     Pause,
+    /// Manage emoji fonts (download/select/remove by catalog id).
+    EmojiFont {
+        action: EmojiFontAction,
+        id: String,
+    },
     Next,
     Previous,
     SetVolume {

@@ -121,6 +121,7 @@ pub struct Shared {
     /// Active emoji font id + download-in-flight state (fonts.rs).
     pub emoji_font: String,
     pub emoji_download: Option<String>,
+    pub emoji_progress: Option<f32>,
     pub emoji_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
@@ -158,6 +159,7 @@ impl App {
                 ntp: cfg2_ntp,
                 emoji_font: cfg2_emoji_font,
                 emoji_download: None,
+                emoji_progress: None,
                 emoji_error: None,
                 ..Shared::default()
             }),
@@ -385,6 +387,15 @@ impl App {
             bt_devices: s.bt_devices.clone(),
             settings: s.settings.clone(),
             setup: s.setup.clone(),
+            emoji_fonts: boompi_proto::EmojiFontsState {
+                #[cfg(target_os = "linux")]
+                fonts: crate::fonts::list(&s.emoji_font),
+                #[cfg(not(target_os = "linux"))]
+                fonts: Vec::new(),
+                downloading: s.emoji_download.clone(),
+                progress: s.emoji_progress,
+                error: s.emoji_error.clone(),
+            },
         }
     }
 
@@ -443,7 +454,7 @@ impl App {
     /// for `--sim`; in Phase 1 transport/volume commands are forwarded to the
     /// active source (BlueZ `MediaPlayer1`, librespot, ...) and state changes
     /// flow back from source events instead.
-    pub async fn handle_client_message(&self, msg: ClientMessage) {
+    pub async fn handle_client_message(self: &std::sync::Arc<Self>, msg: ClientMessage) {
         tracing::debug!(?msg, "client message");
         match msg {
             ClientMessage::Play => {
@@ -502,6 +513,19 @@ impl App {
             ClientMessage::BtDevice { address, action } => {
                 if !self.forward_bt(BtCommand::Device { address, action }) {
                     tracing::info!(?action, "bt device action ignored (no bluetooth task)");
+                }
+            }
+            ClientMessage::EmojiFont { action, id } => {
+                #[cfg(target_os = "linux")]
+                if let Err(err) = crate::fonts::perform(self, action, &id).await {
+                    tracing::warn!(%err, ?action, %id, "emoji font action failed");
+                    self.shared.write().await.emoji_error = Some(err.to_string());
+                    let snapshot = crate::fonts::state(self).await;
+                    self.broadcast(ServerMessage::EmojiFonts(snapshot));
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let _ = (action, id);
                 }
             }
             ClientMessage::SetSettings(patch) => {

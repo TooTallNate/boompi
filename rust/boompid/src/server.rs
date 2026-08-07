@@ -196,13 +196,7 @@ async fn api_emoji_fonts(State(app): State<SharedApp>) -> axum::response::Respon
     let _ = &app;
     #[cfg(target_os = "linux")]
     {
-        let s = app.shared.read().await;
-        return Json(serde_json::json!({
-            "fonts": crate::fonts::list(&s.emoji_font),
-            "downloading": s.emoji_download,
-            "error": s.emoji_error,
-        }))
-        .into_response();
+        return Json(crate::fonts::state(&app).await).into_response();
     }
     #[cfg(not(target_os = "linux"))]
     (
@@ -225,55 +219,19 @@ async fn api_emoji_font_action(
     let _ = (&app, &req);
     #[cfg(target_os = "linux")]
     {
-        let result: anyhow::Result<()> = async {
-            match req.action.as_str() {
-                "download" => {
-                    {
-                        let mut s = app.shared.write().await;
-                        if s.emoji_download.is_some() {
-                            anyhow::bail!("a download is already running");
-                        }
-                        s.emoji_download = Some(req.id.clone());
-                        s.emoji_error = None;
-                    }
-                    let app2 = app.clone();
-                    let id = req.id.clone();
-                    tokio::spawn(async move {
-                        let result = crate::fonts::download(&id).await;
-                        let mut s = app2.shared.write().await;
-                        s.emoji_download = None;
-                        if let Err(err) = result {
-                            tracing::warn!(%err, id, "emoji font download failed");
-                            s.emoji_error = Some(err.to_string());
-                        }
-                    });
-                }
-                "select" => {
-                    if !crate::fonts::installed(&req.id) {
-                        anyhow::bail!("font not installed");
-                    }
-                    crate::fonts::write_conf(&req.id)?;
-                    app.shared.write().await.emoji_font = req.id.clone();
-                    app.persist_config().await;
-                    tokio::spawn(crate::fonts::apply_live());
-                    tracing::info!(id = %req.id, "emoji font selected");
-                }
-                "remove" => {
-                    crate::fonts::remove(&req.id)?;
-                    let was_active = app.shared.read().await.emoji_font == req.id;
-                    if was_active {
-                        crate::fonts::write_conf("noto")?;
-                        app.shared.write().await.emoji_font = "noto".into();
-                        app.persist_config().await;
-                        tokio::spawn(crate::fonts::apply_live());
-                    }
-                }
-                other => anyhow::bail!("unknown action: {other}"),
+        let action = match req.action.as_str() {
+            "download" => boompi_proto::EmojiFontAction::Download,
+            "select" => boompi_proto::EmojiFontAction::Select,
+            "remove" => boompi_proto::EmojiFontAction::Remove,
+            other => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(serde_json::json!({ "error": format!("unknown action: {other}") })),
+                )
+                    .into_response();
             }
-            Ok(())
-        }
-        .await;
-        return match result {
+        };
+        return match crate::fonts::perform(&app, action, &req.id).await {
             Ok(()) => api_emoji_fonts(State(app)).await,
             Err(err) => (
                 StatusCode::BAD_REQUEST,

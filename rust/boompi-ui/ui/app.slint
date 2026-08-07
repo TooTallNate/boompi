@@ -18,7 +18,8 @@ import { Footer } from "components/footer.slint";
 import { NowPlaying } from "components/now_playing.slint";
 import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
-import { SettingsPanel } from "components/settings.slint";
+import { SettingsPanel, EmojiFontRow } from "components/settings.slint";
+export { EmojiFontRow }
 import { SetupScreen } from "components/setup.slint";
 import { ActionButton } from "components/widgets.slint";
 
@@ -79,6 +80,7 @@ export component AppWindow inherits Window {
     in-out property <bool> online-art: false;
     in property <string> settings-url: "";
     in property <image> settings-qr;
+    in property <[EmojiFontRow]> emoji-fonts: [];
     in property <bool> setup-required: false;
 
     // --- clock ---
@@ -98,6 +100,7 @@ export component AppWindow inherits Window {
     callback online-art-toggled(bool);
     callback theme-toggled(bool);
     callback scale-changed(float);
+    callback emoji-font-tapped(string, string);
     callback pairing-enable();
     callback pairing-cancel();
     callback pairing-confirm();
@@ -217,6 +220,10 @@ export component AppWindow inherits Window {
     if root.screen == "settings": SettingsPanel {
         speaker-name: root.speaker-name;
         version-line: root.version-line;
+        emoji-fonts: root.emoji-fonts;
+        emoji-font-tapped(id, status) => {
+            root.emoji-font-tapped(id, status);
+        }
         online-art <=> root.online-art;
         pairing-state: root.pairing-state;
         settings-url: root.settings-url;

@@ -11,6 +11,15 @@ import { ActionButton } from "widgets.slint";
 import { Theme } from "theme.slint";
 import { IconBack } from "icons.slint";
 
+// One emoji font row (built in net.rs from EmojiFontsState).
+// status: "active" | "installed" | "missing" | "downloading" | "busy"
+export struct EmojiFontRow {
+    id: string,
+    label: string,
+    status: string,
+    detail: string,
+}
+
 component Row inherits Rectangle {
     in property <string> label;
     in property <string> sublabel;
@@ -54,6 +63,8 @@ export component SettingsPanel inherits Rectangle {
     in property <string> pairing-state; // "idle" | "discoverable" | "confirm"
     in property <string> settings-url;
     in property <image> settings-qr;
+    in property <[EmojiFontRow]> emoji-fonts: [];
+    callback emoji-font-tapped(string, string); // (id, status)
     callback close();
     callback online-art-toggled(bool);
     callback theme-toggled(bool);
@@ -125,6 +136,31 @@ export component SettingsPanel inherits Rectangle {
                                 root.scale-changed(min(2.5, Theme.scale + 0.25));
                             }
                         }
+                    }
+                }
+
+                Row {
+                    label: "Emoji style";
+                    sublabel: "Selecting briefly restarts this screen";
+                }
+                for f in root.emoji-fonts: Row {
+                    label: f.label;
+                    sublabel: f.detail;
+                    if f.status == "active": Text {
+                        text: "Active";
+                        color: Theme.good;
+                        font-size: 0.83rem;
+                    }
+                    if f.status == "installed" || f.status == "missing": ActionButton {
+                        text: f.status == "installed" ? "Use" : "Get";
+                        clicked => {
+                            root.emoji-font-tapped(f.id, f.status);
+                        }
+                    }
+                    if f.status == "downloading" || f.status == "busy": Text {
+                        text: f.status == "downloading" ? "…" : "";
+                        color: Theme.dim;
+                        font-size: 0.83rem;
                     }
                 }
 

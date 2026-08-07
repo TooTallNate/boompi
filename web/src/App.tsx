@@ -1,26 +1,20 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
-  emojiFontAction,
   fetchClock,
-  fetchEmojiFonts,
   fetchWifi,
   patchClock,
   patchSettings,
   sendCommand,
   wifiAction,
 } from "./api";
-import type {
-  ClockStatus,
-  EmojiFontsStatus,
-  WifiNetwork,
-  WifiStatus,
-} from "./api";
+import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
 import { useBoompi } from "./useBoompi";
 import type {
   BtDevice,
   BtVolumeMode,
   ClientMessage,
+  EmojiFontsState,
   Pairing,
   Settings,
   SettingsPatch,
@@ -65,7 +59,9 @@ export default function App() {
           <>
             <NameSection settings={settings} onSaved={applySettings} />
             <AppearanceSection settings={settings} onSaved={applySettings} />
-            <EmojiFontSection />
+            {state?.emoji_fonts && (
+              <EmojiFontSection emoji={state.emoji_fonts} send={send} />
+            )}
             <ArtSection settings={settings} onSaved={applySettings} />
             <AirplayIconSection settings={settings} onSaved={applySettings} />
           </>
@@ -750,38 +746,17 @@ function AppearanceSection({ settings, onSaved }: SectionProps) {
   );
 }
 
-function EmojiFontSection() {
-  const [status, setStatus] = useState<EmojiFontsStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  async function refresh() {
-    try {
-      setStatus(await fetchEmojiFonts());
-      setError(null);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-  useEffect(() => {
-    refresh();
-  }, []);
-  // Poll while a download runs (the Apple build is ~110MB).
-  useEffect(() => {
-    if (!status?.downloading) return;
-    const t = setInterval(refresh, 2000);
-    return () => clearInterval(t);
-  }, [status?.downloading]);
-
-  async function act(action: "download" | "select" | "remove", id: string) {
-    try {
-      setStatus(await emojiFontAction(action, id));
-      setError(null);
-    } catch (e) {
-      setError(String(e));
-    }
-  }
-
-  if (!status) return null;
+function EmojiFontSection({
+  emoji,
+  send,
+}: {
+  emoji: EmojiFontsState;
+  send: (msg: ClientMessage) => void;
+}) {
+  // Fully push-driven: the ws State snapshot carries the catalog and
+  // every change (downloads incl. progress, selection) arrives as an
+  // emoji_fonts broadcast - no REST polling. The REST endpoint remains
+  // for curl debugging.
   return (
     <Section title="Emoji style">
       <p className="mb-2 text-sm text-dim">
@@ -789,7 +764,7 @@ function EmojiFontSection() {
         titles). Downloads are stored on the speaker and survive updates;
         switching restarts the panel UI briefly.
       </p>
-      {status.fonts.map((f) => (
+      {emoji.fonts.map((f) => (
         <div
           key={f.id}
           className="flex items-center justify-between gap-3 border-t border-line py-2.5 first:border-t-0"
@@ -810,19 +785,21 @@ function EmojiFontSection() {
             {f.installed && !f.active && (
               <button
                 className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink"
-                onClick={() => act("select", f.id)}
+                onClick={() => send({ type: "emoji_font", action: "select", id: f.id })}
               >
                 Use
               </button>
             )}
             {!f.installed &&
-              (status.downloading === f.id ? (
-                <span className="px-3 py-1.5 text-sm text-dim">Downloading…</span>
+              (emoji.downloading === f.id ? (
+                <span className="px-3 py-1.5 text-sm text-dim">
+                  Downloading… {Math.round((emoji.progress ?? 0) * 100)}%
+                </span>
               ) : (
                 <button
                   className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg disabled:opacity-40"
-                  disabled={status.downloading != null}
-                  onClick={() => act("download", f.id)}
+                  disabled={emoji.downloading != null}
+                  onClick={() => send({ type: "emoji_font", action: "download", id: f.id })}
                 >
                   Download
                 </button>
@@ -830,7 +807,7 @@ function EmojiFontSection() {
             {f.installed && !f.builtin && !f.active && (
               <button
                 className="rounded-lg border border-err/40 px-3 py-1.5 text-sm text-err hover:bg-err/10"
-                onClick={() => act("remove", f.id)}
+                onClick={() => send({ type: "emoji_font", action: "remove", id: f.id })}
               >
                 Remove
               </button>
@@ -838,9 +815,7 @@ function EmojiFontSection() {
           </div>
         </div>
       ))}
-      {(error || status.error) && (
-        <p className="mt-2 text-[13px] text-err">{error || status.error}</p>
-      )}
+      {emoji.error && <p className="mt-2 text-[13px] text-err">{emoji.error}</p>}
     </Section>
   );
 }

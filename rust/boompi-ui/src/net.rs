@@ -162,7 +162,9 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let setup_required = state.setup.required;
             let volume = state.volume;
             let scale = ui_scale(state.settings.ui_scale);
+            let emoji = state.emoji_fonts.clone();
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                apply_emoji_fonts(&ui, &emoji);
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
@@ -206,6 +208,11 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             });
         }
         ServerMessage::BtDevices { .. } => {} // panel device list: future work
+        ServerMessage::EmojiFonts(state) => {
+            let _ = ctx
+                .weak
+                .upgrade_in_event_loop(move |ui| apply_emoji_fonts(&ui, &state));
+        }
         ServerMessage::Setup(setup) => {
             let _ = ctx
                 .weak
@@ -347,6 +354,42 @@ fn ui_scale(scale: f32) -> f32 {
     } else {
         scale.clamp(0.5, 3.0)
     }
+}
+
+/// Project EmojiFontsState into the settings screen's row model.
+fn apply_emoji_fonts(ui: &crate::AppWindow, state: &boompi_proto::EmojiFontsState) {
+    use slint::{ModelRc, VecModel};
+    let rows: Vec<crate::EmojiFontRow> = state
+        .fonts
+        .iter()
+        .map(|f| {
+            let status = if state.downloading.as_deref() == Some(f.id.as_str()) {
+                "downloading"
+            } else if f.active {
+                "active"
+            } else if f.installed {
+                "installed"
+            } else if state.downloading.is_some() {
+                "busy" // another download running; hide the Get button
+            } else {
+                "missing"
+            };
+            let detail = if status == "downloading" {
+                format!("Downloading… {:.0}%", state.progress.unwrap_or(0.0) * 100.0)
+            } else if !f.installed && f.size > 0 {
+                format!("{} MB download", f.size / 1024 / 1024)
+            } else {
+                f.license.clone()
+            };
+            crate::EmojiFontRow {
+                id: f.id.clone().into(),
+                label: f.label.clone().into(),
+                status: status.into(),
+                detail: detail.into(),
+            }
+        })
+        .collect();
+    ui.set_emoji_fonts(ModelRc::new(VecModel::from(rows)));
 }
 
 fn pairing_str(state: PairingState) -> &'static str {

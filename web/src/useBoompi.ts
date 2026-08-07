@@ -52,6 +52,11 @@ export function useBoompi() {
           case "volume":
             setState((s) => s && { ...s, volume: (msg as never)["level"] });
             break;
+          case "emoji_fonts": {
+            const { type: _t, ...emoji } = msg as never as Record<string, unknown>;
+            setState((s) => s && { ...s, emoji_fonts: emoji as never });
+            break;
+          }
           case "setup":
             setState(
               (s) =>

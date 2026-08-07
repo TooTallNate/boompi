@@ -117,21 +117,10 @@ pub fn installed(id: &str) -> bool {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct FontStatus {
-    pub id: String,
-    pub label: String,
-    pub license: String,
-    pub installed: bool,
-    pub active: bool,
-    pub builtin: bool,
-    pub size: u64,
-}
-
-pub fn list(active: &str) -> Vec<FontStatus> {
+pub fn list(active: &str) -> Vec<boompi_proto::EmojiFontInfo> {
     CATALOG
         .iter()
-        .map(|f| FontStatus {
+        .map(|f| boompi_proto::EmojiFontInfo {
             id: f.id.into(),
             label: f.label.into(),
             license: f.license.into(),
@@ -141,6 +130,101 @@ pub fn list(active: &str) -> Vec<FontStatus> {
             size: f.download.as_ref().map(|d| d.size).unwrap_or(0),
         })
         .collect()
+}
+
+/// Snapshot of the catalog + download state for clients (ws + REST).
+pub async fn state(app: &crate::state::SharedApp) -> boompi_proto::EmojiFontsState {
+    let s = app.shared.read().await;
+    boompi_proto::EmojiFontsState {
+        fonts: list(&s.emoji_font),
+        downloading: s.emoji_download.clone(),
+        progress: s.emoji_progress,
+        error: s.emoji_error.clone(),
+    }
+}
+
+/// Shared handler for the ws message and the REST endpoint.
+pub async fn perform(
+    app: &crate::state::SharedApp,
+    action: boompi_proto::EmojiFontAction,
+    id: &str,
+) -> anyhow::Result<()> {
+    use boompi_proto::EmojiFontAction as A;
+    match action {
+        A::Download => {
+            {
+                let mut s = app.shared.write().await;
+                if s.emoji_download.is_some() {
+                    anyhow::bail!("a download is already running");
+                }
+                s.emoji_download = Some(id.to_string());
+                s.emoji_progress = Some(0.0);
+                s.emoji_error = None;
+            }
+            broadcast_state(app).await;
+            let app2 = app.clone();
+            let id = id.to_string();
+            tokio::spawn(async move {
+                let result = download(&id, |done, total| {
+                    let app3 = app2.clone();
+                    async move {
+                        let pct = done as f32 / total.max(1) as f32;
+                        let significant = {
+                            let mut s = app3.shared.write().await;
+                            let prev = s.emoji_progress.unwrap_or(0.0);
+                            let significant = pct - prev >= 0.02 || pct >= 1.0;
+                            if significant {
+                                s.emoji_progress = Some(pct);
+                            }
+                            significant
+                        };
+                        if significant {
+                            broadcast_state(&app3).await;
+                        }
+                    }
+                })
+                .await;
+                {
+                    let mut s = app2.shared.write().await;
+                    s.emoji_download = None;
+                    s.emoji_progress = None;
+                    if let Err(err) = &result {
+                        tracing::warn!(%err, id, "emoji font download failed");
+                        s.emoji_error = Some(err.to_string());
+                    }
+                }
+                broadcast_state(&app2).await;
+            });
+        }
+        A::Select => {
+            if !installed(id) {
+                anyhow::bail!("font not installed");
+            }
+            write_conf(id)?;
+            app.shared.write().await.emoji_font = id.to_string();
+            app.persist_config().await;
+            broadcast_state(app).await;
+            tokio::spawn(apply_live());
+            tracing::info!(id, "emoji font selected");
+        }
+        A::Remove => {
+            remove(id)?;
+            let was_active = app.shared.read().await.emoji_font == id;
+            if was_active {
+                write_conf("noto")?;
+                app.shared.write().await.emoji_font = "noto".into();
+                app.persist_config().await;
+                tokio::spawn(apply_live());
+            }
+            broadcast_state(app).await;
+        }
+    }
+    Ok(())
+}
+
+async fn broadcast_state(app: &crate::state::SharedApp) {
+    let snapshot = state(app).await;
+    app.broadcast(boompi_proto::ServerMessage::EmojiFonts(snapshot));
 }
 
 /// Write the fontconfig fragment enforcing the choice: every catalog
@@ -201,8 +285,13 @@ pub fn reconcile(active: &str) -> &'static str {
 }
 
 /// Download + verify a catalog font into /data/fonts (streamed - the
-/// Apple build is ~110MB and the box has 1GB of RAM).
-pub async fn download(id: &str) -> anyhow::Result<()> {
+/// Apple build is ~110MB and the box has 1GB of RAM). `progress` is
+/// called with (bytes_done, bytes_total).
+pub async fn download<F, Fut>(id: &str, progress: F) -> anyhow::Result<()>
+where
+    F: Fn(u64, u64) -> Fut,
+    Fut: std::future::Future<Output = ()>,
+{
     use sha2::Digest;
     let f = def(id).ok_or_else(|| anyhow::anyhow!("unknown font id: {id}"))?;
     let dl = f
@@ -220,6 +309,7 @@ pub async fn download(id: &str) -> anyhow::Result<()> {
         hasher.update(&chunk);
         file.write_all(&chunk).await?;
         written += chunk.len() as u64;
+        progress(written, dl.size).await;
     }
     {
         use tokio::io::AsyncWriteExt;
