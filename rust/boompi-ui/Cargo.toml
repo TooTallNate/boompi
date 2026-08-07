@@ -23,6 +23,10 @@ serde_json = { workspace = true }
 slint = { version = "1", default-features = false, features = [
     "compat-1-2",
     "std",
+    # Runtime font registration (register_emoji_fallback in main.rs):
+    # the bundled Noto Color Emoji is the emoji fallback on every
+    # platform, so all environments render emoji identically.
+    "unstable-fontique-010",
 ] }
 tokio = { workspace = true, features = ["rt", "macros", "net", "sync", "time"] }
 tokio-tungstenite = "0.24"
