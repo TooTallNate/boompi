@@ -11,10 +11,18 @@ export component SetupScreen inherits Rectangle {
 
     background: Theme.bg;
 
+    // At larger UI scales the fixed QR card stops fitting next to the
+    // text (bench: cut off at 150% on 800x480); cap it against the
+    // physical screen and let the copy wrap.
+    property <length> qr-size: min(
+        10.5556rem,
+        root.width * 0.34,
+        root.height - Theme.footer-height-rem * 1rem - 3rem);
+
     HorizontalLayout {
-        padding: 2.2222rem;
+        padding: min(2.2222rem, root.width * 0.045);
         padding-bottom: Theme.footer-height-rem * 1rem + 1.1111rem;
-        spacing: 2rem;
+        spacing: min(2rem, root.width * 0.035);
 
         VerticalLayout {
             alignment: center;
@@ -24,43 +32,48 @@ export component SetupScreen inherits Rectangle {
                 color: Theme.fg;
                 font-size: 1.8889rem;
                 font-weight: 600;
+                wrap: word-wrap;
             }
             Text {
                 text: "Let's get set up - takes about a minute.";
                 color: Theme.dim;
                 font-size: 1.1111rem;
+                wrap: word-wrap;
             }
             Rectangle { height: 0.5556rem; }
             Text {
                 text: "1.  On your phone, join the Wi-Fi network\n     “" + root.speaker-name + "”  -  a setup page opens.";
                 color: Theme.fg;
                 font-size: 1rem;
+                wrap: word-wrap;
             }
             Text {
                 text: "2.  Give the speaker a name, and connect it\n     to your Wi-Fi if you like (optional).";
                 color: Theme.fg;
                 font-size: 1rem;
+                wrap: word-wrap;
             }
             Rectangle { height: 0.3333rem; }
             if root.settings-url != "": Text {
                 text: "Already on the same network? Just open\n" + root.settings-url;
                 color: Theme.dimmer;
                 font-size: 0.8333rem;
+                wrap: word-wrap;
             }
         }
 
         if root.settings-url != "": VerticalLayout {
             alignment: center;
             Rectangle {
-                width: 10.5556rem;
-                height: 10.5556rem;
+                width: root.qr-size;
+                height: root.qr-size;
                 background: white;
                 border-radius: 0.5556rem;
                 Image {
-                    x: 0.5556rem;
-                    y: 0.5556rem;
-                    width: 9.4444rem;
-                    height: 9.4444rem;
+                    x: parent.width * 0.05;
+                    y: parent.height * 0.05;
+                    width: parent.width * 0.9;
+                    height: parent.height * 0.9;
                     source: root.settings-qr;
                     image-rendering: pixelated;
                 }

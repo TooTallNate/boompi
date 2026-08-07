@@ -157,6 +157,30 @@ pub async fn status(scan: bool) -> anyhow::Result<WifiStatus> {
 /// Join a network. Saved profiles reconnect without a password; new ones
 /// need `psk` unless the network is open.
 pub async fn connect(ssid: &str, psk: Option<&str>) -> anyhow::Result<()> {
+    // Joining from the onboarding hotspot: the radio cannot scan while
+    // beaconing, so `dev wifi connect` fails with "no network with
+    // SSID" on the first attempt (the retry only ever worked because
+    // the AP-restore dance let a scan slip in between). Tear the AP
+    // down first and wait for the target to appear in a scan.
+    let ap_up = nmcli(&["-t", "-f", "NAME", "con", "show", "--active"])
+        .await
+        .map(|out| out.lines().any(|l| l == AP_CONNECTION))
+        .unwrap_or(false);
+    if ap_up {
+        let _ = stop_ap().await;
+        for attempt in 0..8 {
+            let _ = nmcli(&["dev", "wifi", "rescan"]).await;
+            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+            let visible = nmcli(&["-t", "-f", "SSID", "dev", "wifi", "list", "--rescan", "no"])
+                .await
+                .map(|out| out.lines().any(|l| l == ssid))
+                .unwrap_or(false);
+            if visible {
+                break;
+            }
+            tracing::debug!(%ssid, attempt, "target SSID not in scan results yet");
+        }
+    }
     // A saved profile with this name activates directly (keeps its psk).
     let saved = nmcli(&["-t", "-f", "NAME,TYPE", "con", "show"])
         .await?
