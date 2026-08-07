@@ -144,23 +144,48 @@ fn start_bar_tween(ui: &AppWindow) -> slint::Timer {
 }
 
 /// Register the bundled Noto Color Emoji (CBDT, pinned - the same file
-/// on every platform) as the emoji/symbol fallback. Platform emoji
-/// stacks differ wildly (Apple Color Emoji on macOS dev builds, whatever
-/// fontconfig finds on the appliance); bundling makes the speaker name
-/// and track metadata render identically everywhere.
+/// the images ship) as the emoji source, making both boxes render
+/// identically regardless of fontconfig state.
+///
+/// Linux-only, and not by choice: macOS Skia rasterizes through
+/// CoreText, which cannot draw CBDT bitmap fonts (selection works -
+/// fontique picks our font - but every glyph rasterizes empty), and
+/// the reverse holds on the boxes, where the Skia/FreeType prebuilt
+/// draws CBDT but not COLRv1. No color emoji format renders on both
+/// stacks, so the desktop preview keeps the host's Apple Color Emoji.
+#[cfg(target_os = "linux")]
 fn register_emoji_fallback() {
     use slint::fontique_010::fontique;
     static NOTO: &[u8] = include_bytes!("../ui/fonts/NotoColorEmoji.ttf");
     let blob = fontique::Blob::new(std::sync::Arc::new(NOTO));
     let mut collection = slint::fontique_010::shared_collection();
     let fonts = collection.register_fonts(blob, None);
-    for script in ["Zsye", "Zsym"] {
-        // set (not append): the bundled font must WIN over whatever the
-        // host offers (e.g. Apple Color Emoji on macOS dev builds), or
-        // environments render different glyphs.
+    // Emoji inherit the surrounding run's script (Unicode script=Common;
+    // parley resolves runs to a real script, defaulting to Latin), so
+    // the fallback query is keyed on Latn - a Zsye registration is never
+    // consulted. Put the bundled font FIRST for the scripts our text
+    // realistically uses, keeping the host's own fallback chained after
+    // (a custom fontique entry otherwise replaces system fallback
+    // entirely, and Geist doesn't cover everything).
+    // Parley routes emoji clusters through the generic Emoji family
+    // (consulted BEFORE script fallbacks), which the system backend
+    // points at the host's emoji font (Apple Color Emoji on macOS).
+    // Overriding the generic is what actually makes the bundled font
+    // win everywhere.
+    collection.set_generic_families(
+        fontique::GenericFamily::Emoji,
+        fonts.iter().map(|f| f.0),
+    );
+    // Belt and braces for symbol clusters that don't take the emoji
+    // path: put the bundled font first in the script fallbacks our text
+    // realistically hits, keeping the host's chain behind it.
+    for script in ["Latn", "Cyrl", "Grek", "Zsye", "Zsym"] {
+        let key =
+            fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None);
+        let system: Vec<_> = collection.fallback_families(key).collect();
         collection.set_fallbacks(
-            fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None),
-            fonts.iter().map(|f| f.0),
+            key,
+            fonts.iter().map(|f| f.0).chain(system.iter().copied()),
         );
     }
 }
@@ -169,6 +194,7 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     let ui = AppWindow::new()?;
     // After AppWindow::new: the font collection needs the platform up.
+    #[cfg(target_os = "linux")]
     register_emoji_fallback();
     let _bar_tween = start_bar_tween(&ui);
     ui.set_screen(cli.screen.clone().into());
