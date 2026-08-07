@@ -155,7 +155,10 @@ fn register_emoji_fallback() {
     let mut collection = slint::fontique_010::shared_collection();
     let fonts = collection.register_fonts(blob, None);
     for script in ["Zsye", "Zsym"] {
-        collection.append_fallbacks(
+        // set (not append): the bundled font must WIN over whatever the
+        // host offers (e.g. Apple Color Emoji on macOS dev builds), or
+        // environments render different glyphs.
+        collection.set_fallbacks(
             fontique::FallbackKey::new(fontique::Script::from_str_unchecked(script), None),
             fonts.iter().map(|f| f.0),
         );

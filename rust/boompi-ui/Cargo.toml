@@ -36,8 +36,11 @@ slint-build = "1"
 
 [features]
 default = ["desktop"]
-# Laptop preview (winit window).
-desktop = ["slint/backend-winit", "slint/renderer-femtovg", "slint/accessibility"]
+# Laptop preview (winit window). Skia, same renderer as the boxes:
+# FemtoVG cannot rasterize CBDT color emoji above its glyph-atlas size
+# cutoff (bitmap-only glyphs have no outline fallback), so large-scale
+# emoji silently vanish there.
+desktop = ["slint/backend-winit", "slint/renderer-skia", "slint/accessibility"]
 # On the Pi: direct DRM/KMS + libinput, CPU rendering.
 kms = ["slint/backend-linuxkms-noseat", "slint/renderer-software"]
 # On the Pi: direct DRM/KMS + libinput, OpenGL ES rendering (vc4).
