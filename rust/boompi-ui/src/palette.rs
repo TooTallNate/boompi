@@ -1,10 +1,13 @@
 //! Album-art palette extraction: dominant vibrant colors drive the
 //! panel theme (accent/glow/slider) and a background gradient.
 //!
-//! Deliberately dependency-free: coarse RGB binning + a vibrance score
-//! (population x saturation, penalizing near-black/near-white), then
-//! the winning hues are renormalized into ranges that read well on the
-//! dark and light themes. Grayscale art returns None - the stock theme
+//! Deliberately dependency-free: a saturation-weighted hue histogram
+//! (36 buckets, scored over 3-bucket windows with circular means).
+//! Judging dominance by hue rather than RGB bins matters for
+//! photographic and gradient-heavy covers: their color mass shatters
+//! across hundreds of nearby RGB bins (no single bin looks dominant)
+//! while concentrating tightly in hue. Near-black/near-white pixels
+//! are discounted, and grayscale art returns None - the stock theme
 //! is better than a mud-colored one.
 
 use image::RgbaImage;
@@ -21,6 +24,36 @@ pub struct ArtPalette {
     pub bg_bottom_light: slint::Color,
 }
 
+#[derive(Clone, Copy, Default)]
+struct Bucket {
+    mass: f32, // saturation- and luma-weighted sample mass
+    sin: f32,  // circular hue mean accumulators (mass-weighted)
+    cos: f32,
+    sat: f32,
+    val: f32,
+}
+
+const BUCKETS: usize = 36; // 10 degrees each
+
+/// Mass, circular-mean hue, and weighted sat/val over buckets
+/// [i-1, i, i+1] (wrapping).
+fn window(buckets: &[Bucket; BUCKETS], i: usize) -> (f32, f32, f32, f32) {
+    let (mut m, mut sin, mut cos, mut s, mut v) = (0f32, 0f32, 0f32, 0f32, 0f32);
+    for o in [BUCKETS - 1, 0, 1] {
+        let b = &buckets[(i + o) % BUCKETS];
+        m += b.mass;
+        sin += b.sin;
+        cos += b.cos;
+        s += b.sat;
+        v += b.val;
+    }
+    if m <= 0.0 {
+        return (0.0, 0.0, 0.0, 0.0);
+    }
+    let hue = sin.atan2(cos).to_degrees().rem_euclid(360.0);
+    (m, hue, s / m, v / m)
+}
+
 pub fn extract(img: &RgbaImage) -> Option<ArtPalette> {
     let (w, h) = img.dimensions();
     if w == 0 || h == 0 {
@@ -29,67 +62,66 @@ pub fn extract(img: &RgbaImage) -> Option<ArtPalette> {
     // ~40k samples regardless of art resolution.
     let step = (((w as u64 * h as u64) / 40_000) as f64).sqrt().max(1.0) as u32;
 
-    // 16 levels per channel -> 4096 bins: population + running sums.
-    let mut bins: std::collections::HashMap<u16, (u32, u64, u64, u64)> =
-        std::collections::HashMap::new();
+    let mut buckets = [Bucket::default(); BUCKETS];
+    let mut total = 0u32;
     let mut y = 0;
     while y < h {
         let mut x = 0;
         while x < w {
             let p = img.get_pixel(x, y).0;
             if p[3] >= 128 {
-                let key =
-                    ((p[0] as u16 >> 4) << 8) | ((p[1] as u16 >> 4) << 4) | (p[2] as u16 >> 4);
-                let e = bins.entry(key).or_insert((0, 0, 0, 0));
-                e.0 += 1;
-                e.1 += p[0] as u64;
-                e.2 += p[1] as u64;
-                e.3 += p[2] as u64;
+                total += 1;
+                let (hh, ss, vv) = rgb_to_hsv(p[0], p[1], p[2]);
+                // Saturation is the star; very dark or blown-out pixels
+                // rarely make good accents.
+                let luma_weight = if !(0.12..=0.97).contains(&vv) {
+                    0.05
+                } else {
+                    1.0
+                };
+                let weight = ss.powf(1.3) * luma_weight;
+                if weight > 0.0 {
+                    let b = &mut buckets[(hh / 10.0) as usize % BUCKETS];
+                    let rad = hh.to_radians();
+                    b.mass += weight;
+                    b.sin += weight * rad.sin();
+                    b.cos += weight * rad.cos();
+                    b.sat += weight * ss;
+                    b.val += weight * vv;
+                }
             }
             x += step;
         }
         y += step;
     }
-
-    // Vibrance score per bin.
-    let mut scored: Vec<(f32, f32, f32, f32)> = Vec::new(); // (score, h, s, v)
-    let mut total = 0u32;
-    for (count, r, g, b) in bins.values() {
-        total += count;
-        let n = *count as f32;
-        let (hh, ss, vv) = rgb_to_hsv(
-            (*r / *count as u64) as u8,
-            (*g / *count as u64) as u8,
-            (*b / *count as u64) as u8,
-        );
-        // Saturation is the star; very dark or blown-out pixels rarely
-        // make good accents.
-        let luma_weight = if !(0.12..=0.97).contains(&vv) {
-            0.05
-        } else {
-            1.0
-        };
-        let score = n * ss.powf(1.3) * luma_weight;
-        scored.push((score, hh, ss, vv));
-    }
     if total == 0 {
         return None;
     }
-    scored.sort_by(|a, b| b.0.total_cmp(&a.0));
-    let best = scored.first().copied()?;
-    // Grayscale/mud art: a meaningful accent needs real saturation in a
-    // non-trivial share of the image.
-    if best.0 < total as f32 * 0.02 || best.2 < 0.25 {
+
+    // Dominant hue arc.
+    let i1 =
+        (0..BUCKETS).max_by(|&a, &b| window(&buckets, a).0.total_cmp(&window(&buckets, b).0))?;
+    let (m1, h1, s1, v1) = window(&buckets, i1);
+    // Grayscale/mud art: a meaningful accent needs real saturated mass
+    // (3% of the image at full saturation, or equivalent) in one arc.
+    if m1 < total as f32 * 0.03 || s1 < 0.25 {
         return None;
     }
-    let (_, h1, s1, v1) = best;
-    // Second hue: farthest-scoring bin at least 50deg away; otherwise a
+
+    // Second hue: strongest arc at least 50deg away; otherwise a
     // synthetic analogous companion.
-    let (h2, s2, v2) = scored
-        .iter()
-        .find(|(sc, hh, ss, _)| *sc > 0.0 && *ss > 0.3 && hue_dist(*hh, h1) > 50.0)
-        .map(|(_, hh, ss, vv)| (*hh, *ss, *vv))
-        .unwrap_or(((h1 + 45.0) % 360.0, s1, v1));
+    let second = (0..BUCKETS)
+        .filter(|&i| {
+            let center = i as f32 * 10.0 + 5.0;
+            hue_dist(center, h1) > 50.0
+        })
+        .max_by(|&a, &b| window(&buckets, a).0.total_cmp(&window(&buckets, b).0))
+        .map(|i| window(&buckets, i))
+        .filter(|&(m, _, s, _)| m > total as f32 * 0.008 && s > 0.25);
+    let (h2, s2, v2) = match second {
+        Some((_, hh, ss, vv)) => (hh, ss, vv),
+        None => ((h1 + 45.0) % 360.0, s1, v1),
+    };
 
     let color = |h: f32, s: f32, v: f32| {
         let (r, g, b) = hsv_to_rgb(h, s, v);
@@ -173,6 +205,77 @@ mod tests {
         let p = extract(&img).expect("saturated art extracts");
         let c = p.accent_dark;
         assert!(c.red() > c.green() && c.red() > c.blue(), "{c:?}");
+    }
+
+    #[test]
+    fn gradient_album_yields_warm_accent() {
+        // Photographic covers spread one hue family across hundreds of
+        // RGB bins (the bug this test pins down): a smooth dark-brown ->
+        // gold -> pale-yellow wash, no two rows alike.
+        let mut img = RgbaImage::new(64, 64);
+        for y in 0..64u32 {
+            for x in 0..64u32 {
+                let t = y as f32 / 63.0;
+                let (r, g, b) = super::hsv_to_rgb(
+                    35.0 + 15.0 * t + (x % 7) as f32, // amber-ish, jittered
+                    0.75 - 0.2 * t,
+                    0.15 + 0.8 * t,
+                );
+                img.put_pixel(x, y, image::Rgba([r, g, b, 255]));
+            }
+        }
+        let p = extract(&img).expect("gradient art must extract");
+        let c = p.accent_dark;
+        // Warm accent: red-dominant with green above blue.
+        assert!(c.red() >= c.green() && c.green() > c.blue(), "{c:?}");
+    }
+
+    #[test]
+    fn dark_cover_with_purple_subject_yields_purple() {
+        // The "mostly black stage photo" archetype: ~75% noisy
+        // near-black, a purple scene (~18%), and bright orange bulbs
+        // (~5%). The blacks must not drown the subject, purple must
+        // out-mass the (more saturated but smaller) orange, and the
+        // orange should surface as the second accent.
+        let mut img = RgbaImage::new(100, 100);
+        let mut k = 0u32;
+        for y in 0..100u32 {
+            for x in 0..100u32 {
+                k = k.wrapping_mul(1664525).wrapping_add(1013904223);
+                let noise = (k >> 24) as f32 / 255.0;
+                let (h, s, v) = if y < 75 {
+                    (noise * 360.0, 0.15 * noise, 0.05 + 0.08 * noise) // noisy black
+                } else if x < 78 {
+                    (
+                        275.0 + 25.0 * noise,
+                        0.45 + 0.25 * noise,
+                        0.2 + 0.35 * noise,
+                    ) // purple
+                } else if x < 96 {
+                    (25.0 + 10.0 * noise, 0.9, 0.85 + 0.1 * noise) // orange bulbs
+                } else {
+                    (350.0, 0.5, 0.9) // pink title text
+                };
+                let (r, g, b) = super::hsv_to_rgb(h, s, v);
+                img.put_pixel(x, y, image::Rgba([r, g, b, 255]));
+            }
+        }
+        let p = extract(&img).expect("dark cover with a colorful subject must extract");
+        let (h1, _, _) = super::rgb_to_hsv(
+            p.accent_dark.red(),
+            p.accent_dark.green(),
+            p.accent_dark.blue(),
+        );
+        assert!((250.0..=320.0).contains(&h1), "accent hue {h1} not purple");
+        let (h2, _, _) = super::rgb_to_hsv(
+            p.accent2_dark.red(),
+            p.accent2_dark.green(),
+            p.accent2_dark.blue(),
+        );
+        assert!(
+            super::hue_dist(h2, 30.0) < 40.0,
+            "accent2 hue {h2} not orange"
+        );
     }
 
     #[test]
