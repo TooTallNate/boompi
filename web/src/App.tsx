@@ -723,6 +723,20 @@ function AppearanceSection({ settings, onSaved }: SectionProps) {
           ))}
         </span>
       </div>
+      <div className="flex items-center justify-between gap-3 py-1.5">
+        <span>Panel text size</span>
+        <select
+          className="rounded-lg border border-line bg-bg px-3 py-2 text-sm"
+          value={String(settings.ui_scale || 1)}
+          onChange={(e) => save({ ui_scale: Number(e.target.value) })}
+        >
+          {[1, 1.25, 1.5, 1.75, 2, 2.25, 2.5].map((s) => (
+            <option key={s} value={String(s)}>
+              {Math.round(s * 100)}%
+            </option>
+          ))}
+        </select>
+      </div>
       <StatusText status={status} />
     </Section>
   );

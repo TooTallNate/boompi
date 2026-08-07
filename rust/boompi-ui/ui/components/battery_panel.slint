@@ -9,21 +9,21 @@ component Stat inherits Rectangle {
     in property <string> value;
     in property <string> label;
     background: Theme.panel;
-    border-radius: 8px;
-    height: 62px;
+    border-radius: 0.4444rem;
+    height: 3.4444rem;
     VerticalLayout {
         alignment: center;
-        spacing: 2px;
+        spacing: 0.1111rem;
         Text {
             text: root.value;
             horizontal-alignment: center;
-            font-size: 20px;
+            font-size: 1.1111rem;
             color: Theme.fg;
         }
         Text {
             text: root.label;
             horizontal-alignment: center;
-            font-size: 12px;
+            font-size: 0.6667rem;
             color: Theme.dimmer;
         }
     }
@@ -43,41 +43,41 @@ export component BatteryPanel inherits Rectangle {
     background: Theme.bg;
 
     VerticalLayout {
-        padding: 14px;
-        padding-bottom: Theme.footer-height + 8px;
-        spacing: 10px;
+        padding: 0.7778rem;
+        padding-bottom: Theme.footer-height-rem * 1rem + 0.4444rem;
+        spacing: 0.5556rem;
 
         HorizontalLayout {
-            spacing: 8px;
+            spacing: 0.4444rem;
             TouchArea {
-                width: 44px;
+                width: 2.4444rem;
                 clicked => {
                     root.close();
                 }
                 IconBack {
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
-                    width: 20px;
-                    height: 22px;
+                    width: 1.1111rem;
+                    height: 1.2222rem;
                     icon-color: Theme.dim;
                 }
             }
             Text {
                 text: "Battery";
-                font-size: 22px;
+                font-size: 1.2222rem;
                 color: Theme.fg;
                 vertical-alignment: center;
             }
             Rectangle { }
             if root.charging: HorizontalLayout {
-                spacing: 6px;
+                spacing: 0.3333rem;
                 Rectangle {
-                    width: 16px;
+                    width: 0.8889rem;
                     IconBolt {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 14px;
-                        height: 18px;
+                        width: 0.7778rem;
+                        height: 1rem;
                         icon-color: Theme.good;
                     }
                 }
@@ -93,14 +93,14 @@ export component BatteryPanel inherits Rectangle {
         Rectangle {
             vertical-stretch: 1;
             background: Theme.panel;
-            border-radius: 8px;
+            border-radius: 0.4444rem;
             clip: true;
             Path {
                 viewbox-width: 100;
                 viewbox-height: 100;
                 commands: root.voltage-path;
                 stroke: Theme.accent2;
-                stroke-width: 2px;
+                stroke-width: 0.1111rem;
                 fill: transparent;
             }
             Path {
@@ -108,22 +108,22 @@ export component BatteryPanel inherits Rectangle {
                 viewbox-height: 100;
                 commands: root.current-path;
                 stroke: Theme.accent;
-                stroke-width: 2px;
+                stroke-width: 0.1111rem;
                 fill: transparent;
             }
             // Legend
             HorizontalLayout {
-                x: 12px;
-                y: 8px;
-                height: 18px;
-                spacing: 14px;
-                Text { text: "- volts"; color: Theme.accent2; font-size: 13px; }
-                Text { text: "- amps"; color: Theme.accent; font-size: 13px; }
+                x: 0.6667rem;
+                y: 0.4444rem;
+                height: 1rem;
+                spacing: 0.7778rem;
+                Text { text: "- volts"; color: Theme.accent2; font-size: 0.7222rem; }
+                Text { text: "- amps"; color: Theme.accent; font-size: 0.7222rem; }
             }
         }
 
         HorizontalLayout {
-            spacing: 8px;
+            spacing: 0.4444rem;
             Stat { value: root.stat-volts; label: "VOLTS"; }
             Stat { value: root.stat-amps; label: "AMPS"; }
             Stat { value: root.stat-watts; label: "WATTS"; }

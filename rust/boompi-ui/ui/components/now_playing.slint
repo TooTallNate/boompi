@@ -1,20 +1,21 @@
 // Now Playing: album art (placeholder until Phase 3), track metadata
 // marquees, position bar, transport controls, volume slider.
 
-import { Slider } from "std-widgets.slint";
 import { Theme } from "theme.slint";
+import { VSlider } from "widgets.slint";
 import { Marquee } from "marquee.slint";
 import { TrackPosition } from "track_position.slint";
 import { IconPlay, IconPause, IconPrev, IconNext, IconSpeaker, IconNote } from "icons.slint";
 
 component TransportButton inherits Rectangle {
     in property <bool> primary: false;
+    in property <float> fit: 1.0;
     callback clicked();
-    width: root.primary ? 84px : 66px;
+    width: (root.primary ? 4.6667rem : 3.6667rem) * root.fit;
     height: self.width;
     border-radius: self.width / 2;
     background: ta.pressed ? #2c2c48 : #1b1b2e;
-    border-width: 1px;
+    border-width: 0.0556rem;
     border-color: #32324e;
     ta := TouchArea {
         clicked => {
@@ -42,28 +43,34 @@ export component NowPlaying inherits VerticalLayout {
     callback volume-edited(float);
 
     alignment: center;
-    spacing: 16px;
-    padding: 26px;
-    padding-bottom: Theme.footer-height + 12px;
+    spacing: 0.8889rem * self.fit;
+    padding: 1.4444rem;
+    padding-bottom: Theme.footer-height-rem * 1rem + 0.6667rem;
+
+    // At larger UI scales the fixed-size graphics (album art, transport
+    // buttons) stop fitting the physical screen; text keeps the user's
+    // chosen size while the graphics compress to make room. 1.0 at
+    // design scale; the floor keeps buttons comfortably tappable.
+    property <float> fit: max(0.45, min(1.0, (self.height - 8rem) / 14.7rem));
 
     HorizontalLayout {
-        spacing: 24px;
+        spacing: 1.3333rem;
 
         // Album art (AVRCP cover art via boompid; note icon when absent).
         // The glow needs to live on an outer rectangle: drop shadows and
         // `clip: true` don't combine on one element.
         Rectangle {
-            width: 180px;
-            height: 180px;
-            border-radius: 12px;
+            width: 10rem * root.fit;
+            height: 10rem * root.fit;
+            border-radius: 0.6667rem;
             drop-shadow-color: Theme.accent.transparentize(0.6);
-            drop-shadow-blur: 28px;
+            drop-shadow-blur: 1.5556rem;
             drop-shadow-offset-x: 0;
             drop-shadow-offset-y: 0;
         Rectangle {
-            width: 180px;
-            height: 180px;
-            border-radius: 12px;
+            width: 10rem * root.fit;
+            height: 10rem * root.fit;
+            border-radius: 0.6667rem;
             background: #16161f;
             clip: true;
             if root.has-artwork: Image {
@@ -75,8 +82,8 @@ export component NowPlaying inherits VerticalLayout {
             if !root.has-artwork: IconNote {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 64px;
-                height: 64px;
+                width: 3.5556rem * root.fit;
+                height: 3.5556rem * root.fit;
                 icon-color: Theme.faint;
             }
         }
@@ -84,21 +91,21 @@ export component NowPlaying inherits VerticalLayout {
 
         VerticalLayout {
             alignment: center;
-            spacing: 8px;
+            spacing: 0.4444rem;
             Marquee {
                 text: root.track-title;
-                font-size: 30px;
+                font-size: 1.6667rem;
                 font-weight: 700;
                 text-color: Theme.fg;
             }
             Marquee {
                 text: root.track-artist;
-                font-size: 21px;
+                font-size: 1.1667rem;
                 text-color: #ccccdd;
             }
             Marquee {
                 text: root.track-album;
-                font-size: 17px;
+                font-size: 0.9444rem;
                 text-color: #8888a0;
             }
             TrackPosition {
@@ -111,8 +118,9 @@ export component NowPlaying inherits VerticalLayout {
 
     HorizontalLayout {
         alignment: center;
-        spacing: 28px;
+        spacing: 1.5556rem * root.fit;
         TransportButton {
+            fit: root.fit;
             clicked => {
                 root.previous();
             }
@@ -126,6 +134,7 @@ export component NowPlaying inherits VerticalLayout {
         }
         TransportButton {
             primary: true;
+            fit: root.fit;
             clicked => {
                 root.toggle-play();
             }
@@ -145,6 +154,7 @@ export component NowPlaying inherits VerticalLayout {
             }
         }
         TransportButton {
+            fit: root.fit;
             clicked => {
                 root.next();
             }
@@ -160,34 +170,32 @@ export component NowPlaying inherits VerticalLayout {
 
     HorizontalLayout {
         alignment: center;
-        spacing: 14px;
+        spacing: 0.7778rem;
         Rectangle {
-            width: 22px;
+            width: 1.2222rem;
             IconSpeaker {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 18px;
-                height: 18px;
+                width: 1rem;
+                height: 1rem;
                 icon-color: Theme.dim;
                 level: 1;
             }
         }
-        Slider {
-            width: 360px;
-            minimum: 0;
-            maximum: 1;
+        VSlider {
+            width: min(20rem, root.width - 7rem);
             value <=> root.volume;
-            changed(value) => {
+            edited(value) => {
                 root.volume-edited(value);
             }
         }
         Rectangle {
-            width: 26px;
+            width: 1.4444rem;
             IconSpeaker {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 22px;
-                height: 22px;
+                width: 1.2222rem;
+                height: 1.2222rem;
                 icon-color: Theme.dim;
                 level: 2;
             }

@@ -89,9 +89,11 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
             a?;
             b?;
         }
-        None => axum::serve(listener, router)
-            .with_graceful_shutdown(shutdown())
-            .await?,
+        None => {
+            axum::serve(listener, router)
+                .with_graceful_shutdown(shutdown())
+                .await?
+        }
     }
     Ok(())
 }
@@ -150,11 +152,20 @@ async fn hello(app: &SharedApp) -> Hello {
 #[derive(serde::Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 enum WifiAction {
-    Connect { ssid: String, psk: Option<String> },
-    Forget { name: String },
-    Radio { enabled: bool },
+    Connect {
+        ssid: String,
+        psk: Option<String>,
+    },
+    Forget {
+        name: String,
+    },
+    Radio {
+        enabled: bool,
+    },
     /// Onboarding hotspot; `ssid` defaults to the speaker name.
-    Ap { enabled: bool },
+    Ap {
+        enabled: bool,
+    },
 }
 
 async fn api_wifi() -> axum::response::Response {

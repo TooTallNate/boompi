@@ -7,3 +7,9 @@ model = "pi3"
 [battery]
 # INA260 on the HyperPixel's bit-banged i2c-gpio bus.
 i2c_bus = 11
+
+[settings]
+# HyperPixel 4.0 is high-DPI (800x480 at 4 inches); the design-size UI
+# is unreadably small there. First-boot default only - the user's
+# choice persists to /data.
+ui_scale = 1.5

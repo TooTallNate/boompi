@@ -4,6 +4,52 @@
 
 import { Theme } from "theme.slint";
 
+// Volume slider. std-widgets' Slider has fixed internal geometry that
+// ignores the rem scale (thumb and track stay tiny at 200%); this one
+// is all rem.
+export component VSlider inherits Rectangle {
+    in-out property <float> value; // 0..1
+    callback edited(float);
+    height: 2.2rem;
+
+    track := Rectangle {
+        y: (parent.height - self.height) / 2;
+        height: 0.44rem;
+        border-radius: 0.22rem;
+        background: Theme.bar;
+        Rectangle {
+            x: 0;
+            width: parent.width * root.value;
+            height: parent.height;
+            border-radius: parent.border-radius;
+            background: Theme.accent;
+        }
+    }
+    thumb := Rectangle {
+        width: 1.55rem;
+        height: 1.55rem;
+        border-radius: self.width / 2;
+        background: white;
+        x: (parent.width - self.width) * root.value;
+        y: (parent.height - self.height) / 2;
+        drop-shadow-color: black.transparentize(0.6);
+        drop-shadow-blur: 0.33rem;
+        drop-shadow-offset-y: 0.08rem;
+    }
+    ta := TouchArea {
+        moved => {
+            if (self.pressed) {
+                root.value = max(0, min(1, self.mouse-x / root.width));
+                root.edited(root.value);
+            }
+        }
+        clicked => {
+            root.value = max(0, min(1, self.mouse-x / root.width));
+            root.edited(root.value);
+        }
+    }
+}
+
 export component ActionButton inherits Rectangle {
     in property <string> text;
     in property <bool> primary: false;
@@ -12,14 +58,14 @@ export component ActionButton inherits Rectangle {
     background: root.primary
         ? Theme.accent
         : (touch.pressed ? Theme.faint : Theme.bar);
-    border-radius: 8px;
-    height: 40px;
-    width: label.preferred-width + 36px;
+    border-radius: 0.4444rem;
+    height: 2.2222rem;
+    width: label.preferred-width + 2rem;
 
     label := Text {
         text: root.text;
         color: root.primary ? (Theme.light ? white : #04121f) : Theme.fg;
-        font-size: 16px;
+        font-size: 0.8889rem;
         font-weight: root.primary ? 600 : 400;
         horizontal-alignment: center;
         vertical-alignment: center;

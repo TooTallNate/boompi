@@ -130,6 +130,7 @@ impl App {
             theme: cfg.settings.theme,
             online_art_fallback: cfg.settings.online_art_fallback,
             airplay_model: cfg.settings.airplay_model.clone(),
+            ui_scale: cfg.settings.ui_scale,
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -247,6 +248,7 @@ impl App {
             cfg.settings.theme = s.settings.theme;
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
+            cfg.settings.ui_scale = s.settings.ui_scale;
             cfg.setup_complete = !s.setup.required;
             cfg.bt_volume_modes = s.bt_volume_modes.clone();
             cfg.timezone = s.timezone.clone();
@@ -507,6 +509,9 @@ impl App {
                         let model = model.trim().to_string();
                         airplay_model_changed = model != s.settings.airplay_model;
                         s.settings.airplay_model = model;
+                    }
+                    if let Some(scale) = patch.ui_scale {
+                        s.settings.ui_scale = scale.clamp(1.0, 2.5);
                     }
                     s.settings.clone()
                 };

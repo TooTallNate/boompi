@@ -115,7 +115,7 @@ const fn ina260_default_address() -> u8 {
     0x40
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SettingsConfig {
     pub online_art_fallback: bool,
@@ -123,6 +123,25 @@ pub struct SettingsConfig {
     pub theme: boompi_proto::Theme,
     /// Advertised AirPlay device model ("" = shairport default).
     pub airplay_model: String,
+    /// Panel UI scale (1.0 = design size); per-board seeds may ship
+    /// larger defaults for small high-DPI panels.
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale: f32,
+}
+
+fn default_ui_scale() -> f32 {
+    1.0
+}
+
+impl Default for SettingsConfig {
+    fn default() -> Self {
+        Self {
+            online_art_fallback: false,
+            theme: boompi_proto::Theme::default(),
+            airplay_model: String::new(),
+            ui_scale: default_ui_scale(),
+        }
+    }
 }
 
 /// Load config from `path`, falling back to a read-only `seed` when the

@@ -1,9 +1,9 @@
-// Persistent bottom bar: clock (blinking colon), connected device,
-// volume level, Bluetooth indicator, battery icon, settings.
+// Persistent bottom bar: clock (blinking colon), connected device +
+// source indicator, battery icon, settings.
 // All iconography is drawn (see icons.slint) - no font dependency.
 
 import { Theme } from "theme.slint";
-import { IconSpeaker, IconBluetooth, IconSettings, IconSpotify, IconAirplay } from "icons.slint";
+import { IconBluetooth, IconSettings, IconSpotify, IconAirplay } from "icons.slint";
 
 export component Footer inherits Rectangle {
     in property <string> clock-day;
@@ -13,7 +13,6 @@ export component Footer inherits Rectangle {
     in property <string> device-name;
     /// "bluetooth" | "spotify" | "airplay" | "" (no active source).
     in property <string> source-kind: "";
-    in property <float> volume;
     in property <bool> battery-present;
     in property <float> battery-percentage;
     in property <bool> battery-charging;
@@ -21,13 +20,13 @@ export component Footer inherits Rectangle {
     callback open-battery();
     callback open-settings();
 
-    height: Theme.footer-height;
+    height: Theme.footer-height-rem * 1rem;
     background: #000000aa;
 
     HorizontalLayout {
-        padding-left: 14px;
-        padding-right: 8px;
-        spacing: 14px;
+        padding-left: 0.7778rem;
+        padding-right: 0.4444rem;
+        spacing: 0.7778rem;
 
         // Clock: "Mon 4:32" with a blinking colon.
         HorizontalLayout {
@@ -59,31 +58,31 @@ export component Footer inherits Rectangle {
 
         // Active source logo + name (Spotify username, phone alias, ...).
         if root.source-kind == "bluetooth": Rectangle {
-            width: 20px;
+            width: 1.1111rem;
             IconBluetooth {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 16px;
-                height: 18px;
+                width: 0.8889rem;
+                height: 1rem;
                 icon-color: #0A84FF;
             }
         }
         if root.source-kind == "spotify": Rectangle {
-            width: 22px;
+            width: 1.2222rem;
             IconSpotify {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 19px;
-                height: 19px;
+                width: 1.0556rem;
+                height: 1.0556rem;
             }
         }
         if root.source-kind == "airplay": Rectangle {
-            width: 22px;
+            width: 1.2222rem;
             IconAirplay {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 19px;
-                height: 19px;
+                width: 1.0556rem;
+                height: 1.0556rem;
                 icon-color: Theme.dim;
             }
         }
@@ -94,40 +93,28 @@ export component Footer inherits Rectangle {
             overflow: elide;
         }
 
-        Rectangle {
-            width: 24px;
-            IconSpeaker {
-                x: (parent.width - self.width) / 2;
-                y: (parent.height - self.height) / 2;
-                width: 20px;
-                height: 20px;
-                icon-color: Theme.dim;
-                level: root.volume <= 0.001 ? 0 : root.volume < 0.5 ? 1 : 2;
-            }
-        }
-
         // Battery icon (tap → diagnostics panel).
         if root.battery-present: TouchArea {
-            width: 36px;
+            width: 2rem;
             clicked => {
                 root.open-battery();
             }
             Rectangle {
                 // body
                 x: 0;
-                y: (parent.height - 14px) / 2;
-                width: 28px;
-                height: 14px;
-                border-width: 1px;
+                y: (parent.height - 0.7778rem) / 2;
+                width: 1.5556rem;
+                height: 0.7778rem;
+                border-width: 0.0556rem;
                 border-color: Theme.dim;
-                border-radius: 3px;
+                border-radius: 0.1667rem;
                 Rectangle {
                     // fill level
-                    x: 2px;
-                    y: 2px;
-                    width: (parent.width - 4px) * max(0.04, min(1.0, root.battery-percentage));
-                    height: parent.height - 4px;
-                    border-radius: 2px;
+                    x: 0.1111rem;
+                    y: 0.1111rem;
+                    width: (parent.width - 0.2222rem) * max(0.04, min(1.0, root.battery-percentage));
+                    height: parent.height - 0.2222rem;
+                    border-radius: 0.1111rem;
                     background: root.battery-charging ? Theme.good
                         : root.battery-percentage < 0.2 ? Theme.bad
                         : Theme.dim;
@@ -135,25 +122,25 @@ export component Footer inherits Rectangle {
             }
             Rectangle {
                 // tip
-                x: 28px;
-                y: (parent.height - 6px) / 2;
-                width: 3px;
-                height: 6px;
-                border-radius: 1px;
+                x: 1.5556rem;
+                y: (parent.height - 0.3333rem) / 2;
+                width: 0.1667rem;
+                height: 0.3333rem;
+                border-radius: 0.0556rem;
                 background: Theme.dim;
             }
         }
 
         TouchArea {
-            width: 34px;
+            width: 1.8889rem;
             clicked => {
                 root.open-settings();
             }
             IconSettings {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
-                width: 19px;
-                height: 19px;
+                width: 1.0556rem;
+                height: 1.0556rem;
                 icon-color: Theme.dimmer;
             }
         }

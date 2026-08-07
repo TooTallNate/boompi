@@ -133,7 +133,10 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             );
             // QR pixels are generated off-thread (SharedPixelBuffer is
             // Send); the slint::Image itself must be built on the UI thread.
-            let qr = hello.settings_url.as_deref().and_then(crate::util::qr_pixels);
+            let qr = hello
+                .settings_url
+                .as_deref()
+                .and_then(crate::util::qr_pixels);
             let settings_url = hello.settings_url.clone().unwrap_or_default();
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_speaker_name(hello.name.into());
@@ -158,12 +161,14 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let light = state.settings.theme == boompi_proto::Theme::Light;
             let setup_required = state.setup.required;
             let volume = state.volume;
+            let scale = ui_scale(state.settings.ui_scale);
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
                 ui.set_setup_required(setup_required);
                 ui.global::<crate::Theme>().set_light(light);
+                ui.global::<crate::Theme>().set_scale(scale);
             });
         }
         ServerMessage::Track(track) => apply_track(ctx, track),
@@ -189,6 +194,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
         }
         ServerMessage::Settings(settings) => {
             let light = settings.theme == boompi_proto::Theme::Light;
+            let scale = ui_scale(settings.ui_scale);
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 // Keep the displayed speaker name live: Hello only arrives
                 // on (re)connect, so a rename mid-session (e.g. during
@@ -196,6 +202,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_speaker_name(settings.name.into());
                 ui.set_online_art(settings.online_art_fallback);
                 ui.global::<crate::Theme>().set_light(light);
+                ui.global::<crate::Theme>().set_scale(scale);
             });
         }
         ServerMessage::BtDevices { .. } => {} // panel device list: future work
@@ -231,6 +238,7 @@ fn apply_track(ctx: &NetCtx, track: Track) {
                 );
             }
             ui.set_has_artwork(false);
+            ui.global::<crate::Theme>().set_art_active(false);
         }
     });
 }
@@ -238,9 +246,10 @@ fn apply_track(ctx: &NetCtx, track: Track) {
 /// Decode an artwork frame off the UI thread, hand pixels to Slint.
 fn apply_artwork(ctx: &NetCtx, payload: &[u8]) {
     if payload.is_empty() {
-        let _ = ctx
-            .weak
-            .upgrade_in_event_loop(|ui| ui.set_has_artwork(false));
+        let _ = ctx.weak.upgrade_in_event_loop(|ui| {
+            ui.set_has_artwork(false);
+            ui.global::<crate::Theme>().set_art_active(false);
+        });
         return;
     }
     let decoded = match image::load_from_memory(payload) {
@@ -250,6 +259,9 @@ fn apply_artwork(ctx: &NetCtx, payload: &[u8]) {
             return;
         }
     };
+    // Palette extraction happens here, off the UI thread with the
+    // pixels already in hand.
+    let palette = crate::palette::extract(&decoded);
     let (width, height) = decoded.dimensions();
     let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
         decoded.as_raw(),
@@ -259,6 +271,21 @@ fn apply_artwork(ctx: &NetCtx, payload: &[u8]) {
     let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
         ui.set_artwork(slint::Image::from_rgba8(buffer));
         ui.set_has_artwork(true);
+        let theme = ui.global::<crate::Theme>();
+        match palette {
+            Some(p) => {
+                theme.set_art_accent_dark(p.accent_dark);
+                theme.set_art_accent2_dark(p.accent2_dark);
+                theme.set_art_accent_light(p.accent_light);
+                theme.set_art_accent2_light(p.accent2_light);
+                theme.set_art_bg_top_dark(p.bg_top_dark);
+                theme.set_art_bg_bottom_dark(p.bg_bottom_dark);
+                theme.set_art_bg_top_light(p.bg_top_light);
+                theme.set_art_bg_bottom_light(p.bg_bottom_light);
+                theme.set_art_active(true);
+            }
+            None => theme.set_art_active(false),
+        }
     });
 }
 
@@ -271,6 +298,7 @@ fn clear_track(ctx: &NetCtx) {
         ui.set_track_album("".into());
         ui.set_playing(false);
         ui.set_has_artwork(false);
+        ui.global::<crate::Theme>().set_art_active(false);
     });
 }
 
@@ -309,6 +337,16 @@ fn apply_battery(ctx: &NetCtx, history: &mut BatteryHistory, battery: Battery) {
         ui.set_stat_watts(stat_watts.into());
         ui.set_stat_percent(stat_percent.into());
     });
+}
+
+/// Sanitize a settings scale: old boompid payloads may omit it (0.0
+/// through serde default paths) and a zero scale collapses the UI.
+fn ui_scale(scale: f32) -> f32 {
+    if scale < 0.5 {
+        1.0
+    } else {
+        scale.clamp(0.5, 3.0)
+    }
 }
 
 fn pairing_str(state: PairingState) -> &'static str {

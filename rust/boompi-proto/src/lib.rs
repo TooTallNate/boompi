@@ -182,8 +182,12 @@ pub enum Theme {
     Light,
 }
 
+fn default_ui_scale() -> f32 {
+    1.0
+}
+
 /// User-adjustable settings, mirrored to all clients.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     /// Speaker name: Bluetooth alias + AirPlay receiver + Spotify Connect
     /// device, all at once.
@@ -200,6 +204,22 @@ pub struct Settings {
     /// (generic speaker). E.g. "AudioAccessory5,1" shows a HomePod mini.
     #[serde(default)]
     pub airplay_model: String,
+    /// Panel UI scale factor (1.0 = design size). The panel rescales
+    /// live; small high-DPI screens (HyperPixel) ship larger defaults.
+    #[serde(default = "default_ui_scale")]
+    pub ui_scale: f32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            theme: Theme::default(),
+            online_art_fallback: false,
+            airplay_model: String::new(),
+            ui_scale: default_ui_scale(),
+        }
+    }
 }
 
 /// Partial settings update; `None` fields are left unchanged.
@@ -214,6 +234,8 @@ pub struct SettingsPatch {
     pub theme: Option<Theme>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airplay_model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_scale: Option<f32>,
 }
 
 /// First-boot setup state.

@@ -117,8 +117,7 @@ pub fn qr_pixels(url: &str) -> Option<slint::SharedPixelBuffer<slint::Rgba8Pixel
     let modules = code.width();
     const QUIET: usize = 2; // the white card behind it provides most of it
     let size = modules + QUIET * 2;
-    let mut buf =
-        slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(size as u32, size as u32);
+    let mut buf = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::new(size as u32, size as u32);
     let pixels = buf.make_mut_slice();
     let white = slint::Rgba8Pixel::new(255, 255, 255, 255);
     let black = slint::Rgba8Pixel::new(16, 16, 20, 255);

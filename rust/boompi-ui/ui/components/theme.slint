@@ -5,17 +5,43 @@
 
 export global Theme {
     in-out property <bool> light: false;
+    // UI scale: multiplies the window default-font-size, and every
+    // length in the app is in rem (relative to it), so changing this
+    // rescales the whole panel live - no restart. Driven from
+    // boompid's settings (web UI / panel stepper).
+    in-out property <float> scale: 1.0;
+
+    // Album-art palette (net.rs/palette.rs): when active, the art's
+    // dominant hues restyle the accent (glow, bars, slider) and the
+    // background gradient. Grayscale art keeps the stock theme.
+    in-out property <bool> art-active: false;
+    in-out property <color> art-accent-dark: #00d4ff;
+    in-out property <color> art-accent2-dark: #ff2d95;
+    in-out property <color> art-accent-light: #007aad;
+    in-out property <color> art-accent2-light: #d61f7d;
+    in-out property <color> art-bg-top-dark: #0b0b10;
+    in-out property <color> art-bg-bottom-dark: #0b0b10;
+    in-out property <color> art-bg-top-light: #f2f2f7;
+    in-out property <color> art-bg-bottom-light: #f2f2f7;
 
     out property <color> bg: light ? #f2f2f7 : #0b0b10;
+    out property <color> bg-top: art-active ? (light ? art-bg-top-light : art-bg-top-dark) : bg;
+    out property <color> bg-bottom: art-active ? (light ? art-bg-bottom-light : art-bg-bottom-dark) : bg;
     out property <color> panel: light ? #ffffff : #12121c;
     out property <color> fg: light ? #1a1a22 : white;
     out property <color> dim: light ? #6e6e7a : #9999aa;
     out property <color> dimmer: light ? #9a9aa6 : #666677;
     out property <color> faint: light ? #d4d4de : #333344;
-    out property <color> accent: light ? #007aad : #00d4ff;
-    out property <color> accent2: light ? #d61f7d : #ff2d95;
+    out property <color> accent: art-active
+        ? (light ? art-accent-light : art-accent-dark)
+        : (light ? #007aad : #00d4ff);
+    out property <color> accent2: art-active
+        ? (light ? art-accent2-light : art-accent2-dark)
+        : (light ? #d61f7d : #ff2d95);
     out property <color> bar: light ? #e4e4ec : #1c1c30;
     out property <color> good: light ? #2e9e44 : #55bb66;
     out property <color> bad: light ? #c23b3b : #bb5555;
-    out property <length> footer-height: 44px;
+    // rem is not allowed in globals (no window context); multiply by
+    // 1rem at the use site.
+    out property <float> footer-height-rem: 2.4444;
 }

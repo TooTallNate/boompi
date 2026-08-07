@@ -10,6 +10,7 @@
 //!   `boompid --sim`.
 
 mod net;
+mod palette;
 mod util;
 
 slint::include_modules!();
@@ -85,7 +86,10 @@ fn start_bar_tween(ui: &AppWindow) -> slint::Timer {
             bars_model.push(0.0);
             peaks_model.push(0.0);
             fades_model.push(1.0);
-            caps.borrow_mut().push(CapState { vel: 0.0, held_since: Instant::now() });
+            caps.borrow_mut().push(CapState {
+                vel: 0.0,
+                held_since: Instant::now(),
+            });
         }
         let n = bars_model.row_count();
         let dt = TICK.as_secs_f32();
@@ -114,13 +118,20 @@ fn start_bar_tween(ui: &AppWindow) -> slint::Timer {
             } else if now.duration_since(cap.held_since) > HOLD {
                 // Falling: accelerate and fade towards transparent.
                 cap.vel += GRAVITY * dt;
-                ((peak - cap.vel * dt).max(next), (fade - dt / FADE_TIME).max(0.0))
+                (
+                    (peak - cap.vel * dt).max(next),
+                    (fade - dt / FADE_TIME).max(0.0),
+                )
             } else {
                 (peak, fade)
             };
             // Drop the cap once everything is silent so it doesn't hover
             // over an empty display.
-            let new_peak = if target <= 0.001 && next <= 0.005 { 0.0 } else { new_peak };
+            let new_peak = if target <= 0.001 && next <= 0.005 {
+                0.0
+            } else {
+                new_peak
+            };
             if (new_peak - peak).abs() > 0.001 {
                 peaks_model.set_row_data(i, new_peak);
             }
@@ -140,8 +151,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(size) = &cli.size {
         if let Some((w, h)) = size.split_once('x') {
             if let (Ok(w), Ok(h)) = (w.parse::<u32>(), h.parse::<u32>()) {
-                ui.window()
-                    .set_size(slint::PhysicalSize::new(w, h));
+                ui.window().set_size(slint::PhysicalSize::new(w, h));
             }
         }
     }
@@ -236,6 +246,15 @@ fn main() -> anyhow::Result<()> {
             let _ = tx.send(ClientMessage::Pairing {
                 action: PairingAction::Reject,
             });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_scale_changed(move |scale| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                ui_scale: Some(scale),
+                ..SettingsPatch::default()
+            }));
         });
     }
     {

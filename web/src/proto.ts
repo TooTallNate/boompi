@@ -4,6 +4,7 @@
 export type Theme = "dark" | "light";
 
 export interface Settings {
+  ui_scale: number;
   /** Advertised AirPlay model - senders pick their picker icon from it.
       "" = generic speaker. */
   airplay_model: string;
@@ -13,6 +14,7 @@ export interface Settings {
 }
 
 export interface SettingsPatch {
+  ui_scale?: number;
   airplay_model?: string;
   name?: string;
   theme?: Theme;

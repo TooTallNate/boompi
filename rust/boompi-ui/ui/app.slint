@@ -28,7 +28,8 @@ export component AppWindow inherits Window {
     preferred-height: 480px;
     background: Theme.bg;
     default-font-family: "Geist";
-    default-font-size: 18px;
+    // 18px design base; all lengths are rem, so this scales everything.
+    default-font-size: 18px * Theme.scale;
 
     // --- connection / identity ---
     in property <bool> connected: false;
@@ -96,10 +97,17 @@ export component AppWindow inherits Window {
     callback screen-changed();
     callback online-art-toggled(bool);
     callback theme-toggled(bool);
+    callback scale-changed(float);
     callback pairing-enable();
     callback pairing-cancel();
     callback pairing-confirm();
     callback pairing-reject();
+
+    // ---- art-tinted background gradient -------------------------------------
+    Rectangle {
+        background: @linear-gradient(170deg, Theme.bg-top 0%, Theme.bg-bottom 100%);
+        animate background { duration: 700ms; easing: ease-out; }
+    }
 
     // ---- background visualizer --------------------------------------------
     // Synthwave-ish: rounded bars with an accent→base vertical gradient and
@@ -107,29 +115,32 @@ export component AppWindow inherits Window {
     // the software renderer skips drop shadows, which is fine - it can't
     // sustain the fill rate for this anyway.
     HorizontalLayout {
-        spacing: 6px;
+        // Scale-invariant: the visualizer spans the physical screen, so
+        // gaps are a fraction of the per-bar slot - rem spacing would
+        // eat the bars alive at higher UI scales.
+        spacing: root.bars.length > 0 ? (self.width / root.bars.length) * 0.18 : 0;
         for level[bar-idx] in root.bars: Rectangle {
             Rectangle {
                 y: parent.height - self.height;
                 height: parent.height * level;
-                border-radius: 3px;
+                border-radius: 0.1667rem;
                 background: @linear-gradient(180deg,
                     Theme.accent.transparentize(0.35) 0%,
                     Theme.bar 55%);
                 drop-shadow-color: Theme.accent.transparentize(0.75);
-                drop-shadow-blur: 14px;
+                drop-shadow-blur: 0.7778rem;
                 drop-shadow-offset-x: 0;
                 drop-shadow-offset-y: 0;
             }
             // Peak-hold cap.
             if root.peaks[bar-idx] > 0.015: Rectangle {
                 y: parent.height * (1 - root.peaks[bar-idx]) - self.height;
-                height: 3px;
-                border-radius: 1.5px;
+                height: 0.1667rem;
+                border-radius: 0.0833rem;
                 opacity: root.peak-fades[bar-idx];
                 background: Theme.accent.transparentize(0.15);
                 drop-shadow-color: Theme.accent.transparentize(0.55);
-                drop-shadow-blur: 8px;
+                drop-shadow-blur: 0.4444rem;
                 drop-shadow-offset-x: 0;
                 drop-shadow-offset-y: 0;
             }
@@ -142,7 +153,7 @@ export component AppWindow inherits Window {
         Text {
             text: "Connecting to backend…";
             color: Theme.dimmer;
-            font-size: 22px;
+            font-size: 1.2222rem;
             horizontal-alignment: center;
         }
     }
@@ -219,6 +230,13 @@ export component AppWindow inherits Window {
         online-art-toggled(enabled) => {
             root.online-art-toggled(enabled);
         }
+        scale-changed(scale) => {
+            // Apply locally right away (snappy feedback); boompid's
+            // Settings broadcast confirms the clamped value moments
+            // later (idempotent).
+            Theme.scale = scale;
+            root.scale-changed(scale);
+        }
         theme-toggled(light) => {
             root.theme-toggled(light);
         }
@@ -239,47 +257,47 @@ export component AppWindow inherits Window {
         Rectangle {
             x: (parent.width - self.width) / 2;
             y: (parent.height - self.height) / 2;
-            width: 440px;
-            height: 230px;
+            width: 24.4444rem;
+            height: 12.7778rem;
             background: Theme.panel;
-            border-radius: 14px;
-            border-width: 1px;
+            border-radius: 0.7778rem;
+            border-width: 0.0556rem;
             border-color: Theme.accent;
             VerticalLayout {
-                padding: 22px;
-                spacing: 6px;
+                padding: 1.2222rem;
+                spacing: 0.3333rem;
                 Text {
                     text: "Bluetooth pairing request";
                     color: Theme.dim;
-                    font-size: 14px;
+                    font-size: 0.7778rem;
                 }
                 Text {
                     text: root.pairing-device == "" ? "Unknown device" : root.pairing-device;
                     color: Theme.fg;
-                    font-size: 22px;
+                    font-size: 1.2222rem;
                     font-weight: 600;
                     overflow: elide;
                 }
                 if root.pairing-passkey != "": Text {
                     text: "Confirm this code matches your device:";
                     color: Theme.dim;
-                    font-size: 14px;
+                    font-size: 0.7778rem;
                 }
                 if root.pairing-passkey != "": Text {
                     text: root.pairing-passkey;
                     color: Theme.accent;
-                    font-size: 30px;
+                    font-size: 1.6667rem;
                     horizontal-alignment: center;
                 }
                 if root.pairing-passkey == "": Text {
                     text: "wants to pair with this speaker.";
                     color: Theme.dim;
-                    font-size: 15px;
+                    font-size: 0.8333rem;
                 }
-                Rectangle { height: 6px; }
+                Rectangle { height: 0.3333rem; }
                 HorizontalLayout {
                     alignment: center;
-                    spacing: 12px;
+                    spacing: 0.6667rem;
                     ActionButton {
                         text: "Pair";
                         primary: true;
@@ -309,7 +327,6 @@ export component AppWindow inherits Window {
         colon-on: root.colon-on;
         device-name: root.device-name;
         source-kind: root.source-kind;
-        volume: root.volume;
         battery-present: root.battery-present;
         battery-percentage: root.battery-percentage;
         battery-charging: root.battery-charging;

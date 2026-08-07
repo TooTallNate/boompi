@@ -8,18 +8,18 @@ export component TrackPosition inherits VerticalLayout {
     in property <string> elapsed;
     in property <string> remaining;
 
-    spacing: 5px;
+    spacing: 0.2778rem;
 
     Rectangle {
-        height: 6px;
-        border-radius: 3px;
+        height: 0.3333rem;
+        border-radius: 0.1667rem;
         background: Theme.faint;
         Rectangle {
             x: 0;
             y: 0;
             width: parent.width * min(1.0, max(0.0, root.progress));
             height: parent.height;
-            border-radius: 3px;
+            border-radius: 0.1667rem;
             background: Theme.accent;
         }
     }
@@ -28,13 +28,13 @@ export component TrackPosition inherits VerticalLayout {
         Text {
             text: root.elapsed;
             color: Theme.dim;
-            font-size: 14px;
+            font-size: 0.7778rem;
         }
         Rectangle { }
         Text {
             text: root.remaining;
             color: Theme.dim;
-            font-size: 14px;
+            font-size: 0.7778rem;
         }
     }
 }

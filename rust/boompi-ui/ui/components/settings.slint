@@ -1,6 +1,10 @@
-// Settings screen: touch-appropriate controls on the left (theme, art
-// fallback, pairing incl. passkey confirm), and a QR code to the web
-// settings UI on the right for keyboard-heavy configuration (name, Wi-Fi).
+// Settings screen: touch-appropriate controls (theme, text size, art
+// fallback, pairing incl. passkey confirm) and a QR code to the web
+// settings UI for keyboard-heavy configuration (name, Wi-Fi).
+//
+// Everything lives in one Flickable column: at larger UI scales the
+// logical canvas shrinks (800×480 at 2.0× is 400×240), so the layout
+// must scroll by touch rather than fit.
 
 import { Switch } from "std-widgets.slint";
 import { ActionButton } from "widgets.slint";
@@ -11,24 +15,26 @@ component Row inherits Rectangle {
     in property <string> label;
     in property <string> sublabel;
     background: Theme.panel;
-    border-radius: 8px;
-    height: 64px;
-    HorizontalLayout {
-        padding-left: 14px;
-        padding-right: 14px;
-        spacing: 10px;
+    border-radius: 0.44rem;
+    height: content.preferred-height + 1.2rem;
+    content := HorizontalLayout {
+        padding-left: 0.78rem;
+        padding-right: 0.78rem;
+        spacing: 0.56rem;
         VerticalLayout {
             alignment: center;
-            spacing: 2px;
+            spacing: 0.11rem;
             Text {
                 text: root.label;
                 color: Theme.fg;
-                font-size: 17px;
+                font-size: 0.94rem;
+                wrap: word-wrap;
             }
             if root.sublabel != "": Text {
                 text: root.sublabel;
                 color: Theme.dimmer;
-                font-size: 13px;
+                font-size: 0.72rem;
+                wrap: word-wrap;
             }
         }
         Rectangle { }
@@ -51,46 +57,45 @@ export component SettingsPanel inherits Rectangle {
     callback close();
     callback online-art-toggled(bool);
     callback theme-toggled(bool);
+    callback scale-changed(float);
     callback pairing-enable();
     callback pairing-cancel();
 
     background: Theme.bg;
 
     VerticalLayout {
-        padding: 14px;
-        padding-bottom: Theme.footer-height + 8px;
-        spacing: 10px;
+        padding: 0.78rem;
+        padding-bottom: Theme.footer-height-rem * 1rem + 0.44rem;
+        spacing: 0.56rem;
 
         HorizontalLayout {
-            spacing: 8px;
+            spacing: 0.44rem;
             TouchArea {
-                width: 44px;
+                width: 2.44rem;
                 clicked => {
                     root.close();
                 }
                 IconBack {
                     x: (parent.width - self.width) / 2;
                     y: (parent.height - self.height) / 2;
-                    width: 20px;
-                    height: 22px;
+                    width: 1.11rem;
+                    height: 1.22rem;
                     icon-color: Theme.dim;
                 }
             }
             Text {
                 text: "Settings";
-                font-size: 22px;
+                font-size: 1.22rem;
                 color: Theme.fg;
                 vertical-alignment: center;
             }
             Rectangle { }
         }
 
-        HorizontalLayout {
-            spacing: 12px;
-
-            // ---- left column: touch controls -------------------------------
+        Flickable {
             VerticalLayout {
-                spacing: 10px;
+                spacing: 0.56rem;
+                alignment: start;
 
                 Row {
                     label: "Light theme";
@@ -99,6 +104,26 @@ export component SettingsPanel inherits Rectangle {
                         checked: Theme.light;
                         toggled => {
                             root.theme-toggled(self.checked);
+                        }
+                    }
+                }
+
+                Row {
+                    label: "Text size";
+                    sublabel: round(Theme.scale * 100) + "% - resizes the whole panel";
+                    HorizontalLayout {
+                        spacing: 0.44rem;
+                        ActionButton {
+                            text: "−";
+                            clicked => {
+                                root.scale-changed(max(1.0, Theme.scale - 0.25));
+                            }
+                        }
+                        ActionButton {
+                            text: "+";
+                            clicked => {
+                                root.scale-changed(min(2.5, Theme.scale + 0.25));
+                            }
                         }
                     }
                 }
@@ -134,64 +159,67 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
-                Rectangle { } // spacer
-            }
-
-            // ---- right column: web settings QR ------------------------------
-            if root.settings-url != "": Rectangle {
-                width: 220px;
-                background: Theme.panel;
-                border-radius: 8px;
-                VerticalLayout {
-                    padding: 16px;
-                    spacing: 10px;
-                    alignment: start;
-                    Text {
-                        text: "More settings";
-                        color: Theme.fg;
-                        font-size: 17px;
-                        horizontal-alignment: center;
-                    }
-                    Text {
-                        text: "Name, Wi-Fi, clock, devices -\nscan with your phone:";
-                        color: Theme.dimmer;
-                        font-size: 13px;
-                        horizontal-alignment: center;
-                    }
-                    Rectangle {
-                        height: 150px;
-                        Rectangle {
-                            x: (parent.width - self.width) / 2;
-                            width: 150px;
-                            height: 150px;
-                            background: white;
-                            border-radius: 6px;
-                            Image {
-                                x: 5px;
-                                y: 5px;
-                                width: 140px;
-                                height: 140px;
-                                source: root.settings-qr;
-                                image-rendering: pixelated;
+                // ---- web settings QR --------------------------------------
+                if root.settings-url != "": Rectangle {
+                    height: qr-card.preferred-height;
+                    qr-card := Rectangle {
+                        x: (parent.width - self.width) / 2;
+                        width: min(parent.width, 13rem);
+                        background: Theme.panel;
+                        border-radius: 0.44rem;
+                        height: qr-col.preferred-height;
+                        qr-col := VerticalLayout {
+                            padding: 0.89rem;
+                            spacing: 0.56rem;
+                            alignment: start;
+                            Text {
+                                text: "More settings";
+                                color: Theme.fg;
+                                font-size: 0.94rem;
+                                horizontal-alignment: center;
+                            }
+                            Text {
+                                text: "Name, Wi-Fi, clock, devices -\nscan with your phone:";
+                                color: Theme.dimmer;
+                                font-size: 0.72rem;
+                                horizontal-alignment: center;
+                            }
+                            Rectangle {
+                                height: 8.33rem;
+                                Rectangle {
+                                    x: (parent.width - self.width) / 2;
+                                    width: 8.33rem;
+                                    height: 8.33rem;
+                                    background: white;
+                                    border-radius: 0.33rem;
+                                    Image {
+                                        x: 0.28rem;
+                                        y: 0.28rem;
+                                        width: parent.width - 0.56rem;
+                                        height: parent.height - 0.56rem;
+                                        source: root.settings-qr;
+                                        image-rendering: pixelated;
+                                    }
+                                }
+                            }
+                            Text {
+                                text: root.settings-url;
+                                color: Theme.dim;
+                                font-size: 0.78rem;
+                                horizontal-alignment: center;
+                                wrap: word-wrap;
                             }
                         }
                     }
-                    Text {
-                        text: root.settings-url;
-                        color: Theme.dim;
-                        font-size: 14px;
-                        horizontal-alignment: center;
-                        wrap: word-wrap;
-                    }
+                }
+
+                Text {
+                    text: root.version-line;
+                    color: Theme.faint;
+                    font-size: 0.72rem;
+                    horizontal-alignment: center;
                 }
             }
-        }
-
-        Text {
-            text: root.version-line;
-            color: Theme.faint;
-            font-size: 13px;
-            horizontal-alignment: center;
         }
     }
 }
