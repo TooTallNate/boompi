@@ -56,6 +56,39 @@ pub const CATALOG: &[FontDef] = &[
         license: "CC-BY 4.0 (Twitter/Mozilla)",
     },
     FontDef {
+        id: "openmoji",
+        label: "OpenMoji",
+        family: "OpenMoji",
+        download: Some(Download {
+            url: "https://github.com/hfg-gmuend/openmoji/raw/17.0.0/font/OpenMoji-color-glyf_colr_0/OpenMoji-color-glyf_colr_0.ttf",
+            sha256: "8376fee074649ece235faba0d157d851f3d93632f0540ad1165feba1aba9ba37",
+            size: 2_681_320,
+        }),
+        license: "CC BY-SA 4.0 (HfG Gmuend)",
+    },
+    FontDef {
+        id: "blobmoji",
+        label: "Blobmoji",
+        family: "Blobmoji",
+        download: Some(Download {
+            url: "https://github.com/C1710/blobmoji/releases/download/v15.0/Blobmoji.ttf",
+            sha256: "dcc3d6675036ba9b35ef574d2221532770b5bd9886cba23c645ef46947eb78f9",
+            size: 12_877_044,
+        }),
+        license: "Apache 2.0 - the classic Android blob style",
+    },
+    FontDef {
+        id: "noto-mono",
+        label: "Noto Emoji (monochrome)",
+        family: "Noto Emoji",
+        download: Some(Download {
+            url: "https://github.com/google/fonts/raw/be7a91f7db2db749ebfc36f598eb85501127e7db/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf",
+            sha256: "de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551",
+            size: 1_982_596,
+        }),
+        license: "OFL - outline glyphs, tinted like text",
+    },
+    FontDef {
         id: "apple",
         label: "Apple Color Emoji",
         family: "Apple Color Emoji",
