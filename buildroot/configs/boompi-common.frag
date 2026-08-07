@@ -1,12 +1,17 @@
-# Boompi Pi 4 box: 1024×600 HDMI touch panel, Raspiaudio Audio+ DAC HAT,
-# USB BT dongle, INA260 battery monitor. Based on raspberrypi4_64_defconfig.
+# Boompi appliance - shared Buildroot configuration fragment.
+#
+# This is NOT a complete defconfig: concatenate it with a board fragment
+# (boompi-pi3.frag / boompi-pi4.frag) to get one - the board fragments
+# hold only genuine hardware deltas (CPU, kernel, boot firmware, TF-A
+# platform, board overlay). scripts/gen-defconfig.sh does the merge;
+# CI feeds the result to `make defconfig BR2_DEFCONFIG=...`. Everything
+# feature-level lives here so the two boxes cannot silently diverge.
 #
 # App binaries (boompid, boompi-ui) are injected via rootfs-overlay-ci by
 # CI (cross-built with cargo-zigbuild against this build's staging sysroot)
 # - see .github/workflows/image.yml.
 
 BR2_aarch64=y
-BR2_cortex_a72=y
 
 # Prebuilt Bootlin toolchain (saves ~40 min of gcc bootstrap per CI run)
 BR2_TOOLCHAIN_EXTERNAL=y
@@ -25,41 +30,32 @@ BR2_INIT_SYSTEMD=y
 # (and its wait-online unit fails the boot health picture).
 # BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
-BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-pi4 $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
-# Package patches (e.g. the bluez 5.79 AVRCP absolute-volume backport).
+# Package patches (e.g. the bluez AVRCP absolute-volume backport).
 BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_BOOMPI_PATH)/patches"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
-BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/post-image.sh"
 
 # Kernel: same Raspberry Pi kernel pin as upstream raspberrypi3_64_defconfig
 BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_6=y
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,576cc10e1ed50a9eacffc7a05c796051d7343ea4)/linux-576cc10e1ed50a9eacffc7a05c796051d7343ea4.tar.gz"
-BR2_LINUX_KERNEL_DEFCONFIG="bcm2711"
-# kexec for A/B trial boots - firmware tryboot is unusable on this
-# hardware (see board/boompi/linux-kexec.fragment).
+# kexec for A/B trial boots - firmware tryboot is not used on either
+# board (see board/boompi/linux-kexec.fragment).
 BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
-BR2_LINUX_KERNEL_INTREE_DTS_NAME="broadcom/bcm2711-rpi-4-b"
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
 
 # Raspberry Pi boot firmware + matching dtb overlays
 # (vc4-kms-dpi-hyperpixel4, disable-bt, ...)
 BR2_PACKAGE_RPI_FIRMWARE=y
-# Pi 4 boots from EEPROM; no bootcode.bin.
-BR2_PACKAGE_RPI_FIRMWARE_VARIANT_PI4=y
 BR2_PACKAGE_RPI_FIRMWARE_INSTALL_DTB_OVERLAYS=y
-BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/config.txt"
-BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/cmdline.txt"
 
-# TF-A BL31 armstub (armstub=bl31.bin in config.txt): PSCI for CPU
-# park/wake - without it the CPUs use spin-tables and kexec_load (the
-# A/B update trial boot) fails with EBUSY.
+# TF-A BL31 armstub: PSCI for CPU park/wake - without it the CPUs use
+# spin-tables and kexec_load (the A/B update trial boot) fails with
+# EBUSY. Platform + build options are per-board (the rpi3 port needs
+# fixed load addresses and a local DT patch; see the board fragments).
 BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
-BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="rpi4"
-BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31=y
 
 # System bits
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
@@ -72,7 +68,7 @@ BR2_PACKAGE_XZ=y
 BR2_PACKAGE_I2C_TOOLS=y
 
 # Bluetooth: BlueZ with experimental (AVRCP cover art), audio plugins,
-# bluetoothctl, obexd (BIP client), btmgmt (sc off for the CSR-clone dongle)
+# bluetoothctl, obexd (BIP client)
 BR2_PACKAGE_BLUEZ5_UTILS=y
 BR2_PACKAGE_BLUEZ5_UTILS_CLIENT=y
 BR2_PACKAGE_BLUEZ5_UTILS_OBEX=y
@@ -125,13 +121,11 @@ BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
-# Onboard Bluetooth (BCM43455): UART BT firmware (BCM4345C0.hcd). The
-# Pi 4 box has no USB dongle - v1 used the onboard radio.
-BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
-# UI runtime deps (Slint linuxkms + Skia GPU renderer: EGL/GLES on
-# KMS/GBM via mesa V3D - smooth 60fps, border-radius clipping, drop
-# shadows and color emoji, none of which the software renderer does).
+# UI runtime deps (Slint linuxkms + Skia GPU renderer on both boards:
+# EGL/GLES on KMS/GBM via mesa - V3D binds on the Pi 4, VC4 on the
+# Pi 3; both drivers ship in both images so the config stays identical.
+# Skia GL on the Pi 3 was validated in Phase 0, docs/PHASE0-PI3.md).
 BR2_PACKAGE_LIBINPUT=y
 BR2_PACKAGE_LIBXKBCOMMON=y
 BR2_PACKAGE_FONTCONFIG=y

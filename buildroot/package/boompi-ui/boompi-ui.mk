@@ -17,7 +17,7 @@ BOOMPI_UI_CARGO_BUILD_OPTS = \
 	--no-default-features \
 	--features slint/backend-linuxkms,slint/renderer-skia
 
-# TODO(Phase 4): confirm feature set (GL vs software renderer per box),
+# TODO(Phase 4): feature set is kms-skia on both boxes (see image.yml),
 # systemd unit, seatd/libinput deps, fontconfig/fonts.
 
 $(eval $(cargo-package))

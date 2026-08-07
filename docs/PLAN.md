@@ -188,7 +188,7 @@ rust/                   cargo workspace
   ina260/               INA260 driver (embedded-hal), port of v1 TS driver
 buildroot/              BR2_EXTERNAL tree
   external.desc / external.mk / Config.in
-  configs/boompi_pi3_defconfig, boompi_pi4_defconfig
+  configs/boompi-common.frag + boompi-{pi3,pi4}.frag (merged defconfigs)
   package/boompid/, package/boompi-ui/, package/librespot/ (if not upstream)
   board/boompi/         rootfs overlay (systemd units, PipeWire/BlueZ/WirePlumber
                         config), genimage.cfg, config-{pi3,pi4}.txt, post-*.sh

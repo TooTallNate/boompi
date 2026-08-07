@@ -2,8 +2,8 @@
 
 `BR2_EXTERNAL` tree for building the Boompi appliance SD card images.
 
-**CI**: `.github/workflows/image.yml` builds the Pi 3 image on every commit
-and uploads `sdcard.img.xz` as an artifact. The system layer comes from
+**CI**: `.github/workflows/image.yml` builds both board images on every
+commit and uploads `sdcard.img.xz` + A/B update bundles as artifacts. The system layer comes from
 Buildroot (pinned release, Bootlin external toolchain, dl+ccache cached);
 the Rust binaries are cross-built with cargo-zigbuild against the build's
 own staging sysroot and injected via `board/boompi/rootfs-overlay-ci/`
@@ -26,8 +26,11 @@ package/
   boompi-ui/                               Slint UI (cargo package, present as stub)
   librespot/                               only if not available upstream
 configs/
-  boompi_pi3_defconfig                     Pi 3 box (HyperPixel 4.0 DPI, USB audio)
-  boompi_pi4_defconfig                     Pi 4 box (HDMI + USB touch, I2S DAC HAT)
+  boompi-common.frag                       shared config (all features live here)
+  boompi-pi3.frag                          Pi 3 hardware deltas (HyperPixel DPI, USB audio/BT)
+  boompi-pi4.frag                          Pi 4 hardware deltas (HDMI panel, DAC HAT, onboard BT)
+                                           (merged by scripts/gen-defconfig.sh; no full
+                                           defconfigs are checked in, so boards cannot drift)
 board/boompi/
   rootfs-overlay/                          systemd units, PipeWire/WirePlumber/BlueZ config
   genimage.cfg                             boot (FAT) + rootfs (squashfs RO) + /data (ext4)

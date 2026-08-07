@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles(format('buildroot/configs/boompi_{0}_defconfig', matrix.board)) }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board)) }}
           restore-keys: |
             br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-
             br-dl-${{ env.BR_VERSION }}-
@@ -130,10 +130,13 @@ jobs:
           mv "$HOME/buildroot-${BR_VERSION}" "$HOME/buildroot"
 
       - name: Configure
+        # The defconfig is generated: shared fragment + board hardware
+        # deltas (buildroot/configs/*.frag) so the boxes cannot drift.
         run: |
+          scripts/gen-defconfig.sh "$BOARD" > "$HOME/boompi_defconfig"
           make -C "$HOME/buildroot" O="$OUTPUT" \
             BR2_EXTERNAL="$GITHUB_WORKSPACE/buildroot" \
-            boompi_${BOARD}_defconfig
+            BR2_DEFCONFIG="$HOME/boompi_defconfig" defconfig
 
       - name: Build system (pass 1)
         run: make -C "$OUTPUT" -j"$(nproc)"
@@ -174,42 +177,31 @@ jobs:
           export RUSTFLAGS="-L $STAGING/usr/lib"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid
-          # pi4: Skia GPU renderer (GLES/EGL via mesa V3D - smooth frames,
-          # rounded art, drop shadows, color emoji). The Skia prebuilt is
-          # C++ built against GNU libstdc++; zig substitutes its own libc++
-          # for `-lstdc++`, so link the real staging libstdc++ by path.
-          # pi3: software renderer (no GL stack in that image yet).
-          if [ "$BOARD" = pi4 ]; then
-            UI_FEATURES=kms-skia
-            LIBSTDCPP="$(find -L "$STAGING" -name 'libstdc++.so.6' | head -1)"
-            export RUSTFLAGS="$RUSTFLAGS -C link-arg=$LIBSTDCPP"
-          else
-            UI_FEATURES=kms
-          fi
+          # Skia GPU renderer on both boards (GLES/EGL via mesa - V3D on
+          # the Pi 4, VC4 on the Pi 3; Phase 0 validated Skia GL on Pi 3).
+          # The Skia prebuilt is C++ built against GNU libstdc++; zig
+          # substitutes its own libc++ for `-lstdc++`, so link the real
+          # staging libstdc++ by path.
+          LIBSTDCPP="$(find -L "$STAGING" -name 'libstdc++.so.6' | head -1)"
+          export RUSTFLAGS="$RUSTFLAGS -C link-arg=$LIBSTDCPP"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" \
-            -p boompi-ui --no-default-features --features "$UI_FEATURES"
+            -p boompi-ui --no-default-features --features kms-skia
 
       - name: Inject binaries + emoji font into the image overlay
         run: |
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
-          if [ "$BOARD" = pi4 ]; then
-            # Color Noto Emoji - must be the CBDT bitmap build (decoding
-            # needs the image freetype built with PNG support, i.e.
-            # BR2_PACKAGE_LIBPNG). google/fonts main serves the COLRv1
-            # build, which this Skia/FreeType stack renders as blanks, so
-            # pin the noto-emoji release CBDT and verify its hash.
-            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
-              "https://github.com/googlefonts/noto-emoji/raw/v2.048/fonts/NotoColorEmoji.ttf"
-            echo "3ed77810c203e1a67735dc19d395f32c23f2d7c0c3696690f4f78e15e57ab816  $OVL/usr/share/fonts/NotoColorEmoji.ttf" \
-              | sha256sum -c -
-          else
-            # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
-            curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \
-              "https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf"
-          fi
+          # Color Noto Emoji (both boards) - must be the CBDT bitmap build
+          # (decoding needs the image freetype built with PNG support, i.e.
+          # BR2_PACKAGE_LIBPNG). google/fonts main serves the COLRv1 build,
+          # which this Skia/FreeType stack renders as blanks, so pin the
+          # noto-emoji release CBDT and verify its hash.
+          curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
+            "https://github.com/googlefonts/noto-emoji/raw/v2.048/fonts/NotoColorEmoji.ttf"
+          echo "3ed77810c203e1a67735dc19d395f32c23f2d7c0c3696690f4f78e15e57ab816  $OVL/usr/share/fonts/NotoColorEmoji.ttf" \
+            | sha256sum -c -
 
       - name: Build image (pass 2, picks up the overlay)
         run: make -C "$OUTPUT" -j"$(nproc)"
