@@ -104,8 +104,35 @@ pub fn spawn(app: SharedApp, resolved: ResolvedArt) -> mpsc::UnboundedSender<Art
             }
         };
         let mut sessions: HashMap<String, OwnedObjectPath> = HashMap::new();
+        // Most recent fetch per device, replayed as keepalive traffic:
+        // iOS idle-drops the BIP channel after ~2 minutes of OBEX
+        // silence, refuses cold reconnects, and eventually stops minting
+        // ImgHandles - the resolved-art cache made repeat albums go
+        // silent long enough to hit exactly that (bench-observed:
+        // "Connection refused (111)" and no art until re-pairing).
+        let mut last_fetch: HashMap<String, ArtRequest> = HashMap::new();
         let mut counter = 0u64;
-        while let Some(req) = rx.recv().await {
+        let mut keepalive = tokio::time::interval(Duration::from_secs(45));
+        keepalive.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        loop {
+            let req = tokio::select! {
+                req = rx.recv() => match req {
+                    Some(req) => req,
+                    None => break,
+                },
+                _ = keepalive.tick() => {
+                    for (address, req) in last_fetch.clone() {
+                        if !sessions.contains_key(&address) {
+                            continue;
+                        }
+                        counter += 1;
+                        if let Err(err) = fetch(&conn, &mut sessions, &req, counter).await {
+                            tracing::debug!(%err, %address, "BIP keepalive fetch failed");
+                        }
+                    }
+                    continue;
+                }
+            };
             let Some(handle) = req.handle.clone() else {
                 // Prime the session so the phone starts including ImgHandle
                 // in track metadata.
@@ -119,6 +146,7 @@ pub fn spawn(app: SharedApp, resolved: ResolvedArt) -> mpsc::UnboundedSender<Art
             match fetch(&conn, &mut sessions, &req, counter).await {
                 Ok(bytes) => {
                     tracing::info!(%handle, size = bytes.len(), "cover art fetched");
+                    last_fetch.insert(req.address.clone(), req.clone());
                     publish(&app, &resolved, &handle, bytes).await;
                 }
                 Err(err) => {
@@ -217,13 +245,26 @@ async fn ensure_session(
         sessions.remove(&req.address);
     }
     let client = ObexClient1Proxy::new(conn).await?;
-    let mut args: HashMap<&str, Value<'_>> = HashMap::new();
-    args.insert("Target", Value::from("bip-avrcp"));
-    args.insert("PSM", Value::from(req.psm));
-    let path = client.create_session(&req.address, args).await?;
-    tracing::info!(address = %req.address, session = %path, "BIP obex session established");
-    sessions.insert(req.address.clone(), path.clone());
-    Ok(path)
+    let mut last_err = None;
+    for backoff_ms in [0u64, 3000] {
+        if backoff_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+        }
+        let mut args: HashMap<&str, Value<'_>> = HashMap::new();
+        args.insert("Target", Value::from("bip-avrcp"));
+        args.insert("PSM", Value::from(req.psm));
+        match client.create_session(&req.address, args).await {
+            Ok(path) => {
+                tracing::info!(address = %req.address, session = %path, "BIP obex session established");
+                sessions.insert(req.address.clone(), path.clone());
+                return Ok(path);
+            }
+            // Phones refuse cold BIP connects in some states (locked,
+            // just-idle-dropped); one spaced retry often lands.
+            Err(err) => last_err = Some(err),
+        }
+    }
+    Err(last_err.expect("at least one attempt").into())
 }
 
 async fn session_alive(conn: &zbus::Connection, path: &OwnedObjectPath) -> bool {
