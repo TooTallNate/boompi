@@ -66,6 +66,19 @@ export RUSTFLAGS="-L $SYS/usr/lib ${RUSTFLAGS:-}"
 echo "== building web/dist =="
 (cd "$REPO_ROOT/web" && pnpm install --frozen-lockfile --silent && pnpm build)
 
+# COLRv1-capable Skia (built by the CI skia job - the rust-skia
+# prebuilt lacks the COLRv1 code path). Optional locally: fetch once
+# with
+#   gh run download -n skia-binaries-arm64 -D ~/.boompi/skia-binaries
+# and bench builds render color emoji identically to the CI images.
+SKIA_DIR="$HOME/.boompi/skia-binaries"
+if ls "$SKIA_DIR"/skia-binaries-*.tar.gz >/dev/null 2>&1; then
+    export SKIA_BINARIES_URL="file://$SKIA_DIR/skia-binaries-{key}.tar.gz"
+    echo "using local COLRv1 skia binaries from $SKIA_DIR"
+else
+    echo "note: no $SKIA_DIR - boompi-ui links the stock prebuilt Skia (no COLRv1)"
+fi
+
 echo "== cross-building boompid (embeds web/dist) + boompi-ui =="
 cargo zigbuild --manifest-path "$REPO_ROOT/rust/Cargo.toml" \
     --target "$TARGET.$GLIBC" --release -p boompid

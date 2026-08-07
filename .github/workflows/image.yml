@@ -69,8 +69,92 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Skia built from source with COLRv1 support. The rust-skia prebuilt
+  # binaries are compiled against old FreeType headers, which compiles
+  # Skia's COLRv1 code path out entirely (FT_Get_Color_Glyph_Paint is
+  # absent; only the COLRv0 FT_Get_Color_Glyph_Layer made it in), so
+  # modern color emoji fonts render blank on the boxes. Building on the
+  # arm64 runner against Ubuntu 24.04's FreeType 2.13 headers turns the
+  # path on; the board jobs consume the result via SKIA_BINARIES_URL
+  # (same crate version + features + target triple = same cache key as
+  # the zigbuild step computes). Cached per skia-bindings version, so
+  # this ~40 min build runs about once per Slint upgrade.
+  skia:
+    name: skia (arm64, COLRv1)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Skia version key
+        id: ver
+        run: |
+          V=$(grep -A1 'name = "skia-bindings"' rust/Cargo.lock | grep version | cut -d'"' -f2)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Restore built binaries
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: skia-out
+          key: skia-colrv1-${{ steps.ver.outputs.version }}-kms-skia-v1
+
+      - name: Install build dependencies
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             clang ninja-build python3 git curl             libfreetype-dev libfontconfig-dev             libegl1-mesa-dev libgles-dev libgl-dev libgbm-dev             libinput-dev libudev-dev libxkbcommon-dev
+          # The whole point: 24.04's FreeType headers must be >= 2.13.
+          pkg-config --modversion freetype2
+
+      - name: Build Skia from source
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          rustup target list >/dev/null # ensure rustup is warm
+          # Pass 1 (downloads the official prebuilt): capture the exact
+          # binaries key the crate computes, and prove the prebuilt is
+          # missing COLRv1 so this job stays honest.
+          cargo build --manifest-path rust/Cargo.toml --release             -p boompi-ui --no-default-features --features kms-skia
+          OUT=$(ls -d rust/target/release/build/skia-bindings-*/out/skia | head -1)
+          KEY=$(cat "$OUT/key.txt"); TAG=$(cat "$OUT/tag.txt")
+          echo "key=$KEY tag=$TAG"
+          if nm "$OUT/libskia.a" 2>/dev/null | grep -q FT_Get_Color_Glyph_Paint; then
+            echo "::notice::official prebuilt now has COLRv1 - this job may be obsolete"
+          fi
+          # Pass 2: force the source build (rerun-if-env-changed on
+          # FORCE_SKIA_BUILD makes cargo redo skia-bindings).
+          FORCE_SKIA_BUILD=1 cargo build --manifest-path rust/Cargo.toml --release             -p boompi-ui --no-default-features --features kms-skia
+          OUT=$(ls -d rust/target/release/build/skia-bindings-*/out/skia | head -1)
+          # The assertion this job exists for:
+          nm "$OUT/libskia.a" | grep -q FT_Get_Color_Glyph_Paint             || { echo "::error::source-built Skia still lacks COLRv1"; exit 1; }
+          # Package in the skia-binaries layout (top-level dir, files
+          # moved up by the crate's unpack()).
+          mkdir -p skia-out/stage/skia-binaries
+          cp "$OUT"/bindings.rs "$OUT"/*.a skia-out/stage/skia-binaries/
+          cp "$OUT"/LICENSE_SKIA skia-out/stage/skia-binaries/ 2>/dev/null ||             cp ~/.cargo/registry/src/*/skia-bindings-*/LICENSE_SKIA skia-out/stage/skia-binaries/
+          echo -n "$KEY" > skia-out/stage/skia-binaries/key.txt
+          echo -n "$TAG" > skia-out/stage/skia-binaries/tag.txt
+          tar czf "skia-out/skia-binaries-$KEY.tar.gz" -C skia-out/stage skia-binaries
+          rm -rf skia-out/stage
+          ls -la skia-out/
+
+      - name: Save built binaries
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: skia-out
+          key: skia-colrv1-${{ steps.ver.outputs.version }}-kms-skia-v1
+
+      - name: Upload skia binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: skia-binaries-arm64
+          path: skia-out/skia-binaries-*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
   image:
-    needs: web
+    needs: [web, skia]
     strategy:
       fail-fast: false
       matrix:
@@ -161,6 +245,13 @@ jobs:
           name: boompi-web-dist
           path: web/dist
 
+      # COLRv1-capable Skia from the arm64 job (see the skia job).
+      - name: Fetch skia binaries
+        uses: actions/download-artifact@v7
+        with:
+          name: skia-binaries-arm64
+          path: /home/runner/skia-binaries
+
       - name: Cross-build boompid + boompi-ui against staging
         run: |
           STAGING="$OUTPUT/staging"
@@ -190,6 +281,9 @@ jobs:
           # staging libstdc++ by path.
           LIBSTDCPP="$(find -L "$STAGING" -name 'libstdc++.so.6' | head -1)"
           export RUSTFLAGS="$RUSTFLAGS -C link-arg=$LIBSTDCPP"
+          # Use the COLRv1-capable Skia from the arm64 job; same crate
+          # version/features/triple, so the computed {key} matches.
+          export SKIA_BINARIES_URL="file:///home/runner/skia-binaries/skia-binaries-{key}.tar.gz"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
             --target "aarch64-unknown-linux-gnu.$GLIBC" \
             -p boompi-ui --no-default-features --features kms-skia
