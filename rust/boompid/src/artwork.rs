@@ -83,6 +83,16 @@ trait ObexImage1 {
     ) -> zbus::Result<(OwnedObjectPath, HashMap<String, zbus::zvariant::OwnedValue>)>;
 }
 
+#[zbus::proxy(
+    interface = "org.bluez.obex.Transfer1",
+    default_service = "org.bluez.obex"
+)]
+trait ObexTransfer1 {
+    fn cancel(&self) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn status(&self) -> zbus::Result<String>;
+}
+
 pub fn spawn(app: SharedApp, resolved: ResolvedArt) -> mpsc::UnboundedSender<ArtRequest> {
     let (tx, mut rx) = mpsc::unbounded_channel::<ArtRequest>();
     tokio::spawn(async move {
@@ -144,10 +154,26 @@ async fn fetch(
             .await?;
         let handle = req.handle.as_deref().unwrap_or_default();
         match image.get_thumbnail(&file, handle).await {
-            Ok(_transfer) => {
-                let result = wait_for_file(&file).await;
+            Ok((transfer, _props)) => {
+                let result = wait_for_transfer(conn, &transfer, &file).await;
                 let _ = tokio::fs::remove_file(&file).await;
-                return result;
+                match result {
+                    Err(err) => {
+                        // Burn the whole session, not just the transfer:
+                        // an abandoned/stalled transfer leaves the BIP
+                        // channel skewed - subsequent requests get the
+                        // previous request's image (bench-observed: the
+                        // same art id served for every following track).
+                        // A fresh session starts the exchange clean.
+                        tracing::debug!(%err, attempt, "cover art transfer bad; resetting session");
+                        drop_session(conn, sessions, &req.address).await;
+                        if attempt <= 2 {
+                            continue;
+                        }
+                        return Err(err);
+                    }
+                    ok => return ok,
+                }
             }
             Err(err) if attempt == 1 => {
                 // Stale session (phone reconnected / dropped the channel):
@@ -156,6 +182,20 @@ async fn fetch(
                 sessions.remove(&req.address);
             }
             Err(err) => return Err(err.into()),
+        }
+    }
+}
+
+/// Tear a session down on both ends (cache + obexd) so the next fetch
+/// negotiates a fresh BIP connection.
+async fn drop_session(
+    conn: &zbus::Connection,
+    sessions: &mut HashMap<String, OwnedObjectPath>,
+    address: &str,
+) {
+    if let Some(path) = sessions.remove(address) {
+        if let Ok(client) = ObexClient1Proxy::new(conn).await {
+            let _ = client.remove_session(&path).await;
         }
     }
 }
@@ -196,23 +236,51 @@ async fn session_alive(conn: &zbus::Connection, path: &OwnedObjectPath) -> bool 
     }
 }
 
-/// Wait for obexd to finish writing the transfer target file. The Transfer1
-/// object vanishes on completion (racy to poll), so watch the file instead:
-/// done when it exists, is non-empty, and its size is stable across polls.
-async fn wait_for_file(path: &str) -> anyhow::Result<Bytes> {
-    let mut last_size = 0u64;
-    for _ in 0..40 {
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        let Ok(meta) = tokio::fs::metadata(path).await else {
-            continue;
-        };
-        let size = meta.len();
-        if size > 0 && size == last_size {
-            return Ok(tokio::fs::read(path).await?.into());
+/// Wait for the OBEX transfer to actually finish, then read the file.
+///
+/// The old approach - "file size stable across two 200ms polls" - called
+/// any transfer that stalled for 200ms complete, and truncated JPEGs are
+/// content-addressed garbage once cached. Track the Transfer1 object's
+/// Status instead: complete/error are authoritative; the object
+/// vanishing (obexd frees it right after completion, or on cancel) is
+/// disambiguated by whether the file decodes.
+async fn wait_for_transfer(
+    conn: &zbus::Connection,
+    transfer: &OwnedObjectPath,
+    path: &str,
+) -> anyhow::Result<Bytes> {
+    let proxy = ObexTransfer1Proxy::builder(conn)
+        .path(transfer.clone())?
+        .build()
+        .await?;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        match proxy.status().await {
+            Ok(status) => match status.as_str() {
+                "complete" => break,
+                "error" => anyhow::bail!("obex transfer failed"),
+                _ => {} // queued | active | suspended
+            },
+            // Object gone: completed-and-freed or cancelled - the file
+            // content decides below.
+            Err(_) => break,
         }
-        last_size = size;
+        if tokio::time::Instant::now() >= deadline {
+            // Never abandon a live transfer silently: it keeps occupying
+            // the OBEX channel and skews every response after it.
+            let _ = proxy.cancel().await;
+            anyhow::bail!("artwork transfer timed out");
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    anyhow::bail!("artwork transfer timed out")
+    let bytes: Bytes = tokio::fs::read(path).await?.into();
+    if bytes.is_empty() || image::load_from_memory(&bytes).is_err() {
+        anyhow::bail!(
+            "transfer delivered undecodable image ({} bytes)",
+            bytes.len()
+        );
+    }
+    Ok(bytes)
 }
 
 /// Cache the image, record the handle→id mapping, and notify clients.
