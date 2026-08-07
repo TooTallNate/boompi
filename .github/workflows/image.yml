@@ -216,7 +216,7 @@ jobs:
           # version bump - the BR2_EXTERNAL mechanism cannot override
           # package versions).
           for p in "$GITHUB_WORKSPACE"/buildroot/buildroot-patches/*.patch; do
-            patch -d "$HOME/buildroot" -p1 < "$p"
+            patch -d "$HOME/buildroot" -p1 -E < "$p"
           done
 
       - name: Configure
