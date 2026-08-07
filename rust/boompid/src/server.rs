@@ -255,10 +255,29 @@ async fn api_clock() -> axum::response::Response {
         .into_response()
 }
 
-async fn api_clock_set(Json(patch): Json<ClockPatch>) -> axum::response::Response {
+async fn api_clock_set(
+    State(app): State<SharedApp>,
+    Json(patch): Json<ClockPatch>,
+) -> axum::response::Response {
+    #[cfg(not(target_os = "linux"))]
+    let _ = &app;
     #[cfg(target_os = "linux")]
     match crate::clock::set(patch.timezone.as_deref(), patch.ntp).await {
-        Ok(()) => return api_clock().await,
+        Ok(()) => {
+            // Persist to /data: /etc/localtime sits on the A/B rootfs and
+            // an OTA replaces it; boompid re-applies this copy at startup.
+            {
+                let mut s = app.shared.write().await;
+                if patch.timezone.is_some() {
+                    s.timezone = patch.timezone.clone();
+                }
+                if patch.ntp.is_some() {
+                    s.ntp = patch.ntp;
+                }
+            }
+            app.persist_config().await;
+            return api_clock().await;
+        }
         Err(err) => {
             tracing::warn!(%err, "clock change failed");
             return (

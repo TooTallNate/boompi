@@ -115,6 +115,9 @@ pub struct Shared {
     pub setup: SetupState,
     /// Per-device Bluetooth volume-mode assignments (address → mode).
     pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
+    /// Durable clock prefs (see config::Config::timezone).
+    pub timezone: Option<String>,
+    pub ntp: Option<bool>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
 }
@@ -132,6 +135,8 @@ impl App {
             required: !cfg.setup_complete,
         };
         let cfg2_bt_volume_modes = cfg.bt_volume_modes.clone();
+        let cfg2_timezone = cfg.timezone.clone();
+        let cfg2_ntp = cfg.ntp;
         Arc::new(Self {
             cfg,
             config_path,
@@ -143,6 +148,8 @@ impl App {
                 settings,
                 setup,
                 bt_volume_modes: cfg2_bt_volume_modes,
+                timezone: cfg2_timezone,
+                ntp: cfg2_ntp,
                 ..Shared::default()
             }),
             tx,
@@ -216,6 +223,8 @@ impl App {
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.bt_volume_modes = s.bt_volume_modes.clone();
+            cfg.timezone = s.timezone.clone();
+            cfg.ntp = s.ntp;
         }
         match crate::config::save(&cfg, path) {
             Ok(()) => tracing::info!(path = %path.display(), "config persisted"),

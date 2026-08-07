@@ -50,6 +50,23 @@ pub async fn status() -> anyhow::Result<ClockStatus> {
     })
 }
 
+/// Re-apply the persisted timezone/NTP prefs (best-effort). /etc lives
+/// on the A/B rootfs, so an OTA silently resets the system copy to the
+/// image default; the durable copy is in /data (boompi.toml).
+pub async fn restore(app: &crate::state::SharedApp) {
+    let (tz, ntp) = {
+        let s = app.shared.read().await;
+        (s.timezone.clone(), s.ntp)
+    };
+    if tz.is_none() && ntp.is_none() {
+        return;
+    }
+    match set(tz.as_deref(), ntp).await {
+        Ok(()) => tracing::info!(?tz, ?ntp, "restored persisted clock prefs"),
+        Err(err) => tracing::warn!(%err, "failed to restore persisted clock prefs"),
+    }
+}
+
 pub async fn set(timezone: Option<&str>, ntp: Option<bool>) -> anyhow::Result<()> {
     let conn = zbus::Connection::system().await?;
     let td = TimeDate1Proxy::new(&conn).await?;

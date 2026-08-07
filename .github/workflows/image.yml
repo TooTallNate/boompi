@@ -196,11 +196,15 @@ jobs:
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
           if [ "$BOARD" = pi4 ]; then
-            # Color Noto Emoji (CBDT). Decoding needs the image freetype
-            # built with PNG support (BR2_PACKAGE_LIBPNG). Discovery is
-            # fontconfig-based at runtime; no font registration needed.
+            # Color Noto Emoji - must be the CBDT bitmap build (decoding
+            # needs the image freetype built with PNG support, i.e.
+            # BR2_PACKAGE_LIBPNG). google/fonts main serves the COLRv1
+            # build, which this Skia/FreeType stack renders as blanks, so
+            # pin the noto-emoji release CBDT and verify its hash.
             curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
-              "https://github.com/google/fonts/raw/main/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf"
+              "https://github.com/googlefonts/noto-emoji/raw/v2.048/fonts/NotoColorEmoji.ttf"
+            echo "3ed77810c203e1a67735dc19d395f32c23f2d7c0c3696690f4f78e15e57ab816  $OVL/usr/share/fonts/NotoColorEmoji.ttf" \
+              | sha256sum -c -
           else
             # Monochrome Noto Emoji (software renderer; see etc/fonts/local.conf)
             curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoEmoji.ttf" \

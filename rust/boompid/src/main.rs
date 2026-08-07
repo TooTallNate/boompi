@@ -91,6 +91,11 @@ async fn main() -> anyhow::Result<()> {
             visualizer::spawn(app.clone());
             spotify::spawn(app.clone());
             airplay::spawn(app.clone());
+            // Re-apply persisted clock prefs (an OTA resets /etc).
+            {
+                let app = app.clone();
+                tokio::spawn(async move { clock::restore(&app).await });
+            }
             // Seed the volume from the current system state.
             {
                 let app = app.clone();

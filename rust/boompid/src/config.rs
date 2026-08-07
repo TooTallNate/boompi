@@ -30,6 +30,12 @@ pub struct Config {
     /// Per-device Bluetooth volume-mode assignments (address → mode);
     /// devices absent from the map are `Auto`.
     pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
+    /// User timezone (IANA name). The system copy lives in /etc/localtime
+    /// on the rootfs, which an A/B update replaces wholesale - this is
+    /// the durable copy, re-applied at startup.
+    pub timezone: Option<String>,
+    /// NTP on/off, if the user ever toggled it (None = image default).
+    pub ntp: Option<bool>,
 }
 
 impl Default for Config {
@@ -43,6 +49,8 @@ impl Default for Config {
             settings: SettingsConfig::default(),
             setup_complete: false,
             bt_volume_modes: Default::default(),
+            timezone: None,
+            ntp: None,
         }
     }
 }
