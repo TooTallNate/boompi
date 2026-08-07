@@ -293,14 +293,16 @@ jobs:
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
-          # Color Noto Emoji (both boards) - must be the CBDT bitmap build
-          # (decoding needs the image freetype built with PNG support, i.e.
-          # BR2_PACKAGE_LIBPNG). google/fonts main serves the COLRv1 build,
-          # which this Skia/FreeType stack renders as blanks, so pin the
-          # noto-emoji release CBDT and verify its hash.
+          # Color Noto Emoji (both boards), COLRv1 build - vector color
+          # glyphs stay crisp at every UI scale, unlike the 128px CBDT
+          # bitmaps. Requires the source-built Skia from the skia job
+          # (the rust-skia prebuilt has COLRv1 compiled out and renders
+          # this font as blanks). Pinned to the google/fonts commit whose
+          # file was bench-verified; sha-checked so an upstream swap
+          # fails the build instead of shipping blanks.
           curl -fsSL --create-dirs -o "$OVL/usr/share/fonts/NotoColorEmoji.ttf" \
-            "https://github.com/googlefonts/noto-emoji/raw/v2.048/fonts/NotoColorEmoji.ttf"
-          echo "3ed77810c203e1a67735dc19d395f32c23f2d7c0c3696690f4f78e15e57ab816  $OVL/usr/share/fonts/NotoColorEmoji.ttf" \
+            "https://github.com/google/fonts/raw/be7a91f7db2db749ebfc36f598eb85501127e7db/ofl/notocoloremoji/NotoColorEmoji-Regular.ttf"
+          echo "be73479ba4fa277c89b85cd6c71717df30d9d0eff6da8c1e1a201e5b95459299  $OVL/usr/share/fonts/NotoColorEmoji.ttf" \
             | sha256sum -c -
 
       - name: Build image (pass 2, picks up the overlay)
