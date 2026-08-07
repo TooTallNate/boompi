@@ -31,6 +31,10 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/command", post(api_command))
         .route("/api/clock", get(api_clock).post(api_clock_set))
         .route("/api/wifi", get(api_wifi).post(api_wifi_action))
+        .route(
+            "/api/emoji-fonts",
+            get(api_emoji_fonts).post(api_emoji_font_action),
+        )
         // Captive-portal detection probes (iOS/Android/Windows). In AP
         // mode the portal dnsmasq resolves every name to us; answering
         // these with a redirect pops the OS "sign in to network" sheet
@@ -184,6 +188,104 @@ async fn api_wifi() -> axum::response::Response {
     (
         StatusCode::NOT_IMPLEMENTED,
         Json(serde_json::json!({ "error": "wifi control is Linux-only" })),
+    )
+        .into_response()
+}
+
+async fn api_emoji_fonts(State(app): State<SharedApp>) -> axum::response::Response {
+    let _ = &app;
+    #[cfg(target_os = "linux")]
+    {
+        let s = app.shared.read().await;
+        return Json(serde_json::json!({
+            "fonts": crate::fonts::list(&s.emoji_font),
+            "downloading": s.emoji_download,
+            "error": s.emoji_error,
+        }))
+        .into_response();
+    }
+    #[cfg(not(target_os = "linux"))]
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({ "error": "emoji fonts are Linux-only" })),
+    )
+        .into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct EmojiFontAction {
+    action: String,
+    id: String,
+}
+
+async fn api_emoji_font_action(
+    State(app): State<SharedApp>,
+    Json(req): Json<EmojiFontAction>,
+) -> axum::response::Response {
+    let _ = (&app, &req);
+    #[cfg(target_os = "linux")]
+    {
+        let result: anyhow::Result<()> = async {
+            match req.action.as_str() {
+                "download" => {
+                    {
+                        let mut s = app.shared.write().await;
+                        if s.emoji_download.is_some() {
+                            anyhow::bail!("a download is already running");
+                        }
+                        s.emoji_download = Some(req.id.clone());
+                        s.emoji_error = None;
+                    }
+                    let app2 = app.clone();
+                    let id = req.id.clone();
+                    tokio::spawn(async move {
+                        let result = crate::fonts::download(&id).await;
+                        let mut s = app2.shared.write().await;
+                        s.emoji_download = None;
+                        if let Err(err) = result {
+                            tracing::warn!(%err, id, "emoji font download failed");
+                            s.emoji_error = Some(err.to_string());
+                        }
+                    });
+                }
+                "select" => {
+                    if !crate::fonts::installed(&req.id) {
+                        anyhow::bail!("font not installed");
+                    }
+                    crate::fonts::write_conf(&req.id)?;
+                    app.shared.write().await.emoji_font = req.id.clone();
+                    app.persist_config().await;
+                    tokio::spawn(crate::fonts::apply_live());
+                    tracing::info!(id = %req.id, "emoji font selected");
+                }
+                "remove" => {
+                    crate::fonts::remove(&req.id)?;
+                    let was_active = app.shared.read().await.emoji_font == req.id;
+                    if was_active {
+                        crate::fonts::write_conf("noto")?;
+                        app.shared.write().await.emoji_font = "noto".into();
+                        app.persist_config().await;
+                        tokio::spawn(crate::fonts::apply_live());
+                    }
+                }
+                other => anyhow::bail!("unknown action: {other}"),
+            }
+            Ok(())
+        }
+        .await;
+        return match result {
+            Ok(()) => api_emoji_fonts(State(app)).await,
+            Err(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": err.to_string() })),
+            )
+                .into_response(),
+        };
+    }
+    #[cfg(not(target_os = "linux"))]
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(serde_json::json!({ "error": "emoji fonts are Linux-only" })),
     )
         .into_response()
 }

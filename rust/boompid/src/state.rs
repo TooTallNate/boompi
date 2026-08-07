@@ -118,6 +118,10 @@ pub struct Shared {
     /// Durable clock prefs (see config::Config::timezone).
     pub timezone: Option<String>,
     pub ntp: Option<bool>,
+    /// Active emoji font id + download-in-flight state (fonts.rs).
+    pub emoji_font: String,
+    pub emoji_download: Option<String>,
+    pub emoji_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
 }
@@ -138,6 +142,7 @@ impl App {
         let cfg2_bt_volume_modes = cfg.bt_volume_modes.clone();
         let cfg2_timezone = cfg.timezone.clone();
         let cfg2_ntp = cfg.ntp;
+        let cfg2_emoji_font = cfg.settings.emoji_font.clone();
         Arc::new(Self {
             cfg,
             config_path,
@@ -151,6 +156,9 @@ impl App {
                 bt_volume_modes: cfg2_bt_volume_modes,
                 timezone: cfg2_timezone,
                 ntp: cfg2_ntp,
+                emoji_font: cfg2_emoji_font,
+                emoji_download: None,
+                emoji_error: None,
                 ..Shared::default()
             }),
             tx,
@@ -249,6 +257,7 @@ impl App {
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.settings.ui_scale = s.settings.ui_scale;
+            cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.bt_volume_modes = s.bt_volume_modes.clone();
             cfg.timezone = s.timezone.clone();

@@ -47,6 +47,43 @@ export async function fetchWifi(): Promise<WifiStatus> {
   return body;
 }
 
+export interface EmojiFont {
+  id: string;
+  label: string;
+  license: string;
+  installed: boolean;
+  active: boolean;
+  builtin: boolean;
+  size: number;
+}
+
+export interface EmojiFontsStatus {
+  fonts: EmojiFont[];
+  downloading: string | null;
+  error: string | null;
+}
+
+export async function fetchEmojiFonts(): Promise<EmojiFontsStatus> {
+  const r = await fetch("/api/emoji-fonts");
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+  return body;
+}
+
+export async function emojiFontAction(
+  action: "download" | "select" | "remove",
+  id: string,
+): Promise<EmojiFontsStatus> {
+  const r = await fetch("/api/emoji-fonts", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, id }),
+  });
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+  return body;
+}
+
 export async function wifiAction(action: WifiAction): Promise<WifiStatus> {
   const r = await fetch("/api/wifi", {
     method: "POST",

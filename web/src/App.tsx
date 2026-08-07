@@ -1,14 +1,21 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  emojiFontAction,
   fetchClock,
+  fetchEmojiFonts,
   fetchWifi,
   patchClock,
   patchSettings,
   sendCommand,
   wifiAction,
 } from "./api";
-import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
+import type {
+  ClockStatus,
+  EmojiFontsStatus,
+  WifiNetwork,
+  WifiStatus,
+} from "./api";
 import { useBoompi } from "./useBoompi";
 import type {
   BtDevice,
@@ -58,6 +65,7 @@ export default function App() {
           <>
             <NameSection settings={settings} onSaved={applySettings} />
             <AppearanceSection settings={settings} onSaved={applySettings} />
+            <EmojiFontSection />
             <ArtSection settings={settings} onSaved={applySettings} />
             <AirplayIconSection settings={settings} onSaved={applySettings} />
           </>
@@ -738,6 +746,101 @@ function AppearanceSection({ settings, onSaved }: SectionProps) {
         </select>
       </div>
       <StatusText status={status} />
+    </Section>
+  );
+}
+
+function EmojiFontSection() {
+  const [status, setStatus] = useState<EmojiFontsStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refresh() {
+    try {
+      setStatus(await fetchEmojiFonts());
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+  useEffect(() => {
+    refresh();
+  }, []);
+  // Poll while a download runs (the Apple build is ~110MB).
+  useEffect(() => {
+    if (!status?.downloading) return;
+    const t = setInterval(refresh, 2000);
+    return () => clearInterval(t);
+  }, [status?.downloading]);
+
+  async function act(action: "download" | "select" | "remove", id: string) {
+    try {
+      setStatus(await emojiFontAction(action, id));
+      setError(null);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  if (!status) return null;
+  return (
+    <Section title="Emoji style">
+      <p className="mb-2 text-sm text-dim">
+        The font used for emoji on the speaker's screen (name, track
+        titles). Downloads are stored on the speaker and survive updates;
+        switching restarts the panel UI briefly.
+      </p>
+      {status.fonts.map((f) => (
+        <div
+          key={f.id}
+          className="flex items-center justify-between gap-3 border-t border-line py-2.5 first:border-t-0"
+        >
+          <div className="min-w-0">
+            <div>
+              {f.label}
+              {f.active && <span className="ml-2 text-[12px] text-ok">active</span>}
+            </div>
+            <div className="text-[12px] text-dim">
+              {f.license}
+              {f.size > 0 && !f.installed && (
+                <span className="ml-2">{Math.round(f.size / 1024 / 1024)} MB</span>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-none gap-2">
+            {f.installed && !f.active && (
+              <button
+                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink"
+                onClick={() => act("select", f.id)}
+              >
+                Use
+              </button>
+            )}
+            {!f.installed &&
+              (status.downloading === f.id ? (
+                <span className="px-3 py-1.5 text-sm text-dim">Downloading…</span>
+              ) : (
+                <button
+                  className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg disabled:opacity-40"
+                  disabled={status.downloading != null}
+                  onClick={() => act("download", f.id)}
+                >
+                  Download
+                </button>
+              ))}
+            {f.installed && !f.builtin && !f.active && (
+              <button
+                className="rounded-lg border border-err/40 px-3 py-1.5 text-sm text-err hover:bg-err/10"
+                onClick={() => act("remove", f.id)}
+              >
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      {(error || status.error) && (
+        <p className="mt-2 text-[13px] text-err">{error || status.error}</p>
+      )}
     </Section>
   );
 }

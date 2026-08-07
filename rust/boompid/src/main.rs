@@ -23,6 +23,7 @@ mod bt_agent;
 #[cfg(target_os = "linux")]
 mod clock;
 mod config;
+mod fonts;
 // DSP is platform-independent (unit-tested everywhere) but only consumed by
 // the Linux-only visualizer.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -95,6 +96,20 @@ async fn main() -> anyhow::Result<()> {
             {
                 let app = app.clone();
                 tokio::spawn(async move { clock::restore(&app).await });
+            }
+            // Emoji font choice: regenerate the fontconfig fragment and
+            // fall back to the built-in if the chosen file vanished.
+            {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    let chosen = app.shared.read().await.emoji_font.clone();
+                    let effective = fonts::reconcile(&chosen);
+                    if effective != chosen {
+                        tracing::warn!(%chosen, %effective, "emoji font missing; falling back");
+                        app.shared.write().await.emoji_font = effective.into();
+                        app.persist_config().await;
+                    }
+                });
             }
             // Seed the volume from the current system state.
             {

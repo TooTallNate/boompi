@@ -52,4 +52,5 @@ librespot = { version = "0.8", default-features = false, features = [
 linux-embedded-hal = "0.4"
 # Cover art downloads (Spotify CDN; later the online-art fallback).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
+sha2 = "0.10"
 zbus = { version = "5", default-features = false, features = ["tokio"] }

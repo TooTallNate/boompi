@@ -127,6 +127,14 @@ pub struct SettingsConfig {
     /// larger defaults for small high-DPI panels.
     #[serde(default = "default_ui_scale")]
     pub ui_scale: f32,
+    /// Active emoji font (catalog id in fonts.rs; "noto" ships with
+    /// the image, others download to /data/fonts).
+    #[serde(default = "default_emoji_font")]
+    pub emoji_font: String,
+}
+
+fn default_emoji_font() -> String {
+    "noto".into()
 }
 
 fn default_ui_scale() -> f32 {
@@ -140,6 +148,7 @@ impl Default for SettingsConfig {
             theme: boompi_proto::Theme::default(),
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
+            emoji_font: default_emoji_font(),
         }
     }
 }
