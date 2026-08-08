@@ -391,7 +391,11 @@ jobs:
   # minus the sdcard images (edge is OTA-only).
   edge:
     needs: image
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Pushes and manual re-runs both refresh edge (dispatch exists for
+    # rebuilding when a push was missed, e.g. the branch-rename force
+    # push whose v1-to-v2 mega-diff blew past the paths filter's
+    # 300-file window).
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
     name: edge prerelease
     runs-on: ubuntu-24.04
     timeout-minutes: 30
