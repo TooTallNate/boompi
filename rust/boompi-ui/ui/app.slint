@@ -82,6 +82,8 @@ export component AppWindow inherits Window {
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
     in property <bool> setup-required: false;
+    in property <string> setup-wifi-kind: "";
+    in property <string> setup-wifi-text: "";
 
     // --- clock ---
     in property <string> clock-day: "";
@@ -164,6 +166,8 @@ export component AppWindow inherits Window {
         speaker-name: root.speaker-name;
         settings-url: root.settings-url;
         settings-qr: root.settings-qr;
+        wifi-status-kind: root.setup-wifi-kind;
+        wifi-status-text: root.setup-wifi-text;
     }
 
     if root.connected && !root.setup-required && root.screen == "main" && !root.has-track: ConnectScreen {

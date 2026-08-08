@@ -139,6 +139,7 @@ impl App {
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
+            wifi_status: None,
         };
         let cfg2_bt_volume_modes = cfg.bt_volume_modes.clone();
         let cfg2_timezone = cfg.timezone.clone();
@@ -243,6 +244,16 @@ impl App {
             }
         });
         was_required
+    }
+
+    /// Publish a Wi-Fi join status update (panel setup screen).
+    pub async fn set_wifi_status(&self, status: Option<boompi_proto::WifiJoinStatus>) {
+        let setup = {
+            let mut s = self.shared.write().await;
+            s.setup.wifi_status = status;
+            s.setup.clone()
+        };
+        self.broadcast(ServerMessage::Setup(setup));
     }
 
     /// Persist the current runtime settings back to the config file.

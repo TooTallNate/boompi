@@ -79,7 +79,7 @@ export interface AppState {
   volume: number;
   pairing: Pairing;
   bt_devices: BtDevice[];
-  setup: { required: boolean };
+  setup: { required: boolean; wifi_status?: unknown };
   emoji_fonts: EmojiFontsState;
   // Present but unused by the settings UI so far:
   source: unknown;

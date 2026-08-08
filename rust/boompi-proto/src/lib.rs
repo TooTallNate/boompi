@@ -238,6 +238,17 @@ pub struct SettingsPatch {
     pub ui_scale: Option<f32>,
 }
 
+/// Live Wi-Fi join progress, surfaced on the panel: the join usually
+/// kills the portal connection it was requested over (single radio),
+/// so the speaker's own screen is the only reliable status display.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum WifiJoinStatus {
+    Joining { ssid: String },
+    Joined { ssid: String },
+    Failed { ssid: String, reason: String },
+}
+
 /// First-boot setup state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SetupState {
@@ -245,6 +256,9 @@ pub struct SetupState {
     /// panel shows the onboarding screen and (when Wi-Fi hardware exists
     /// and nothing is connected) the speaker broadcasts its own hotspot.
     pub required: bool,
+    /// Most recent Wi-Fi join attempt (cleared when setup completes).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wifi_status: Option<WifiJoinStatus>,
 }
 
 /// First-boot setup commands (sent by the web wizard).

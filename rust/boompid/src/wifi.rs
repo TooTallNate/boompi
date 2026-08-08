@@ -194,7 +194,15 @@ pub async fn connect(ssid: &str, psk: Option<&str>) -> anyhow::Result<()> {
         if let Some(psk) = psk {
             args.extend(["password", psk]);
         }
-        nmcli(&args).await?;
+        if let Err(err) = nmcli(&args).await {
+            // A failed fresh join leaves a broken profile behind that NM
+            // will keep retrying (and that shadows the next attempt);
+            // drop it so a retry starts clean.
+            if !saved {
+                let _ = nmcli(&["con", "delete", "id", ssid]).await;
+            }
+            return Err(err);
+        }
     }
     tracing::info!(%ssid, "wifi connected");
     Ok(())

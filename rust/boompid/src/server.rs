@@ -257,7 +257,34 @@ async fn api_wifi_action(
     {
         let result = match &action {
             WifiAction::Connect { ssid, psk } => {
+                app.set_wifi_status(Some(boompi_proto::WifiJoinStatus::Joining {
+                    ssid: ssid.clone(),
+                }))
+                .await;
                 let res = crate::wifi::connect(ssid, psk.as_deref()).await;
+                match &res {
+                    Ok(()) => {
+                        app.set_wifi_status(Some(boompi_proto::WifiJoinStatus::Joined {
+                            ssid: ssid.clone(),
+                        }))
+                        .await;
+                    }
+                    Err(err) => {
+                        // nmcli's wrong-password signature is a secrets
+                        // failure; everything else gets the raw reason.
+                        let msg = err.to_string();
+                        let reason = if msg.to_lowercase().contains("secrets") {
+                            "wrong password?".to_string()
+                        } else {
+                            msg.lines().next().unwrap_or("failed").to_string()
+                        };
+                        app.set_wifi_status(Some(boompi_proto::WifiJoinStatus::Failed {
+                            ssid: ssid.clone(),
+                            reason,
+                        }))
+                        .await;
+                    }
+                }
                 // Joining from the captive portal tears the hotspot down
                 // (single radio). If the join failed while still in
                 // first-boot setup, bring the hotspot back so the phone

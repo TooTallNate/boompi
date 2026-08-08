@@ -160,6 +160,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let online_art = state.settings.online_art_fallback;
             let light = state.settings.theme == boompi_proto::Theme::Light;
             let setup_required = state.setup.required;
+            let (wifi_kind, wifi_text) = wifi_status_strings(&state.setup.wifi_status);
             let volume = state.volume;
             let scale = ui_scale(state.settings.ui_scale);
             let emoji = state.emoji_fonts.clone();
@@ -169,6 +170,8 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
                 ui.set_setup_required(setup_required);
+                ui.set_setup_wifi_kind(wifi_kind.into());
+                ui.set_setup_wifi_text(wifi_text.into());
                 ui.global::<crate::Theme>().set_light(light);
                 ui.global::<crate::Theme>().set_scale(scale);
             });
@@ -214,9 +217,12 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 .upgrade_in_event_loop(move |ui| apply_emoji_fonts(&ui, &state));
         }
         ServerMessage::Setup(setup) => {
-            let _ = ctx
-                .weak
-                .upgrade_in_event_loop(move |ui| ui.set_setup_required(setup.required));
+            let (kind, text) = wifi_status_strings(&setup.wifi_status);
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_setup_required(setup.required);
+                ui.set_setup_wifi_kind(kind.into());
+                ui.set_setup_wifi_text(text.into());
+            });
         }
     }
 }
@@ -353,6 +359,20 @@ fn ui_scale(scale: f32) -> f32 {
         1.0
     } else {
         scale.clamp(0.5, 3.0)
+    }
+}
+
+/// Wi-Fi join status → (kind, display text) for the setup screen.
+fn wifi_status_strings(status: &Option<boompi_proto::WifiJoinStatus>) -> (String, String) {
+    use boompi_proto::WifiJoinStatus as W;
+    match status {
+        None => (String::new(), String::new()),
+        Some(W::Joining { ssid }) => ("joining".into(), format!("Joining “{ssid}”…")),
+        Some(W::Joined { ssid }) => ("joined".into(), format!("Joined “{ssid}”!")),
+        Some(W::Failed { ssid, reason }) => (
+            "failed".into(),
+            format!("Couldn't join “{ssid}” - {reason}\nRejoin the hotspot to try again."),
+        ),
     }
 }
 

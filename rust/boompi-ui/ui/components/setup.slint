@@ -8,6 +8,11 @@ export component SetupScreen inherits Rectangle {
     in property <string> speaker-name;
     in property <string> settings-url;
     in property <image> settings-qr;
+    /// "" | "joining" | "joined" | "failed" (+ display text): the join
+    /// kills the phone's portal connection, so this screen is the only
+    /// reliable place to see the outcome.
+    in property <string> wifi-status-kind: "";
+    in property <string> wifi-status-text: "";
 
     background: Theme.bg;
 
@@ -54,6 +59,15 @@ export component SetupScreen inherits Rectangle {
                 wrap: word-wrap;
             }
             Rectangle { height: 0.3333rem; }
+            if root.wifi-status-kind != "": Text {
+                text: root.wifi-status-text;
+                color: root.wifi-status-kind == "failed" ? Theme.bad
+                    : root.wifi-status-kind == "joined" ? Theme.good
+                    : Theme.accent;
+                font-size: 1rem;
+                font-weight: 600;
+                wrap: word-wrap;
+            }
             if root.settings-url != "": Text {
                 text: "Already on the same network? Just open\n" + root.settings-url;
                 color: Theme.dimmer;
