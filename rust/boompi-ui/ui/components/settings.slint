@@ -139,28 +139,73 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
-                Row {
-                    label: "Emoji style";
-                    sublabel: "Selecting briefly restarts this screen";
-                }
-                for f in root.emoji-fonts: Row {
-                    label: f.label;
-                    sublabel: f.detail;
-                    if f.status == "active": Text {
-                        text: "Active";
-                        color: Theme.good;
-                        font-size: 0.83rem;
-                    }
-                    if f.status == "installed" || f.status == "missing": ActionButton {
-                        text: f.status == "installed" ? "Use" : "Get";
-                        clicked => {
-                            root.emoji-font-tapped(f.id, f.status);
+                // One card for the whole catalog: separate rows read as
+                // unrelated settings, and this mirrors the web's list.
+                Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: emoji-col.preferred-height;
+                    emoji-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        VerticalLayout {
+                            spacing: 0.11rem;
+                            Text {
+                                text: "Emoji style";
+                                color: Theme.fg;
+                                font-size: 0.94rem;
+                            }
+                            Text {
+                                text: "Selecting briefly restarts this screen";
+                                color: Theme.dimmer;
+                                font-size: 0.72rem;
+                            }
                         }
-                    }
-                    if f.status == "downloading" || f.status == "busy": Text {
-                        text: f.status == "downloading" ? "…" : "";
-                        color: Theme.dim;
-                        font-size: 0.83rem;
+                        for f[i] in root.emoji-fonts: VerticalLayout {
+                            spacing: 0.5rem;
+                            Rectangle {
+                                height: 0.06rem;
+                                background: Theme.faint;
+                            }
+                            HorizontalLayout {
+                                spacing: 0.56rem;
+                                VerticalLayout {
+                                    alignment: center;
+                                    spacing: 0.11rem;
+                                    Text {
+                                        text: f.label;
+                                        color: Theme.fg;
+                                        font-size: 0.89rem;
+                                    }
+                                    Text {
+                                        text: f.detail;
+                                        color: Theme.dimmer;
+                                        font-size: 0.72rem;
+                                        wrap: word-wrap;
+                                    }
+                                }
+                                Rectangle { }
+                                VerticalLayout {
+                                    alignment: center;
+                                    if f.status == "active": Text {
+                                        text: "Active";
+                                        color: Theme.good;
+                                        font-size: 0.83rem;
+                                    }
+                                    if f.status == "installed" || f.status == "missing": ActionButton {
+                                        text: f.status == "installed" ? "Use" : "Download";
+                                        clicked => {
+                                            root.emoji-font-tapped(f.id, f.status);
+                                        }
+                                    }
+                                    if f.status == "downloading": Text {
+                                        text: "…";
+                                        color: Theme.dim;
+                                        font-size: 0.83rem;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
