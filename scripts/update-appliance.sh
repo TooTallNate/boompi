@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
-# Over-the-air OS update for the Pi 4 boombox (A/B slots, kexec trial).
+# Over-the-air OS update for the boomboxes (A/B slots with trial boot).
 #
 # Fetches the newest green update bundle from CI (or takes a local
 # bundle dir), pushes it to the box, and stages it into the inactive
-# slot. The box kexecs into the candidate without touching autoboot.txt;
+# slot. The box trial-boots the candidate without touching autoboot.txt;
 # it commits only after boompid answers healthz, else any reboot or
 # power-cycle falls back to the old slot.
+#
+# Trial mechanism per board (mirrors on-box boompi-update-slot):
+#   pi3: one-shot PM_RSTS partition request (the pre-tryboot `reboot N`
+#        protocol) - bootcode.bin boots the requested partition once
+#        and clears the request; the candidate gets a full firmware
+#        boot (all 4 CPUs). Firmware tryboot proper does not work here:
+#        the mailbox tryboot flag lives in PM_RSTS bit 1, which does
+#        not survive the watchdog reset on BCM2837; cross-kernel kexec
+#        hangs on this board.
+#   pi4: kexec chain-load of the candidate kernel. Pi 4B <= rev 1.3
+#        power-cycles on every reboot, wiping PM_RSTS + mailbox reboot
+#        flags, so no firmware-level one-shot request survives there.
 #
 # Usage:
 #   scripts/update-appliance.sh                # latest CI bundle
@@ -13,11 +25,8 @@
 #
 # Env: PI (default root@boompi.local), REPO (default TooTallNate/boompi),
 #      BOARD (pi4 default; pi3 for the Pi 3 box - same layout + scripts)
-#      TRIAL=0 to skip the kexec trial: flip autoboot + firmware reboot
-#      (commit-without-trial). The Pi 3 hangs kexec'ing into a KERNEL
-#      BUILD other than the running one (same-kernel kexec works; the
-#      Pi 4 cross-kexecs fine) - until that's understood, pi3 updates
-#      should use TRIAL=0. Recovery if the new slot were unbootable:
+#      TRIAL=0 to skip the trial boot: flip autoboot + firmware reboot
+#      (commit-without-trial). Recovery if the new slot were unbootable:
 #      edit autoboot.txt on the card.
 set -euo pipefail
 
@@ -87,6 +96,31 @@ sync
 reboot" || true
     echo "box is firmware-booting the new slot; verify in ~90s:"
     echo "  ssh $PI cat /proc/cmdline"
+    exit 0
+fi
+
+if [ "$BOARD" = pi3 ]; then
+    # Spread the target boot partition number into PM_RSTS bits
+    # 0,2,4,6,8,10 with the 0x5a password byte: p1 -> 0x1, p2 -> 0x4.
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
+    echo "arming one-shot PM_RSTS partition request (box reboots now)"
+    ssh "$PI" "set -eu
+# boot-a.vfat carries the image-default autoboot.txt (boot_partition=1,
+# the candidate); the current slot must stay the fallback until commit.
+if [ $TARGET_BOOT = /dev/mmcblk0p1 ]; then
+    MNT=\$(mktemp -d)
+    mount /dev/mmcblk0p1 \"\$MNT\"
+    printf '[all]\nboot_partition=%s\n' $CURRENT_PART > \"\$MNT/autoboot.txt\"
+    umount \"\$MNT\"; rmdir \"\$MNT\"
+fi
+echo $TARGET_ROOT > $MARKER
+sync
+devmem 0x3f100020 32 $RSTS
+reboot" || true # ssh drops at reboot
+    echo
+    echo "Box is firmware-booting the candidate slot once. Verify in ~90s:"
+    echo "  ssh $PI cat /proc/cmdline           # new slot's root device"
+    echo "  ssh $PI systemctl status boompi-boot-commit   # committed?"
     exit 0
 fi
 

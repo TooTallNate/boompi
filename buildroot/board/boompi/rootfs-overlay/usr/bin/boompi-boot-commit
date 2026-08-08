@@ -1,22 +1,25 @@
 #!/bin/sh
 # A/B slot commit / rollback - runs once per boot.
 #
-# boompi-update-slot kexec-chains into the candidate slot WITHOUT
-# touching autoboot.txt; the only record of the trial is the marker on
-# persistent /data. On the boot after, three cases:
+# boompi-update-slot boots the candidate slot (kexec on Pi 4, one-shot
+# PM_RSTS partition request on Pi 3) WITHOUT touching autoboot.txt; the
+# only record of the trial is the marker on persistent /data. On the
+# boot after, three cases:
 #
 #   running the candidate, healthy -> rewrite autoboot.txt (commit)
-#   running the candidate, sick    -> clear marker + reboot; the
-#                                     power-cycle reset boots the old
-#                                     slot (autoboot.txt never changed)
+#   running the candidate, sick    -> clear marker + reboot; the reset
+#                                     boots the old slot (autoboot.txt
+#                                     never changed)
 #   running the old slot           -> the trial crashed/hung and a
 #                                     reset/power-cycle fell back; just
 #                                     clear the marker
 #
-# Residual risk (accepted): the kexec trial exercises kernel + rootfs +
-# userspace but not the candidate's config.txt/firmware files; gross
-# corruption there is covered by boompi-update-slot's sha256 verify and
-# the bootloader's failover-to-partition-1 for unbootable partitions.
+# Residual risk (accepted, Pi 4 only): the kexec trial exercises kernel
+# + rootfs + userspace but not the candidate's config.txt/firmware
+# files; gross corruption there is covered by boompi-update-slot's
+# sha256 verify and the bootloader's failover-to-partition-1 for
+# unbootable partitions. The Pi 3 trial is a full firmware boot and
+# has no such gap.
 set -eu
 
 MARKER=/data/boompi-trial
@@ -70,10 +73,18 @@ umount "$MNT"
 rmdir "$MNT"
 rm -f "$MARKER"
 sync
-echo "committed: boot_partition=$BOOT_PART; rebooting onto a firmware boot"
+echo "committed: boot_partition=$BOOT_PART"
 
-# The kexec trial environment is not quite a real boot (e.g. a CPU can
-# fail to come back online across the PSCI off/on cycle) - finish the
-# update with a firmware boot of the now-committed slot. The marker is
-# gone, so this run's successor is a no-op.
-systemctl reboot
+case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
+*"Raspberry Pi 3"*)
+    # PM_RSTS trials are full firmware boots; nothing left to redo.
+    ;;
+*)
+    # The kexec trial environment is not quite a real boot (e.g. a CPU
+    # can fail to come back online across the PSCI off/on cycle) -
+    # finish the update with a firmware boot of the now-committed slot.
+    # The marker is gone, so this run's successor is a no-op.
+    echo "kexec trial; rebooting onto a firmware boot"
+    systemctl reboot
+    ;;
+esac

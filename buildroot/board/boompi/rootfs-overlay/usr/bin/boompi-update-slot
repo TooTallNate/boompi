@@ -1,20 +1,31 @@
 #!/bin/sh
-# Write an OS update into the inactive A/B slot and kexec into it (trial).
+# Write an OS update into the inactive A/B slot and trial-boot it.
 #
 # Usage: boompi-update-slot <bundle-dir>
 #   where <bundle-dir> contains: rootfs.ext4, boot-a.vfat, boot-b.vfat
 #   (the CI update bundle, decompressed).
 #
-# Why kexec and not firmware tryboot: Pi 4B boards before rev 1.4
-# power-cycle on every reboot (firmware GPIO-expander reset), which wipes
-# PM_RSTS and the mailbox reboot flags; the firmware only persists the
-# tryboot flag to EEPROM on rev 1.0/1.1, so on rev 1.2/1.3 boards the
-# flag never survives (see also raspberrypi/firmware#2038).
-# The Pi 3 has no tryboot EEPROM at all. So instead we chain-load the
-# candidate kernel with kexec and leave autoboot.txt UNTOUCHED: if the
-# candidate crashes or hangs, any reset or power-cycle boots the old
-# slot. boompi-boot-commit makes the candidate permanent only after the
+# The trial mechanism differs per board; both leave autoboot.txt
+# UNTOUCHED so a crash, hang or power-cycle boots the old slot, and
+# boompi-boot-commit makes the candidate permanent only after the
 # system proves healthy. /data (p6) is never touched.
+#
+#   Pi 3: one-shot PM_RSTS partition request (the pre-tryboot
+#         `reboot N` protocol). bootcode.bin boots the requested
+#         partition once and clears the request, giving a full
+#         firmware boot of the candidate (all 4 CPUs). Firmware
+#         tryboot proper is unusable here: the mailbox tryboot flag
+#         is stored in PM_RSTS bit 1, which does not survive the
+#         watchdog reset on BCM2837 (verified empirically); and
+#         cross-kernel kexec hangs on this board.
+#
+#   Pi 4: kexec chain-load of the candidate kernel. Pi 4B boards
+#         before rev 1.4 power-cycle on every reboot (firmware
+#         GPIO-expander reset), which wipes PM_RSTS and the mailbox
+#         reboot flags; the firmware only persists the tryboot flag
+#         to EEPROM on rev 1.0/1.1, so on rev 1.2/1.3 boards no
+#         firmware-level one-shot request survives (see also
+#         raspberrypi/firmware#2038).
 set -eu
 
 BUNDLE="${1:?usage: boompi-update-slot <bundle-dir>}"
@@ -73,6 +84,22 @@ if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
     umount "$MNT"
     rmdir "$MNT"
 fi
+
+# Pi 3: arm the one-shot partition request and take a normal reboot.
+# The partition number is spread into PM_RSTS bits 0,2,4,6,8,10 with
+# the 0x5a password in the top byte; bootcode.bin consumes and clears
+# the request, so the boot after this one follows autoboot.txt again.
+case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
+*"Raspberry Pi 3"*)
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
+    echo "$TARGET_ROOT" > "$MARKER"
+    sync
+    echo "update staged + verified; one-shot firmware boot of candidate ($TARGET_ROOT)"
+    devmem 0x3f100020 32 "$RSTS"
+    reboot
+    exit 0
+    ;;
+esac
 
 # Chain-load the candidate: its kernel, the running (firmware-fixed-up)
 # device tree, and the current cmdline with the root device swapped -
