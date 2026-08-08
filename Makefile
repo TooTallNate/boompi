@@ -29,7 +29,7 @@ ui:
 # Build the settings web UI (web/dist is a build artifact, embedded into
 # boompid via rust-embed; cargo builds of boompid need it present).
 web:
-	cd web && pnpm install --frozen-lockfile && pnpm build
+	pnpm install --frozen-lockfile && pnpm --filter boompi build
 
 # ---- cross-compilation for the Pi (see scripts/cross-build.sh) ------------
 # One-time: brew install zig cargo-zigbuild && rustup target add aarch64-unknown-linux-gnu

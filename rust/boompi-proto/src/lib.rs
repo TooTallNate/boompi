@@ -186,6 +186,18 @@ fn default_ui_scale() -> f32 {
     1.0
 }
 
+/// Which releases the software updater follows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateChannel {
+    /// Tagged releases (vX.Y.Z).
+    #[default]
+    Stable,
+    /// The rolling "edge" prerelease: every green build of the dev
+    /// branch.
+    Edge,
+}
+
 /// User-adjustable settings, mirrored to all clients.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
@@ -208,6 +220,9 @@ pub struct Settings {
     /// live; small high-DPI screens (HyperPixel) ship larger defaults.
     #[serde(default = "default_ui_scale")]
     pub ui_scale: f32,
+    /// Which releases the software updater follows.
+    #[serde(default)]
+    pub update_channel: UpdateChannel,
 }
 
 impl Default for Settings {
@@ -218,6 +233,7 @@ impl Default for Settings {
             online_art_fallback: false,
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
+            update_channel: UpdateChannel::default(),
         }
     }
 }
@@ -236,6 +252,8 @@ pub struct SettingsPatch {
     pub airplay_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_scale: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub update_channel: Option<UpdateChannel>,
 }
 
 /// Live Wi-Fi join progress, surfaced on the panel: the join usually
@@ -341,6 +359,36 @@ pub enum EmojiFontAction {
     Remove,
 }
 
+/// OS software update state, mirrored to all clients.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct UpdateState {
+    /// Version of the running OS image (/etc/boompi-version), e.g.
+    /// "v2.0.0" for a tagged release or "v2.0.0-abcdefg" for an
+    /// untagged build. "dev" when not running a CI image.
+    pub version: String,
+    /// Newer version available on the selected channel, if any.
+    pub available: Option<String>,
+    /// A release check is in flight.
+    pub checking: bool,
+    /// Version currently being downloaded + staged, if any.
+    pub applying: Option<String>,
+    /// Progress 0.0-1.0 while `applying` is set (download, write and
+    /// verify phases combined). The box reboots into the update trial
+    /// when it reaches the end.
+    pub progress: Option<f32>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateAction {
+    /// Query the release channel now.
+    Check,
+    /// Download + stage the available update, then reboot into the
+    /// trial boot.
+    Apply,
+}
+
 /// Full state snapshot; sent after [`Hello`] and available on demand.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct State {
@@ -356,6 +404,8 @@ pub struct State {
     pub setup: SetupState,
     #[serde(default)]
     pub emoji_fonts: EmojiFontsState,
+    #[serde(default)]
+    pub updates: UpdateState,
 }
 
 /// Server → client messages (JSON text frames).
@@ -375,6 +425,7 @@ pub enum ServerMessage {
     Settings(Settings),
     Setup(SetupState),
     EmojiFonts(EmojiFontsState),
+    Update(UpdateState),
 }
 
 /// Client → server messages (JSON text frames).
@@ -387,6 +438,11 @@ pub enum ClientMessage {
     EmojiFont {
         action: EmojiFontAction,
         id: String,
+    },
+    /// OS software update (check the channel / apply the available
+    /// update).
+    Update {
+        action: UpdateAction,
     },
     Next,
     Previous,
@@ -492,6 +548,8 @@ mod tests {
                 address: "AA:BB:CC:DD:EE:FF".into(),
                 name: "Phone".into(),
                 connected: true,
+                volume_mode: BtVolumeMode::Auto,
+                volume_mode_auto: BtVolumeMode::Phone,
             }],
         };
         let json = serde_json::to_value(&msg).unwrap();

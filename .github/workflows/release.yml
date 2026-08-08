@@ -1,0 +1,168 @@
+# Changesets-driven releases.
+#
+# Every push to the dev branch either opens/updates a "Version Packages"
+# PR (when unreleased changesets exist), or - right after that PR is
+# merged - cuts a GitHub Release tagged vX.Y.Z with the SD card images
+# and OTA update assets taken from the `image` workflow run of the same
+# commit (the release job waits for it to finish; image builds take a
+# while).
+#
+# The appliance is versioned as a single package: `boompi` in web/
+# (see .changeset/README.md). The on-box updater (boompid) consumes the
+# release assets directly, so their names and formats are a contract:
+#   boompi-<board>-sdcard-vX.Y.Z.img.xz    (flashing)
+#   boompi-<board>-rootfs.ext4.zst          (OTA, streamed to the slot)
+#   boompi-<board>-boot-a.vfat.zst          (OTA)
+#   boompi-<board>-boot-b.vfat.zst          (OTA)
+#   SHA256SUMS.txt      (uncompressed payload hashes, verified post-dd)
+#   boompi-version.txt  (the /etc/boompi-version stamp of these images)
+#
+# If the image run for the release commit failed, fix it, re-run it,
+# then re-run this workflow (workflow_dispatch).
+
+name: release
+
+on:
+  push:
+    branches: [v2, main]
+  workflow_dispatch:
+
+concurrency: release-${{ github.ref }}
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 350
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Opens/updates the Version Packages PR when changesets are
+      # pending; hasChangesets == 'false' means this push has none
+      # (e.g. the Version PR itself just landed) and we may release.
+      - name: Create Version PR or detect release
+        id: changesets
+        uses: changesets/action@v1
+        with:
+          version: pnpm changeset version
+          # No npm publishing - releases are GitHub Releases with image
+          # assets, handled below.
+          publish: "echo skip"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read version
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        id: version
+        run: echo "tag=v$(jq -r .version web/package.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check if release already exists
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "${{ steps.version.outputs.tag }}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The image workflow builds for the same commit in parallel with
+      # this job; wait for it and pull its artifacts. A release build is
+      # never redone here - the released images ARE the CI images.
+      - name: Wait for image build
+        if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
+        id: image_run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for i in $(seq 1 30); do
+            RUN=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow image \
+              --commit "$GITHUB_SHA" --limit 1 --json databaseId --jq '.[0].databaseId' || true)
+            [ -n "$RUN" ] && break
+            echo "no image run for $GITHUB_SHA yet; waiting..."
+            sleep 20
+          done
+          if [ -z "$RUN" ]; then
+            echo "::error::no image workflow run found for $GITHUB_SHA"
+            exit 1
+          fi
+          echo "run=$RUN" >> "$GITHUB_OUTPUT"
+          gh run watch "$RUN" --repo "$GITHUB_REPOSITORY" --exit-status --interval 60
+
+      - name: Download image artifacts
+        if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          for board in pi3 pi4; do
+            gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
+              -n "boompi-$board-sdcard" -D "dl/$board-sdcard"
+            gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
+              -n "boompi-$board-update" -D "dl/$board-update"
+          done
+
+      - name: Prepare release assets
+        if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          sudo apt-get install -y --no-install-recommends zstd
+          cd assets
+          : > SHA256SUMS.txt
+          for board in pi3 pi4; do
+            mv "../dl/$board-sdcard/sdcard.img.xz" "boompi-$board-sdcard-$TAG.img.xz"
+            for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
+              src="../dl/$board-update/$f"
+              sha256sum "$src" | sed "s|../dl/$board-update/$f|boompi-$board-$f|" >> SHA256SUMS.txt
+              zstd -T0 -15 --no-progress -o "boompi-$board-$f.zst" "$src"
+            done
+          done
+          echo -n "$TAG" > boompi-version.txt
+          ls -la
+
+      - name: Extract release notes
+        if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # web/CHANGELOG.md sections look like "## 2.1.0"; pull out the
+          # section for the version being released.
+          node -e "
+            const fs = require('fs');
+            const version = process.env.TAG.replace(/^v/, '');
+            const changelog = fs.existsSync('web/CHANGELOG.md')
+              ? fs.readFileSync('web/CHANGELOG.md', 'utf8') : '';
+            const re = new RegExp('## ' + version.replace(/\\./g, '\\\\.') + '\\n([\\s\\S]*?)(?=\\n## |$)');
+            const match = changelog.match(re);
+            fs.writeFileSync('RELEASE_NOTES.md', match ? match[1].trim() : '');
+          "
+          cat RELEASE_NOTES.md
+
+      - name: Create GitHub Release
+        if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --notes-file RELEASE_NOTES.md \
+            assets/*

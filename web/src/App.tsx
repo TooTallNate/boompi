@@ -19,6 +19,7 @@ import type {
   Settings,
   SettingsPatch,
   Theme,
+  UpdateState,
 } from "./proto";
 
 type SaveStatus =
@@ -78,6 +79,14 @@ export default function App() {
 
         <WifiSection />
         <ClockSection />
+        {state?.updates && settings && (
+          <UpdateSection
+            updates={state.updates}
+            settings={settings}
+            send={send}
+            onSaved={applySettings}
+          />
+        )}
         <DangerSection />
       </main>
     </div>
@@ -816,6 +825,73 @@ function EmojiFontSection({
         </div>
       ))}
       {emoji.error && <p className="mt-2 text-[13px] text-err">{emoji.error}</p>}
+    </Section>
+  );
+}
+
+function UpdateSection({
+  updates,
+  settings,
+  send,
+  onSaved,
+}: {
+  updates: UpdateState;
+  settings: Settings;
+  send: (msg: ClientMessage) => void;
+  onSaved: (s: Settings) => void;
+}) {
+  const { status, save } = useSave(onSaved);
+  const detail = updates.applying
+    ? `Installing ${updates.applying}… ${Math.round((updates.progress ?? 0) * 100)}% - the speaker restarts when done`
+    : updates.checking
+      ? "Checking…"
+      : updates.available
+        ? `${updates.available} is available`
+        : `No update available on the ${settings.update_channel} channel`;
+
+  return (
+    <Section title="Software update">
+      <div className="flex items-center justify-between gap-3 py-1.5">
+        <div className="min-w-0">
+          <div>{updates.version}</div>
+          <div className="text-[12px] text-dim">{detail}</div>
+        </div>
+        <div className="flex flex-none gap-2">
+          {updates.applying == null && updates.available != null && (
+            <button
+              className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink"
+              onClick={() => send({ type: "update", action: "apply" })}
+            >
+              Update
+            </button>
+          )}
+          {updates.applying == null && updates.available == null && (
+            <button
+              className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg disabled:opacity-40"
+              disabled={updates.checking}
+              onClick={() => send({ type: "update", action: "check" })}
+            >
+              Check now
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-line pt-2.5 pb-1.5">
+        <div className="min-w-0">
+          <div>Bleeding edge updates</div>
+          <div className="text-[12px] text-dim">
+            Follow every green dev build, not just tagged releases
+          </div>
+        </div>
+        <Toggle
+          checked={settings.update_channel === "edge"}
+          onChange={(v) => save({ update_channel: v ? "edge" : "stable" })}
+        />
+      </div>
+      {updates.error && (
+        <p className="mt-2 text-[13px] text-err">{updates.error}</p>
+      )}
+      <StatusText status={status} />
     </Section>
   );
 }

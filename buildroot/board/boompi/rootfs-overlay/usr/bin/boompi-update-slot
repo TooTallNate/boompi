@@ -53,10 +53,10 @@ esac
 
 if [ "$ACTIVE" = A ]; then
     TARGET_BOOT=/dev/mmcblk0p2; TARGET_ROOT=/dev/mmcblk0p5
-    BOOT_IMG="$BUNDLE/boot-b.vfat"; CURRENT_PART=1
+    BOOT_IMG="$BUNDLE/boot-b.vfat"
 else
     TARGET_BOOT=/dev/mmcblk0p1; TARGET_ROOT=/dev/mmcblk0p3
-    BOOT_IMG="$BUNDLE/boot-a.vfat"; CURRENT_PART=2
+    BOOT_IMG="$BUNDLE/boot-a.vfat"
 fi
 
 echo "active slot: $ACTIVE - writing update to $TARGET_ROOT / $TARGET_BOOT"
@@ -74,54 +74,5 @@ verify "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
 verify "$BOOT_IMG" "$TARGET_BOOT"
 echo "slot verified (sha256)"
 
-# Writing boot-a.vfat to p1 replaced autoboot.txt with the image default
-# (boot_partition=1, i.e. the *candidate*) - restore the truth: the
-# current slot stays the default until boompi-boot-commit flips it.
-if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
-    MNT=$(mktemp -d)
-    mount /dev/mmcblk0p1 "$MNT"
-    printf '[all]\nboot_partition=%s\n' "$CURRENT_PART" > "$MNT/autoboot.txt"
-    umount "$MNT"
-    rmdir "$MNT"
-fi
-
-# Pi 3: arm the one-shot partition request and take a normal reboot.
-# The partition number is spread into PM_RSTS bits 0,2,4,6,8,10 with
-# the 0x5a password in the top byte; bootcode.bin consumes and clears
-# the request, so the boot after this one follows autoboot.txt again.
-case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
-*"Raspberry Pi 3"*)
-    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
-    echo "$TARGET_ROOT" > "$MARKER"
-    sync
-    echo "update staged + verified; one-shot firmware boot of candidate ($TARGET_ROOT)"
-    devmem 0x3f100020 32 "$RSTS"
-    reboot
-    exit 0
-    ;;
-esac
-
-# Chain-load the candidate: its kernel, the running (firmware-fixed-up)
-# device tree, and the current cmdline with the root device swapped -
-# the firmware-injected parameters (video=, vc_mem, MAC, ...) are
-# hardware-static, so reusing them matches what a real boot would get.
-MNT=$(mktemp -d)
-mount -o ro "$TARGET_BOOT" "$MNT"
-cp "$MNT/Image" /tmp/boompi-trial-Image
-umount "$MNT"
-rmdir "$MNT"
-
-CMDLINE="$(sed "s|root=/dev/mmcblk0p[0-9]*|root=$TARGET_ROOT|" /proc/cmdline)"
-kexec -l /tmp/boompi-trial-Image \
-      --dtb=/sys/firmware/fdt \
-      --command-line="$CMDLINE"
-
-# Only now that the candidate kernel is loaded do we record the trial:
-# tells boompi-boot-commit on the next boot that a candidate is under
-# trial, and which slot it is. (Marker after kexec -l, so a failed load
-# leaves no stale trial state behind.)
-echo "$TARGET_ROOT" > "$MARKER"
-sync
-
-echo "update staged + verified; kexec'ing into candidate ($TARGET_ROOT)"
-systemctl kexec
+echo "update staged + verified; arming trial boot"
+exec boompi-trial-boot "$TARGET_ROOT"

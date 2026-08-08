@@ -1,0 +1,87 @@
+#!/bin/sh
+# Arm a one-shot trial boot of an already-staged candidate slot and
+# reboot into it. The staging (writing rootfs + boot images, sha
+# verify) is done by the caller: boompi-update-slot for bundle-dir
+# updates, boompid's built-in updater for GitHub release OTAs.
+#
+# Usage: boompi-trial-boot <candidate-root-dev>
+#   candidate-root-dev: /dev/mmcblk0p3 (slot A) or /dev/mmcblk0p5 (B)
+#
+# autoboot.txt is left pointing at the RUNNING slot, so a crash, hang
+# or power-cycle during the trial falls back to it. boompi-boot-commit
+# flips the default on the next boot once the candidate proves healthy.
+#
+# Trial mechanism per board (see boompi-update-slot for the full
+# rationale):
+#   Pi 3: one-shot PM_RSTS partition request consumed by bootcode.bin
+#   Pi 4: kexec chain-load of the candidate kernel
+set -eu
+
+TARGET_ROOT="${1:?usage: boompi-trial-boot <candidate-root-dev>}"
+MARKER=/data/boompi-trial
+
+case "$TARGET_ROOT" in
+    /dev/mmcblk0p3) TARGET_BOOT=/dev/mmcblk0p1; CURRENT_PART=2 ;;
+    /dev/mmcblk0p5) TARGET_BOOT=/dev/mmcblk0p2; CURRENT_PART=1 ;;
+    *) echo "bogus candidate root '$TARGET_ROOT'" >&2; exit 1 ;;
+esac
+
+case "$(cat /proc/cmdline)" in
+    *"root=$TARGET_ROOT "*|*"root=$TARGET_ROOT")
+        echo "$TARGET_ROOT is the RUNNING slot; refusing" >&2; exit 1 ;;
+esac
+
+if [ -f "$MARKER" ]; then
+    echo "trial of $(cat "$MARKER") still pending (marker present)" >&2
+    exit 1
+fi
+
+# A freshly written boot-a image carries the image-default autoboot.txt
+# (boot_partition=1, i.e. the candidate); the running slot must stay
+# the default until boompi-boot-commit flips it.
+if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
+    MNT=$(mktemp -d)
+    mount /dev/mmcblk0p1 "$MNT"
+    printf '[all]\nboot_partition=%s\n' "$CURRENT_PART" > "$MNT/autoboot.txt"
+    umount "$MNT"
+    rmdir "$MNT"
+fi
+
+case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
+*"Raspberry Pi 3"*)
+    # One-shot partition request: the partition number is spread into
+    # PM_RSTS bits 0,2,4,6,8,10 with the 0x5a password in the top
+    # byte; bootcode.bin consumes and clears the request, so the boot
+    # after this one follows autoboot.txt again.
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
+    echo "$TARGET_ROOT" > "$MARKER"
+    sync
+    echo "one-shot firmware boot of candidate ($TARGET_ROOT)"
+    devmem 0x3f100020 32 "$RSTS"
+    reboot
+    ;;
+*)
+    # Chain-load the candidate: its kernel, the running
+    # (firmware-fixed-up) device tree, and the current cmdline with the
+    # root device swapped - the firmware-injected parameters (video=,
+    # vc_mem, MAC, ...) are hardware-static, so reusing them matches
+    # what a real boot would get.
+    MNT=$(mktemp -d)
+    mount -o ro "$TARGET_BOOT" "$MNT"
+    cp "$MNT/Image" /tmp/boompi-trial-Image
+    umount "$MNT"
+    rmdir "$MNT"
+
+    CMDLINE="$(sed "s|root=/dev/mmcblk0p[0-9]*|root=$TARGET_ROOT|" /proc/cmdline)"
+    kexec -l /tmp/boompi-trial-Image \
+          --dtb=/sys/firmware/fdt \
+          --command-line="$CMDLINE"
+
+    # Marker only after a successful kexec -l, so a failed load leaves
+    # no stale trial state behind.
+    echo "$TARGET_ROOT" > "$MARKER"
+    sync
+    echo "kexec'ing into candidate ($TARGET_ROOT)"
+    systemctl kexec
+    ;;
+esac

@@ -14,6 +14,10 @@ name: image
 
 on:
   push:
+    # Only the dev/release branches: without a filter the changesets
+    # "Version Packages" branch would trigger multi-hour image builds
+    # of its own.
+    branches: [v2, main]
     # Docs-only commits shouldn't trigger multi-hour image builds.
     paths:
       - "rust/**"
@@ -46,20 +50,16 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v6
-        with:
-          package_json_file: web/package.json
 
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
 
       - name: Build web UI
-        working-directory: web
         run: |
           pnpm install --frozen-lockfile
-          pnpm build
+          pnpm --filter boompi build
 
       - name: Upload web dist
         uses: actions/upload-artifact@v7
@@ -168,6 +168,27 @@ jobs:
       BOARD: ${{ matrix.board }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The version stamp diffs web/package.json against HEAD~1.
+          fetch-depth: 2
+
+      # The OS version baked into the image (/etc/boompi-version,
+      # surfaced in the settings UIs and used by the on-box updater):
+      # clean "vX.Y.Z" when this commit is the changesets version-bump
+      # merge (the commit a release is cut from), "vX.Y.Z-<sha>"
+      # otherwise.
+      - name: Version stamp
+        id: stamp
+        run: |
+          V=$(jq -r .version web/package.json)
+          PREV=$(git show HEAD~1:web/package.json 2>/dev/null | jq -r .version || echo "")
+          if [ "$PREV" != "$V" ]; then
+            STAMP="v$V"
+          else
+            STAMP="v$V-$(git rev-parse --short=7 HEAD)"
+          fi
+          echo "version=$STAMP" >> "$GITHUB_OUTPUT"
+          echo "OS version: $STAMP"
 
       - name: Install host dependencies
         run: |
@@ -293,6 +314,8 @@ jobs:
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
+          install -D -m 0644 /dev/null "$OVL/etc/boompi-version"
+          printf '%s' "${{ steps.stamp.outputs.version }}" > "$OVL/etc/boompi-version"
           # Color Noto Emoji (both boards), COLRv1 build - vector color
           # glyphs stay crisp at every UI scale, unlike the 128px CBDT
           # bitmaps. Requires the source-built Skia from the skia job
@@ -360,3 +383,70 @@ jobs:
             ~/.cargo/registry
             rust/target
           key: cargo-image-${{ hashFiles('rust/Cargo.lock') }}
+
+  # Rolling "edge" prerelease: every green build of the dev branch
+  # replaces it. Boxes with the bleeding-edge update channel enabled
+  # follow this instead of the tagged releases. Same asset names and
+  # formats as a real release (a contract with boompid's updater),
+  # minus the sdcard images (edge is OTA-only).
+  edge:
+    needs: image
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/v2' || github.ref == 'refs/heads/main')
+    name: edge prerelease
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Version stamp
+        id: stamp
+        run: |
+          V=$(jq -r .version web/package.json)
+          PREV=$(git show HEAD~1:web/package.json 2>/dev/null | jq -r .version || echo "")
+          if [ "$PREV" != "$V" ]; then
+            STAMP="v$V"
+          else
+            STAMP="v$V-$(git rev-parse --short=7 HEAD)"
+          fi
+          echo "version=$STAMP" >> "$GITHUB_OUTPUT"
+
+      - name: Download update bundles
+        uses: actions/download-artifact@v7
+        with:
+          pattern: boompi-*-update
+          path: dl
+
+      - name: Prepare edge assets
+        env:
+          STAMP: ${{ steps.stamp.outputs.version }}
+        run: |
+          sudo apt-get install -y --no-install-recommends zstd
+          mkdir -p assets && cd assets
+          : > SHA256SUMS.txt
+          for board in pi3 pi4; do
+            for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
+              src="../dl/boompi-$board-update/$f"
+              sha256sum "$src" | sed "s|../dl/boompi-$board-update/$f|boompi-$board-$f|" >> SHA256SUMS.txt
+              zstd -T0 -15 --no-progress -o "boompi-$board-$f.zst" "$src"
+            done
+          done
+          echo -n "$STAMP" > boompi-version.txt
+          ls -la
+
+      - name: Update edge prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STAMP: ${{ steps.stamp.outputs.version }}
+        run: |
+          gh release delete edge --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh release create edge \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "edge ($STAMP)" \
+            --notes "Rolling prerelease: latest green build of the dev branch. OTA assets only." \
+            assets/*

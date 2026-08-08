@@ -1,9 +1,8 @@
 {
-  "name": "web",
+  "name": "boompi",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "packageManager": "pnpm@11.0.8",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

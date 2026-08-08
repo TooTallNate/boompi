@@ -164,8 +164,12 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let volume = state.volume;
             let scale = ui_scale(state.settings.ui_scale);
             let emoji = state.emoji_fonts.clone();
+            let updates = state.updates.clone();
+            let edge = state.settings.update_channel == boompi_proto::UpdateChannel::Edge;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 apply_emoji_fonts(&ui, &emoji);
+                apply_update(&ui, &updates);
+                ui.set_update_channel_edge(edge);
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
@@ -206,6 +210,9 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 // OOBE) must land through this broadcast too.
                 ui.set_speaker_name(settings.name.into());
                 ui.set_online_art(settings.online_art_fallback);
+                ui.set_update_channel_edge(
+                    settings.update_channel == boompi_proto::UpdateChannel::Edge,
+                );
                 ui.global::<crate::Theme>().set_light(light);
                 ui.global::<crate::Theme>().set_scale(scale);
             });
@@ -215,6 +222,11 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let _ = ctx
                 .weak
                 .upgrade_in_event_loop(move |ui| apply_emoji_fonts(&ui, &state));
+        }
+        ServerMessage::Update(state) => {
+            let _ = ctx
+                .weak
+                .upgrade_in_event_loop(move |ui| apply_update(&ui, &state));
         }
         ServerMessage::Setup(setup) => {
             let (kind, text) = wifi_status_strings(&setup.wifi_status);
@@ -374,6 +386,30 @@ fn wifi_status_strings(status: &Option<boompi_proto::WifiJoinStatus>) -> (String
             format!("Couldn't join “{ssid}” - {reason}\nRejoin the hotspot to try again."),
         ),
     }
+}
+
+/// Project UpdateState into the settings screen's update card.
+fn apply_update(ui: &crate::AppWindow, state: &boompi_proto::UpdateState) {
+    let (status, detail) = if let Some(v) = &state.applying {
+        (
+            "applying",
+            format!(
+                "Installing {v}… {:.0}% - the speaker restarts when done",
+                state.progress.unwrap_or(0.0) * 100.0
+            ),
+        )
+    } else if let Some(err) = &state.error {
+        ("error", err.clone())
+    } else if state.checking {
+        ("checking", String::new())
+    } else if let Some(v) = &state.available {
+        ("available", format!("{v} is available"))
+    } else {
+        ("idle", String::new())
+    };
+    ui.set_update_version(state.version.clone().into());
+    ui.set_update_status(status.into());
+    ui.set_update_detail(detail.into());
 }
 
 /// Project EmojiFontsState into the settings screen's row model.

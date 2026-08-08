@@ -64,7 +64,16 @@ export component SettingsPanel inherits Rectangle {
     in property <string> settings-url;
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
+    // Software update flow (built in net.rs from UpdateState).
+    // status: "idle" | "checking" | "available" | "applying" | "error"
+    in property <string> update-version;
+    in property <string> update-status: "idle";
+    in property <string> update-detail;
+    in-out property <bool> update-channel-edge;
     callback emoji-font-tapped(string, string); // (id, status)
+    callback update-check();
+    callback update-apply();
+    callback update-channel-toggled(bool);
     callback close();
     callback online-art-toggled(bool);
     callback theme-toggled(bool);
@@ -235,6 +244,95 @@ export component SettingsPanel inherits Rectangle {
                                 root.pairing-enable();
                             } else {
                                 root.pairing-cancel();
+                            }
+                        }
+                    }
+                }
+
+                // ---- software update --------------------------------------
+                Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: update-col.preferred-height;
+                    update-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        HorizontalLayout {
+                            spacing: 0.56rem;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 0.11rem;
+                                Text {
+                                    text: "Software";
+                                    color: Theme.fg;
+                                    font-size: 0.94rem;
+                                }
+                                Text {
+                                    text: root.update-version;
+                                    color: Theme.dimmer;
+                                    font-size: 0.72rem;
+                                }
+                            }
+                            Rectangle { }
+                            VerticalLayout {
+                                alignment: center;
+                                if root.update-status == "idle" || root.update-status == "error": ActionButton {
+                                    text: "Check for updates";
+                                    clicked => {
+                                        root.update-check();
+                                    }
+                                }
+                                if root.update-status == "checking": Text {
+                                    text: "Checking…";
+                                    color: Theme.dim;
+                                    font-size: 0.83rem;
+                                }
+                                if root.update-status == "available": ActionButton {
+                                    text: "Update";
+                                    clicked => {
+                                        root.update-apply();
+                                    }
+                                }
+                            }
+                        }
+                        // Detail line: the offered version, download
+                        // progress, or the error.
+                        if root.update-detail != "": Text {
+                            text: root.update-detail;
+                            color: root.update-status == "error" ? Theme.bad : Theme.dimmer;
+                            font-size: 0.72rem;
+                            wrap: word-wrap;
+                        }
+                        Rectangle {
+                            height: 0.06rem;
+                            background: Theme.faint;
+                        }
+                        HorizontalLayout {
+                            spacing: 0.56rem;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 0.11rem;
+                                Text {
+                                    text: "Bleeding edge updates";
+                                    color: Theme.fg;
+                                    font-size: 0.89rem;
+                                }
+                                Text {
+                                    text: "Follow every green dev build, not just releases";
+                                    color: Theme.dimmer;
+                                    font-size: 0.72rem;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Rectangle { }
+                            VerticalLayout {
+                                alignment: center;
+                                Switch {
+                                    checked <=> root.update-channel-edge;
+                                    toggled => {
+                                        root.update-channel-toggled(self.checked);
+                                    }
+                                }
                             }
                         }
                     }

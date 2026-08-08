@@ -33,6 +33,7 @@ mod sim;
 #[cfg(target_os = "linux")]
 mod spotify;
 mod state;
+mod update;
 #[cfg(target_os = "linux")]
 mod visualizer;
 #[cfg(target_os = "linux")]
@@ -110,6 +111,11 @@ async fn main() -> anyhow::Result<()> {
                         app.persist_config().await;
                     }
                 });
+            }
+            // Periodic OS update checks against the release channel.
+            {
+                let app = app.clone();
+                tokio::spawn(update::periodic(app));
             }
             // Seed the volume from the current system state.
             {

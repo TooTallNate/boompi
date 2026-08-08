@@ -12,6 +12,21 @@ use tokio::sync::{broadcast, Notify, RwLock};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// The OS image version stamp: "vX.Y.Z" for release builds,
+/// "vX.Y.Z-<sha>" for untagged CI builds (written by the image
+/// workflow to /etc/boompi-version), "dev" when absent (local builds,
+/// desktop development).
+pub fn os_version() -> &'static str {
+    static V: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    V.get_or_init(|| {
+        std::fs::read_to_string("/etc/boompi-version")
+            .map(|s| s.trim().to_string())
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "dev".into())
+    })
+}
+
 /// Anything fanned out to connected WebSocket clients. Payloads are
 /// pre-encoded once at broadcast time so the per-subscriber clone is cheap.
 #[derive(Debug, Clone)]
@@ -123,6 +138,12 @@ pub struct Shared {
     pub emoji_download: Option<String>,
     pub emoji_progress: Option<f32>,
     pub emoji_error: Option<String>,
+    /// OS update flow state (update.rs).
+    pub update_available: Option<String>,
+    pub update_checking: bool,
+    pub update_applying: Option<String>,
+    pub update_progress: Option<f32>,
+    pub update_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
 }
@@ -136,6 +157,7 @@ impl App {
             online_art_fallback: cfg.settings.online_art_fallback,
             airplay_model: cfg.settings.airplay_model.clone(),
             ui_scale: cfg.settings.ui_scale,
+            update_channel: cfg.settings.update_channel,
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -270,6 +292,7 @@ impl App {
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.settings.ui_scale = s.settings.ui_scale;
+            cfg.settings.update_channel = s.settings.update_channel;
             cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.bt_volume_modes = s.bt_volume_modes.clone();
@@ -407,6 +430,14 @@ impl App {
                 progress: s.emoji_progress,
                 error: s.emoji_error.clone(),
             },
+            updates: boompi_proto::UpdateState {
+                version: os_version().to_string(),
+                available: s.update_available.clone(),
+                checking: s.update_checking,
+                applying: s.update_applying.clone(),
+                progress: s.update_progress,
+                error: s.update_error.clone(),
+            },
         }
     }
 
@@ -539,8 +570,23 @@ impl App {
                     let _ = (action, id);
                 }
             }
+            ClientMessage::Update { action } => {
+                #[cfg(target_os = "linux")]
+                if let Err(err) = crate::update::perform(self, action).await {
+                    tracing::warn!(%err, ?action, "update action failed");
+                    self.shared.write().await.update_error = Some(err.to_string());
+                    let snapshot = crate::update::state(self).await;
+                    self.broadcast(ServerMessage::Update(snapshot));
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let _ = action;
+                }
+            }
             ClientMessage::SetSettings(patch) => {
                 let mut airplay_model_changed = false;
+                #[allow(unused_mut, unused_variables)]
+                let mut channel_changed = false;
                 let settings = {
                     let mut s = self.shared.write().await;
                     if let Some(v) = patch.online_art_fallback {
@@ -557,6 +603,16 @@ impl App {
                     if let Some(scale) = patch.ui_scale {
                         s.settings.ui_scale = scale.clamp(1.0, 2.5);
                     }
+                    if let Some(channel) = patch.update_channel {
+                        if channel != s.settings.update_channel {
+                            s.settings.update_channel = channel;
+                            // A stale offer from the other channel is
+                            // meaningless; the next check refreshes it.
+                            s.update_available = None;
+                            s.update_error = None;
+                            channel_changed = true;
+                        }
+                    }
                     s.settings.clone()
                 };
                 self.broadcast(ServerMessage::Settings(settings));
@@ -570,6 +626,12 @@ impl App {
                     // alias is updated in place; AirPlay/Spotify restart
                     // discovery - the AirPlay conf embeds the model).
                     self.cfg_generation.send_modify(|g| *g += 1);
+                }
+                // Switching channels re-checks immediately (also pushes
+                // the cleared `available` to clients).
+                #[cfg(target_os = "linux")]
+                if channel_changed {
+                    let _ = crate::update::perform(self, boompi_proto::UpdateAction::Check).await;
                 }
             }
             ClientMessage::Setup(cmd) => {

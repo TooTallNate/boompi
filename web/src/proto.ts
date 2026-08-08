@@ -3,6 +3,8 @@
 
 export type Theme = "dark" | "light";
 
+export type UpdateChannel = "stable" | "edge";
+
 export interface Settings {
   ui_scale: number;
   /** Advertised AirPlay model - senders pick their picker icon from it.
@@ -11,6 +13,7 @@ export interface Settings {
   name: string;
   theme: Theme;
   online_art_fallback: boolean;
+  update_channel: UpdateChannel;
 }
 
 export interface SettingsPatch {
@@ -19,6 +22,7 @@ export interface SettingsPatch {
   name?: string;
   theme?: Theme;
   online_art_fallback?: boolean;
+  update_channel?: UpdateChannel;
 }
 
 export type PairingState = "idle" | "discoverable" | "confirm" | "unavailable";
@@ -60,6 +64,18 @@ export interface EmojiFontsState {
 
 export type EmojiFontAction = "download" | "select" | "remove";
 
+export interface UpdateState {
+  /** Running OS image version: "v2.0.0", "v2.0.0-abcdefg" or "dev". */
+  version: string;
+  available: string | null;
+  checking: boolean;
+  applying: string | null;
+  progress: number | null;
+  error: string | null;
+}
+
+export type UpdateAction = "check" | "apply";
+
 export type BtDeviceAction =
   | "connect"
   | "disconnect"
@@ -81,6 +97,7 @@ export interface AppState {
   bt_devices: BtDevice[];
   setup: { required: boolean; wifi_status?: unknown };
   emoji_fonts: EmojiFontsState;
+  updates: UpdateState;
   // Present but unused by the settings UI so far:
   source: unknown;
   track: unknown;
@@ -98,6 +115,7 @@ export type ServerMessage =
   | { type: "state"; [k: string]: unknown }
   | ({ type: "settings" } & Settings)
   | ({ type: "emoji_fonts" } & EmojiFontsState)
+  | ({ type: "update" } & UpdateState)
   | ({ type: "pairing" } & Pairing)
   | { type: "bt_devices"; devices: BtDevice[] }
   | { type: "volume"; level: number }
@@ -106,6 +124,7 @@ export type ServerMessage =
 /** Client → server WebSocket messages used by the settings UI. */
 export type ClientMessage =
   | { type: "emoji_font"; action: EmojiFontAction; id: string }
+  | { type: "update"; action: UpdateAction }
   | { type: "pairing"; action: PairingAction }
   | { type: "bt_device"; address: string; action: BtDeviceAction }
   | { type: "factory_reset" };

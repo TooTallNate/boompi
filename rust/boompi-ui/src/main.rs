@@ -307,6 +307,35 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_update_check(move || {
+            let _ = tx.send(ClientMessage::Update {
+                action: boompi_proto::UpdateAction::Check,
+            });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_update_apply(move || {
+            let _ = tx.send(ClientMessage::Update {
+                action: boompi_proto::UpdateAction::Apply,
+            });
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_update_channel_toggled(move |edge| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                update_channel: Some(if edge {
+                    boompi_proto::UpdateChannel::Edge
+                } else {
+                    boompi_proto::UpdateChannel::Stable
+                }),
+                ..SettingsPatch::default()
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_scale_changed(move |scale| {
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
                 ui_scale: Some(scale),

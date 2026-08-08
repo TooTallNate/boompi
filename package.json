@@ -1,0 +1,12 @@
+{
+  "name": "boompi-monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.0.8",
+  "scripts": {
+    "changeset": "changeset",
+    "build": "pnpm --filter boompi build"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.29.5"
+  }
+}

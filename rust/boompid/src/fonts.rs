@@ -14,8 +14,6 @@
 
 #![cfg(target_os = "linux")]
 
-use serde::Serialize;
-
 pub const FONTS_DIR: &str = "/data/fonts";
 pub const CONF_DIR: &str = "/data/fontconfig";
 pub const CONF_PATH: &str = "/data/fontconfig/emoji.conf";

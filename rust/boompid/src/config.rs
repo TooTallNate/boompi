@@ -131,6 +131,10 @@ pub struct SettingsConfig {
     /// the image, others download to /data/fonts).
     #[serde(default = "default_emoji_font")]
     pub emoji_font: String,
+    /// Which releases the software updater follows ("stable" /
+    /// "edge").
+    #[serde(default)]
+    pub update_channel: boompi_proto::UpdateChannel,
 }
 
 fn default_emoji_font() -> String {
@@ -149,6 +153,7 @@ impl Default for SettingsConfig {
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
             emoji_font: default_emoji_font(),
+            update_channel: boompi_proto::UpdateChannel::default(),
         }
     }
 }

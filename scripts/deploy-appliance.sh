@@ -64,7 +64,7 @@ export RUSTFLAGS="-L $SYS/usr/lib ${RUSTFLAGS:-}"
 
 # web/dist is a build artifact (not committed); boompid embeds it.
 echo "== building web/dist =="
-(cd "$REPO_ROOT/web" && pnpm install --frozen-lockfile --silent && pnpm build)
+(cd "$REPO_ROOT" && pnpm install --frozen-lockfile --silent && pnpm --filter boompi build)
 
 # COLRv1-capable Skia (built by the CI skia job - the rust-skia
 # prebuilt lacks the COLRv1 code path). Optional locally: fetch once

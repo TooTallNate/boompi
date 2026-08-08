@@ -81,6 +81,10 @@ export component AppWindow inherits Window {
     in property <string> settings-url: "";
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
+    in property <string> update-version;
+    in property <string> update-status: "idle";
+    in property <string> update-detail;
+    in-out property <bool> update-channel-edge;
     in property <bool> setup-required: false;
     in property <string> setup-wifi-kind: "";
     in property <string> setup-wifi-text: "";
@@ -103,6 +107,9 @@ export component AppWindow inherits Window {
     callback theme-toggled(bool);
     callback scale-changed(float);
     callback emoji-font-tapped(string, string);
+    callback update-check();
+    callback update-apply();
+    callback update-channel-toggled(bool);
     callback pairing-enable();
     callback pairing-cancel();
     callback pairing-confirm();
@@ -225,6 +232,19 @@ export component AppWindow inherits Window {
         speaker-name: root.speaker-name;
         version-line: root.version-line;
         emoji-fonts: root.emoji-fonts;
+        update-version: root.update-version;
+        update-status: root.update-status;
+        update-detail: root.update-detail;
+        update-channel-edge <=> root.update-channel-edge;
+        update-check => {
+            root.update-check();
+        }
+        update-apply => {
+            root.update-apply();
+        }
+        update-channel-toggled(edge) => {
+            root.update-channel-toggled(edge);
+        }
         emoji-font-tapped(id, status) => {
             root.emoji-font-tapped(id, status);
         }

@@ -23,6 +23,9 @@ clap = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
+    "fs",
+    "io-util",
+    "process",
     "rt-multi-thread",
     "macros",
     "net",
@@ -37,7 +40,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Linux-only hardware integrations, cfg-gated so the workspace stays
 # cross-platform for laptop development (verify with `make cross-boompid`).
 [target.'cfg(target_os = "linux")'.dependencies]
+# OTA update assets are zstd streams decompressed straight onto the
+# inactive slot's partitions (update.rs).
+async-compression = { version = "0.4", default-features = false, features = ["tokio", "zstd"] }
 futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["io"] }
 ina260 = { path = "../ina260" }
 # Spotify Connect, embedded (pure-Rust feature set: rustls TLS, no audio
 # backends - we provide a pw-cat sink). Zeroconf: avahi when the daemon is
@@ -50,7 +57,9 @@ librespot = { version = "0.8", default-features = false, features = [
     "with-libmdns",
 ] }
 linux-embedded-hal = "0.4"
-# Cover art downloads (Spotify CDN; later the online-art fallback).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots"] }
+# Cover art downloads (Spotify CDN; later the online-art fallback),
+# GitHub release queries + OTA downloads ("stream" for bytes_stream -
+# update.rs pipes the body through the zstd decoder).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "stream"] }
 sha2 = "0.10"
 zbus = { version = "5", default-features = false, features = ["tokio"] }
