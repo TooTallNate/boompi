@@ -13,6 +13,12 @@
 #
 # Env: PI (default root@boompi.local), REPO (default TooTallNate/boompi),
 #      BOARD (pi4 default; pi3 for the Pi 3 box - same layout + scripts)
+#      TRIAL=0 to skip the kexec trial: flip autoboot + firmware reboot
+#      (commit-without-trial). The Pi 3 hangs kexec'ing into a KERNEL
+#      BUILD other than the running one (same-kernel kexec works; the
+#      Pi 4 cross-kexecs fine) - until that's understood, pi3 updates
+#      should use TRIAL=0. Recovery if the new slot were unbootable:
+#      edit autoboot.txt on the card.
 set -euo pipefail
 
 PI="${PI:-root@boompi.local}"
@@ -68,6 +74,21 @@ stream() { # <local-file> <remote-dev>
 }
 stream "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
 stream "$BOOT_IMG" "$TARGET_BOOT"
+
+if [ "${TRIAL:-1}" = 0 ]; then
+    echo "committing without trial: flipping autoboot + firmware reboot"
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then TARGET_PART=1; else TARGET_PART=2; fi
+    ssh "$PI" "set -eu
+MNT=\$(mktemp -d)
+mount /dev/mmcblk0p1 "\$MNT"
+printf '[all]\nboot_partition=%s\n' $TARGET_PART > "\$MNT/autoboot.txt"
+umount "\$MNT"; rmdir "\$MNT"
+sync
+reboot" || true
+    echo "box is firmware-booting the new slot; verify in ~90s:"
+    echo "  ssh $PI cat /proc/cmdline"
+    exit 0
+fi
 
 echo "arming trial + kexec'ing into candidate (box reboots now)"
 ssh "$PI" "set -eu
