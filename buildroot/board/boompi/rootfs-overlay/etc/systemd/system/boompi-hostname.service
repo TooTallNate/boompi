@@ -1,0 +1,18 @@
+[Unit]
+Description=Unique hostname from the SoC serial (mDNS collision avoidance)
+# Two boomboxes both named "boompi" fight over the mDNS host record and
+# avahi's collision loop withdraws every service (AirPlay, Spotify
+# Connect discovery) on BOTH boxes. Suffix the hostname with the last
+# four hex digits of the CPU serial before anything network-facing
+# starts.
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target avahi-daemon.service NetworkManager.service sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c 'S=$(grep Serial /proc/cpuinfo | awk "{print \$3}" | tail -c 5); [ -n "$S" ] && { echo "boompi-$S" > /etc/hostname; hostname "boompi-$S"; } || true'
+
+[Install]
+WantedBy=sysinit.target
