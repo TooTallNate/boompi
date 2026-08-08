@@ -142,6 +142,7 @@ pub struct Shared {
     pub update_available: Option<String>,
     pub update_checking: bool,
     pub update_applying: Option<String>,
+    pub update_stage: Option<boompi_proto::UpdateStage>,
     pub update_progress: Option<f32>,
     pub update_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
@@ -435,6 +436,7 @@ impl App {
                 available: s.update_available.clone(),
                 checking: s.update_checking,
                 applying: s.update_applying.clone(),
+                stage: s.update_stage,
                 progress: s.update_progress,
                 error: s.update_error.clone(),
             },

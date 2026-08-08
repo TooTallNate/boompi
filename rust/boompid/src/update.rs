@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, bail, Context, Result};
-use boompi_proto::{ServerMessage, UpdateAction, UpdateChannel, UpdateState};
+use boompi_proto::{ServerMessage, UpdateAction, UpdateChannel, UpdateStage, UpdateState};
 use futures_util::TryStreamExt;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -190,6 +190,7 @@ pub async fn state(app: &SharedApp) -> UpdateState {
         available: s.update_available.clone(),
         checking: s.update_checking,
         applying: s.update_applying.clone(),
+        stage: s.update_stage,
         progress: s.update_progress,
         error: s.update_error.clone(),
     }
@@ -261,6 +262,7 @@ pub async fn perform(app: &SharedApp, action: UpdateAction) -> Result<()> {
                         tracing::warn!(%err, %version, "update failed");
                         let mut s = app.shared.write().await;
                         s.update_applying = None;
+                        s.update_stage = None;
                         s.update_progress = None;
                         s.update_error = Some(err.to_string());
                         drop(s);
@@ -368,6 +370,7 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
         "applying update"
     );
 
+    set_stage(app, UpdateStage::DownloadingSystem).await;
     let n = stream_to_device(
         app,
         rootfs_asset,
@@ -376,10 +379,14 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
         P_ROOTFS_DL,
     )
     .await?;
+    set_stage(app, UpdateStage::VerifyingSystem).await;
     verify_device(app, slot.target_root, n, &rootfs_sum, P_ROOTFS_VERIFY).await?;
+    set_stage(app, UpdateStage::DownloadingBoot).await;
     let n = stream_to_device(app, boot_asset, slot.target_boot, &boot_sum, P_BOOT_DL).await?;
+    set_stage(app, UpdateStage::VerifyingBoot).await;
     verify_device(app, slot.target_boot, n, &boot_sum, P_BOOT_VERIFY).await?;
 
+    set_stage(app, UpdateStage::Restarting).await;
     set_progress(app, 1.0).await;
 
     // Hand off to the shared trial-boot script: restores autoboot.txt
@@ -400,11 +407,16 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
     Ok(())
 }
 
+async fn set_stage(app: &SharedApp, stage: UpdateStage) {
+    app.shared.write().await.update_stage = Some(stage);
+    broadcast_state(app).await;
+}
+
 async fn set_progress(app: &SharedApp, p: f32) {
     let significant = {
         let mut s = app.shared.write().await;
         let prev = s.update_progress.unwrap_or(0.0);
-        let significant = p - prev >= 0.02 || p >= 1.0;
+        let significant = p - prev >= 0.01 || p >= 1.0;
         if significant {
             s.update_progress = Some(p);
         }

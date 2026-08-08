@@ -391,10 +391,18 @@ fn wifi_status_strings(status: &Option<boompi_proto::WifiJoinStatus>) -> (String
 /// Project UpdateState into the settings screen's update card.
 fn apply_update(ui: &crate::AppWindow, state: &boompi_proto::UpdateState) {
     let (status, detail) = if let Some(v) = &state.applying {
+        let stage = match state.stage {
+            Some(boompi_proto::UpdateStage::DownloadingSystem) => "downloading system",
+            Some(boompi_proto::UpdateStage::VerifyingSystem) => "verifying system",
+            Some(boompi_proto::UpdateStage::DownloadingBoot) => "downloading boot files",
+            Some(boompi_proto::UpdateStage::VerifyingBoot) => "verifying boot files",
+            Some(boompi_proto::UpdateStage::Restarting) => "restarting",
+            None => "preparing",
+        };
         (
             "applying",
             format!(
-                "Installing {v}… {:.0}% - the speaker restarts when done",
+                "Installing {v}: {stage}… {:.0}%",
                 state.progress.unwrap_or(0.0) * 100.0
             ),
         )

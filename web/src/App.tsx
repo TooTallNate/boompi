@@ -841,8 +841,15 @@ function UpdateSection({
   onSaved: (s: Settings) => void;
 }) {
   const { status, save } = useSave(onSaved);
+  const stageLabel: Record<string, string> = {
+    downloading_system: "downloading system",
+    verifying_system: "verifying system",
+    downloading_boot: "downloading boot files",
+    verifying_boot: "verifying boot files",
+    restarting: "restarting",
+  };
   const detail = updates.applying
-    ? `Installing ${updates.applying}… ${Math.round((updates.progress ?? 0) * 100)}% - the speaker restarts when done`
+    ? `Installing ${updates.applying}: ${stageLabel[updates.stage ?? ""] ?? "preparing"}… ${Math.round((updates.progress ?? 0) * 100)}%`
     : updates.checking
       ? "Checking…"
       : updates.available

@@ -64,12 +64,20 @@ export interface EmojiFontsState {
 
 export type EmojiFontAction = "download" | "select" | "remove";
 
+export type UpdateStage =
+  | "downloading_system"
+  | "verifying_system"
+  | "downloading_boot"
+  | "verifying_boot"
+  | "restarting";
+
 export interface UpdateState {
   /** Running OS image version: "v2.0.0", "v2.0.0-abcdefg" or "dev". */
   version: string;
   available: string | null;
   checking: boolean;
   applying: string | null;
+  stage: UpdateStage | null;
   progress: number | null;
   error: string | null;
 }

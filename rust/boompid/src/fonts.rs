@@ -170,7 +170,7 @@ pub async fn perform(
                         let significant = {
                             let mut s = app3.shared.write().await;
                             let prev = s.emoji_progress.unwrap_or(0.0);
-                            let significant = pct - prev >= 0.02 || pct >= 1.0;
+                            let significant = pct - prev >= 0.01 || pct >= 1.0;
                             if significant {
                                 s.emoji_progress = Some(pct);
                             }

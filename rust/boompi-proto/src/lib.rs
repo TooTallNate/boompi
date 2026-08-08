@@ -359,6 +359,22 @@ pub enum EmojiFontAction {
     Remove,
 }
 
+/// What the updater is doing right now while `applying` is set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateStage {
+    /// Streaming the system image into the inactive slot.
+    DownloadingSystem,
+    /// Re-reading the written system image against its checksum.
+    VerifyingSystem,
+    /// Streaming the boot files into the inactive slot.
+    DownloadingBoot,
+    /// Re-reading the written boot files against their checksum.
+    VerifyingBoot,
+    /// Staged and verified; arming the trial boot + restarting.
+    Restarting,
+}
+
 /// OS software update state, mirrored to all clients.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UpdateState {
@@ -372,6 +388,8 @@ pub struct UpdateState {
     pub checking: bool,
     /// Version currently being downloaded + staged, if any.
     pub applying: Option<String>,
+    /// Current step while `applying` is set.
+    pub stage: Option<UpdateStage>,
     /// Progress 0.0-1.0 while `applying` is set (download, write and
     /// verify phases combined). The box reboots into the update trial
     /// when it reaches the end.
