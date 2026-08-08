@@ -1,0 +1,36 @@
+obexd: don't gate the bluetooth transport on a logind session
+
+bluez 5.87 wraps obexd's bluetooth transport registration in logind
+session tracking (obexd/src/logind.c, new since 5.79): the transport
+only registers once the daemon's uid has an "active" logind session.
+Upstream ships obexd as a systemd *user* unit where that holds; on a
+headless appliance running obexd as a system service, root's logind
+state is permanently "offline", the init callbacks never fire, and
+obexd dies at startup with "obex_server_init failed: No transport
+driver registered" - no AVRCP cover art.
+
+(If logind were absent entirely, the FAIL path already falls back to
+active=TRUE; only a present-but-sessionless logind wedges it.)
+
+Treat the appliance as always active and skip the monitoring.
+
+Upstream is unlikely to want this as-is (the right fix is probably a
+configuration knob); carried locally by boompi.
+
+--- a/obexd/src/logind.c
++++ b/obexd/src/logind.c
+@@ -162,6 +162,14 @@ static int logind_init(void)
+ 
+ 	DBG("");
+ 
++	/* boompi: headless appliance - obexd runs as a system service
++	 * with no logind session, so session-gating would leave the
++	 * bluetooth transport permanently disabled (obex_server_init
++	 * fails at startup). Treat the box as always active. */
++	monitoring_enabled = FALSE;
++	active = TRUE;
++	return 0;
++
+ 	if (!monitoring_enabled)
+ 		return 0;
+ 

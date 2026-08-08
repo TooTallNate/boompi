@@ -32,6 +32,10 @@ trait Adapter1 {
     #[zbus(property)]
     fn set_alias(&self, alias: &str) -> zbus::Result<()>;
     #[zbus(property)]
+    fn powered(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn set_powered(&self, powered: bool) -> zbus::Result<()>;
+    #[zbus(property)]
     fn set_discoverable(&self, discoverable: bool) -> zbus::Result<()>;
     #[zbus(property)]
     fn set_pairable(&self, pairable: bool) -> zbus::Result<()>;
@@ -297,6 +301,7 @@ async fn handle_interface_added(
             // configured speaker name right away (startup ordering means
             // the boot-time alias set can race the adapter's appearance),
             // and clear any `Unavailable` pairing state shown to the UIs.
+            ensure_powered(ctx, session).await;
             apply_adapter_alias(ctx, session, &ctx.app.speaker_name().await).await;
             crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
         }
@@ -699,6 +704,9 @@ async fn handle_bt_command(
     };
     match cmd {
         BtCommand::Pairing(PairingAction::Enable) => {
+            // A wedged dongle presents as a present-but-unpowered
+            // adapter; recover it before opening the pairing window.
+            ensure_powered(ctx, session).await;
             // No adapter (dongle unplugged, bluetoothd down): say so
             // instead of silently doing nothing - a dead pairing button
             // is indistinguishable from a bug.
@@ -990,6 +998,61 @@ async fn enumerate_devices(
     // Connected first, then alphabetical.
     out.sort_by(|a, b| b.connected.cmp(&a.connected).then(a.name.cmp(&b.name)));
     Ok(out)
+}
+
+/// Make sure the controller is actually powered - AutoEnable does this
+/// on healthy hardware, but the Pi 3 box's counterfeit-CSR dongle
+/// sometimes wedges at the HCI transport (HCI_Reset times out, mgmt
+/// Set Powered fails) and only a USB-level reset revives it. Detect
+/// the powered-off + power-on-fails combination and perform the reset
+/// (sysfs `authorized` toggle) that a human would otherwise do by
+/// replugging the dongle.
+async fn ensure_powered(ctx: &Ctx, session: &Session) {
+    let Some(path) = &session.adapter_path else {
+        return;
+    };
+    let adapter = match Adapter1Proxy::builder(&ctx.conn).path(path.clone()) {
+        Ok(builder) => match builder.build().await {
+            Ok(adapter) => adapter,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+    if adapter.powered().await.unwrap_or(false) {
+        return;
+    }
+    if adapter.set_powered(true).await.is_ok() {
+        tracing::info!("BT adapter powered on");
+        return;
+    }
+    tracing::warn!("BT adapter refuses to power on; USB-resetting the dongle");
+    let reset = tokio::task::spawn_blocking(|| -> std::io::Result<()> {
+        // hciN -> .../usbX/X-Y/X-Y.Z/X-Y.Z:1.0/bluetooth/hciN; the usb
+        // DEVICE (with `authorized`) is two levels above the interface.
+        for entry in std::fs::read_dir("/sys/class/bluetooth")? {
+            let hci = entry?.path();
+            let dev = hci.join("device").join("..");
+            let auth = dev.join("authorized");
+            if auth.exists() {
+                std::fs::write(&auth, "0")?;
+                std::thread::sleep(std::time::Duration::from_millis(1000));
+                std::fs::write(&auth, "1")?;
+            }
+        }
+        Ok(())
+    })
+    .await;
+    match reset {
+        Ok(Ok(())) => {
+            // Re-enumeration takes a few seconds; bluetoothd re-adds the
+            // adapter (InterfacesAdded) and we come back through here.
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            if adapter.set_powered(true).await.is_ok() {
+                tracing::info!("BT adapter recovered after USB reset");
+            }
+        }
+        other => tracing::warn!(?other, "USB reset of BT dongle failed"),
+    }
 }
 
 /// Set the BlueZ controller alias - the advertised speaker name.
