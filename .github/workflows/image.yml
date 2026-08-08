@@ -14,10 +14,10 @@ name: image
 
 on:
   push:
-    # Only the dev/release branches: without a filter the changesets
+    # Only the main branch: without a filter the changesets
     # "Version Packages" branch would trigger multi-hour image builds
     # of its own.
-    branches: [v2, main]
+    branches: [main]
     # Docs-only commits shouldn't trigger multi-hour image builds.
     paths:
       - "rust/**"
@@ -391,7 +391,7 @@ jobs:
   # minus the sdcard images (edge is OTA-only).
   edge:
     needs: image
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/v2' || github.ref == 'refs/heads/main')
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     name: edge prerelease
     runs-on: ubuntu-24.04
     timeout-minutes: 30

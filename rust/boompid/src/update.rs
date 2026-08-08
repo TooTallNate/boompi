@@ -15,8 +15,8 @@
 //! is half of 1GB on the Pi 3 - hashing the decompressed stream on the
 //! way through, then re-reads the partition to verify the media, and
 //! finally arms the A/B trial boot (boompi-trial-boot: one-shot
-//! PM_RSTS partition request on the Pi 3, kexec on the Pi 4; a crash
-//! or power-cycle during the trial falls back to the running slot).
+//! PM_RSTS partition request on the Pi 3, autoboot flip with
+//! sick-rollback on the Pi 4 - see that script for the rationale).
 #![cfg(target_os = "linux")]
 
 use std::sync::atomic::{AtomicU64, Ordering};

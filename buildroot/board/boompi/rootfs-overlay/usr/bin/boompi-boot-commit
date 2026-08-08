@@ -1,25 +1,22 @@
 #!/bin/sh
 # A/B slot commit / rollback - runs once per boot.
 #
-# boompi-update-slot boots the candidate slot (kexec on Pi 4, one-shot
-# PM_RSTS partition request on Pi 3) WITHOUT touching autoboot.txt; the
-# only record of the trial is the marker on persistent /data. On the
-# boot after, three cases:
+# boompi-trial-boot firmware-boots the candidate slot (one-shot
+# PM_RSTS partition request on Pi 3, autoboot flipped to the candidate
+# on Pi 4 - see its header); the trial's record is the marker on
+# persistent /data. On the boot after, three cases:
 #
-#   running the candidate, healthy -> rewrite autoboot.txt (commit)
-#   running the candidate, sick    -> clear marker + reboot; the reset
-#                                     boots the old slot (autoboot.txt
-#                                     never changed)
+#   running the candidate, healthy -> point autoboot.txt at it (a
+#                                     no-op on the Pi 4, the commit on
+#                                     the Pi 3) and clear the marker
+#   running the candidate, sick    -> point autoboot.txt at the OLD
+#                                     slot (rollback; a no-op on the
+#                                     Pi 3, where it never moved),
+#                                     clear the marker, reboot
 #   running the old slot           -> the trial crashed/hung and a
-#                                     reset/power-cycle fell back; just
-#                                     clear the marker
-#
-# Residual risk (accepted, Pi 4 only): the kexec trial exercises kernel
-# + rootfs + userspace but not the candidate's config.txt/firmware
-# files; gross corruption there is covered by boompi-update-slot's
-# sha256 verify and the bootloader's failover-to-partition-1 for
-# unbootable partitions. The Pi 3 trial is a full firmware boot and
-# has no such gap.
+#                                     reset/power-cycle fell back
+#                                     (Pi 3 only); just clear the
+#                                     marker
 set -eu
 
 MARKER=/data/boompi-trial
@@ -32,11 +29,20 @@ fi
 TARGET_ROOT="$(cat "$MARKER")"
 
 case "$TARGET_ROOT" in
-    /dev/mmcblk0p3) BOOT_PART=1 ;;
-    /dev/mmcblk0p5) BOOT_PART=2 ;;
+    /dev/mmcblk0p3) BOOT_PART=1; OLD_PART=2 ;;
+    /dev/mmcblk0p5) BOOT_PART=2; OLD_PART=1 ;;
     *) echo "bogus trial marker '$TARGET_ROOT'; clearing" >&2
        rm -f "$MARKER"; sync; exit 1 ;;
 esac
+
+# autoboot.txt always lives on p1, whichever slot is active.
+write_autoboot() { # <partition>
+    MNT=$(mktemp -d)
+    mount /dev/mmcblk0p1 "$MNT"
+    printf '[all]\nboot_partition=%s\n' "$1" > "$MNT/autoboot.txt"
+    umount "$MNT"
+    rmdir "$MNT"
+}
 
 case "$(cat /proc/cmdline)" in
     *"root=$TARGET_ROOT "*|*"root=$TARGET_ROOT") ;;
@@ -58,33 +64,18 @@ for i in $(seq 1 60); do
 done
 
 if [ "$HEALTHY" = 0 ]; then
+    # Roll back: point autoboot at the old slot (a no-op on the Pi 3,
+    # where it never moved off it) and reboot into it.
+    write_autoboot "$OLD_PART"
     rm -f "$MARKER"; sync
-    echo "candidate never became healthy; rebooting to previous slot" >&2
+    echo "candidate never became healthy; rolling back to boot_partition=$OLD_PART" >&2
     systemctl reboot
     exit 1
 fi
 
-# Commit: the candidate becomes the default. autoboot.txt always lives
-# on p1, whichever slot is active.
-MNT=$(mktemp -d)
-mount /dev/mmcblk0p1 "$MNT"
-printf '[all]\nboot_partition=%s\n' "$BOOT_PART" > "$MNT/autoboot.txt"
-umount "$MNT"
-rmdir "$MNT"
+# Commit: the candidate becomes the default (the flip on the Pi 3, a
+# no-op on the Pi 4, where trial-boot already pointed autoboot here).
+write_autoboot "$BOOT_PART"
 rm -f "$MARKER"
 sync
 echo "committed: boot_partition=$BOOT_PART"
-
-case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
-*"Raspberry Pi 3"*)
-    # PM_RSTS trials are full firmware boots; nothing left to redo.
-    ;;
-*)
-    # The kexec trial environment is not quite a real boot (e.g. a CPU
-    # can fail to come back online across the PSCI off/on cycle) -
-    # finish the update with a firmware boot of the now-committed slot.
-    # The marker is gone, so this run's successor is a no-op.
-    echo "kexec trial; rebooting onto a firmware boot"
-    systemctl reboot
-    ;;
-esac

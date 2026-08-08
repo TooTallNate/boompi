@@ -11,7 +11,7 @@ native appliance:
 - **`buildroot/`** - flashable, pre-configured SD card images (silent boot,
   read-only rootfs, first-boot setup).
 
-The v1 stack (Node.js + Next.js + Chromium kiosk) lives on the `main` branch.
+The v1 stack (Node.js + Next.js + Chromium kiosk) lives on the `v1` branch.
 The full design and phased plan is in [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Development

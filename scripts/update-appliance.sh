@@ -7,17 +7,21 @@
 # it commits only after boompid answers healthz, else any reboot or
 # power-cycle falls back to the old slot.
 #
-# Trial mechanism per board (mirrors on-box boompi-update-slot):
+# Trial mechanism per board (mirrors on-box boompi-trial-boot):
 #   pi3: one-shot PM_RSTS partition request (the pre-tryboot `reboot N`
 #        protocol) - bootcode.bin boots the requested partition once
 #        and clears the request; the candidate gets a full firmware
-#        boot (all 4 CPUs). Firmware tryboot proper does not work here:
-#        the mailbox tryboot flag lives in PM_RSTS bit 1, which does
-#        not survive the watchdog reset on BCM2837; cross-kernel kexec
-#        hangs on this board.
-#   pi4: kexec chain-load of the candidate kernel. Pi 4B <= rev 1.3
-#        power-cycles on every reboot, wiping PM_RSTS + mailbox reboot
-#        flags, so no firmware-level one-shot request survives there.
+#        boot and any crash/power-cycle falls back to the old slot.
+#        Firmware tryboot proper does not work here: the mailbox
+#        tryboot flag lives in PM_RSTS bit 1, which does not survive
+#        the watchdog reset on BCM2837.
+#   pi4: commit-with-rollback - autoboot.txt is flipped to the
+#        candidate before the reboot and boompi-boot-commit flips it
+#        back if the candidate boots sick. No one-shot mechanism
+#        exists on rev <= 1.3 (the PMIC power-cycles on every reboot,
+#        wiping PM_RSTS and the tryboot flag - both bench-falsified on
+#        rev 1.2), and kexec into a different kernel build hangs after
+#        "Bye!" on both boards (kexec is retired).
 #
 # Usage:
 #   scripts/update-appliance.sh                # latest CI bundle
@@ -124,28 +128,21 @@ reboot" || true # ssh drops at reboot
     exit 0
 fi
 
-echo "arming trial + kexec'ing into candidate (box reboots now)"
+# pi4 commit-with-rollback: flip autoboot to the candidate, mark the
+# trial, firmware reboot. boompi-boot-commit rolls autoboot back if
+# the candidate boots sick.
+if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then TARGET_PART=1; else TARGET_PART=2; fi
+echo "flipping autoboot to the candidate + rebooting (rollback if sick)"
 ssh "$PI" "set -eu
-rm -rf /tmp/boompi-update /tmp/boompi-trial-Image # stale staging leftovers
-# boot-a.vfat carries the image-default autoboot.txt (boot_partition=1,
-# the candidate); the current slot must stay the fallback until commit.
-if [ $TARGET_BOOT = /dev/mmcblk0p1 ]; then
-    MNT=\$(mktemp -d)
-    mount /dev/mmcblk0p1 "\$MNT"
-    printf '[all]\nboot_partition=%s\n' $CURRENT_PART > "\$MNT/autoboot.txt"
-    umount "\$MNT"; rmdir "\$MNT"
-fi
 MNT=\$(mktemp -d)
-mount -o ro $TARGET_BOOT "\$MNT"
-cp "\$MNT/Image" /tmp/boompi-trial-Image
-umount "\$MNT"; rmdir "\$MNT"
-CMDLINE=\$(sed 's|root=/dev/mmcblk0p[0-9]*|root=$TARGET_ROOT|' /proc/cmdline)
-kexec -l /tmp/boompi-trial-Image --dtb=/sys/firmware/fdt --command-line="\$CMDLINE"
+mount /dev/mmcblk0p1 \"\$MNT\"
+printf '[all]\nboot_partition=%s\n' $TARGET_PART > \"\$MNT/autoboot.txt\"
+umount \"\$MNT\"; rmdir \"\$MNT\"
 echo $TARGET_ROOT > $MARKER
 sync
-systemctl kexec" || true # ssh drops at kexec
+reboot" || true # ssh drops at reboot
 
 echo
-echo "Box is kexec'ing into the candidate slot. Verify in ~60s:"
+echo "Box is firmware-booting the candidate slot. Verify in ~90s:"
 echo "  ssh $PI cat /proc/cmdline           # new slot's root device"
 echo "  ssh $PI systemctl status boompi-boot-commit   # committed?"

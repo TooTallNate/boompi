@@ -7,22 +7,34 @@
 # Usage: boompi-trial-boot <candidate-root-dev>
 #   candidate-root-dev: /dev/mmcblk0p3 (slot A) or /dev/mmcblk0p5 (B)
 #
-# autoboot.txt is left pointing at the RUNNING slot, so a crash, hang
-# or power-cycle during the trial falls back to it. boompi-boot-commit
-# flips the default on the next boot once the candidate proves healthy.
+# Trial mechanism per board:
 #
-# Trial mechanism per board (see boompi-update-slot for the full
-# rationale):
-#   Pi 3: one-shot PM_RSTS partition request consumed by bootcode.bin
-#   Pi 4: kexec chain-load of the candidate kernel
+#   Pi 3: one-shot PM_RSTS partition request, consumed by bootcode.bin.
+#         autoboot.txt keeps pointing at the RUNNING slot, so a crash,
+#         hang or power-cycle during the trial falls back to it;
+#         boompi-boot-commit flips the default once the candidate
+#         proves healthy.
+#
+#   Pi 4: autoboot.txt is flipped to the candidate BEFORE the reboot.
+#         There is no one-shot mechanism on this board: rev <= 1.3
+#         power-cycles the PMIC on every reboot, wiping PM_RSTS and
+#         the firmware tryboot flag (both bench-falsified on rev 1.2),
+#         and kexec into a kernel build other than the running one
+#         hangs after "Bye!" on BOTH boards (pi4 confirmed during the
+#         v2.0.0 rollout; kexec is retired). boompi-boot-commit rolls
+#         autoboot back if the candidate boots but is sick. A candidate
+#         that cannot boot at all leaves the box on the broken slot
+#         (recovery: edit autoboot.txt on the SD card) - accepted
+#         because slots are sha256-verified before arming and both
+#         boards ship the same userspace.
 set -eu
 
 TARGET_ROOT="${1:?usage: boompi-trial-boot <candidate-root-dev>}"
 MARKER=/data/boompi-trial
 
 case "$TARGET_ROOT" in
-    /dev/mmcblk0p3) TARGET_BOOT=/dev/mmcblk0p1; CURRENT_PART=2 ;;
-    /dev/mmcblk0p5) TARGET_BOOT=/dev/mmcblk0p2; CURRENT_PART=1 ;;
+    /dev/mmcblk0p3) TARGET_BOOT=/dev/mmcblk0p1; CANDIDATE_PART=1; CURRENT_PART=2 ;;
+    /dev/mmcblk0p5) TARGET_BOOT=/dev/mmcblk0p2; CANDIDATE_PART=2; CURRENT_PART=1 ;;
     *) echo "bogus candidate root '$TARGET_ROOT'" >&2; exit 1 ;;
 esac
 
@@ -36,19 +48,22 @@ if [ -f "$MARKER" ]; then
     exit 1
 fi
 
-# A freshly written boot-a image carries the image-default autoboot.txt
-# (boot_partition=1, i.e. the candidate); the running slot must stay
-# the default until boompi-boot-commit flips it.
-if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
+write_autoboot() { # <partition>
     MNT=$(mktemp -d)
     mount /dev/mmcblk0p1 "$MNT"
-    printf '[all]\nboot_partition=%s\n' "$CURRENT_PART" > "$MNT/autoboot.txt"
+    printf '[all]\nboot_partition=%s\n' "$1" > "$MNT/autoboot.txt"
     umount "$MNT"
     rmdir "$MNT"
-fi
+}
 
 case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
 *"Raspberry Pi 3"*)
+    # A freshly written boot-a image carries the image-default
+    # autoboot.txt (boot_partition=1, i.e. the candidate); the running
+    # slot must stay the default until boompi-boot-commit flips it.
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then
+        write_autoboot "$CURRENT_PART"
+    fi
     # One-shot partition request: the partition number is spread into
     # PM_RSTS bits 0,2,4,6,8,10 with the 0x5a password in the top
     # byte; bootcode.bin consumes and clears the request, so the boot
@@ -61,27 +76,12 @@ case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
     reboot
     ;;
 *)
-    # Chain-load the candidate: its kernel, the running
-    # (firmware-fixed-up) device tree, and the current cmdline with the
-    # root device swapped - the firmware-injected parameters (video=,
-    # vc_mem, MAC, ...) are hardware-static, so reusing them matches
-    # what a real boot would get.
-    MNT=$(mktemp -d)
-    mount -o ro "$TARGET_BOOT" "$MNT"
-    cp "$MNT/Image" /tmp/boompi-trial-Image
-    umount "$MNT"
-    rmdir "$MNT"
-
-    CMDLINE="$(sed "s|root=/dev/mmcblk0p[0-9]*|root=$TARGET_ROOT|" /proc/cmdline)"
-    kexec -l /tmp/boompi-trial-Image \
-          --dtb=/sys/firmware/fdt \
-          --command-line="$CMDLINE"
-
-    # Marker only after a successful kexec -l, so a failed load leaves
-    # no stale trial state behind.
+    # Commit-with-rollback: the candidate becomes the default now;
+    # boompi-boot-commit reverts autoboot.txt if it boots sick.
+    write_autoboot "$CANDIDATE_PART"
     echo "$TARGET_ROOT" > "$MARKER"
     sync
-    echo "kexec'ing into candidate ($TARGET_ROOT)"
-    systemctl kexec
+    echo "firmware boot of candidate ($TARGET_ROOT); commit rolls back if sick"
+    reboot
     ;;
 esac

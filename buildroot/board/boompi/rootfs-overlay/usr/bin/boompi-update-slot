@@ -5,27 +5,10 @@
 #   where <bundle-dir> contains: rootfs.ext4, boot-a.vfat, boot-b.vfat
 #   (the CI update bundle, decompressed).
 #
-# The trial mechanism differs per board; both leave autoboot.txt
-# UNTOUCHED so a crash, hang or power-cycle boots the old slot, and
-# boompi-boot-commit makes the candidate permanent only after the
-# system proves healthy. /data (p6) is never touched.
-#
-#   Pi 3: one-shot PM_RSTS partition request (the pre-tryboot
-#         `reboot N` protocol). bootcode.bin boots the requested
-#         partition once and clears the request, giving a full
-#         firmware boot of the candidate (all 4 CPUs). Firmware
-#         tryboot proper is unusable here: the mailbox tryboot flag
-#         is stored in PM_RSTS bit 1, which does not survive the
-#         watchdog reset on BCM2837 (verified empirically); and
-#         cross-kernel kexec hangs on this board.
-#
-#   Pi 4: kexec chain-load of the candidate kernel. Pi 4B boards
-#         before rev 1.4 power-cycle on every reboot (firmware
-#         GPIO-expander reset), which wipes PM_RSTS and the mailbox
-#         reboot flags; the firmware only persists the tryboot flag
-#         to EEPROM on rev 1.0/1.1, so on rev 1.2/1.3 boards no
-#         firmware-level one-shot request survives (see also
-#         raspberrypi/firmware#2038).
+# Writes are sha256-verified against the bundle before the trial is
+# armed; the trial-boot mechanics (and the per-board rationale) live
+# in boompi-trial-boot, the commit/rollback in boompi-boot-commit.
+# /data (p6) is never touched.
 set -eu
 
 BUNDLE="${1:?usage: boompi-update-slot <bundle-dir>}"
