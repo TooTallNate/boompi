@@ -67,6 +67,9 @@ export component SettingsPanel inherits Rectangle {
     // Advertised AirPlay model ("" = generic); mirrors the web picker.
     in property <string> airplay-model;
     callback airplay-model-tapped(string);
+    // Idle screensaver kind ("off"/"clock"/"matrix"/"art").
+    in property <string> saver-kind;
+    callback saver-kind-tapped(string);
     // Software update flow (built in net.rs from UpdateState).
     // status: "idle" | "checking" | "available" | "applying" | "error"
     in property <string> update-version;
@@ -299,6 +302,60 @@ export component SettingsPanel inherits Rectangle {
                                 TouchArea {
                                     clicked => {
                                         root.airplay-model-tapped(m.value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---- screensaver ------------------------------------------
+                Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: saver-col.preferred-height;
+                    saver-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        VerticalLayout {
+                            spacing: 0.11rem;
+                            Text {
+                                text: "Screensaver";
+                                color: Theme.fg;
+                                font-size: 0.94rem;
+                            }
+                            Text {
+                                text: "Starts after idle; protects the panel from burn-in";
+                                color: Theme.dimmer;
+                                font-size: 0.72rem;
+                                wrap: word-wrap;
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 0.44rem;
+                            for m[i] in [
+                                { label: "Off", value: "off" },
+                                { label: "Clock", value: "clock" },
+                                { label: "Matrix", value: "matrix" },
+                                { label: "Album art", value: "art" },
+                            ]: Rectangle {
+                                border-radius: 0.33rem;
+                                border-width: 0.09rem;
+                                border-color: root.saver-kind == m.value ? Theme.accent : Theme.faint;
+                                background: root.saver-kind == m.value ? Theme.bar : transparent;
+                                height: saver-tile.preferred-height;
+                                saver-tile := VerticalLayout {
+                                    padding: 0.44rem;
+                                    Text {
+                                        text: m.label;
+                                        color: root.saver-kind == m.value ? Theme.fg : Theme.dim;
+                                        font-size: 0.72rem;
+                                        horizontal-alignment: center;
+                                    }
+                                }
+                                TouchArea {
+                                    clicked => {
+                                        root.saver-kind-tapped(m.value);
                                     }
                                 }
                             }

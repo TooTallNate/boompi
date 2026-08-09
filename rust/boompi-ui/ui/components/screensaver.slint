@@ -1,0 +1,116 @@
+// Idle screensavers: mostly-black, slowly moving content. Two jobs at
+// once - relieve panel burn-in (image retention appeared on both
+// boxes after long static idle) and keep GPU load LOW: everything
+// here is driven by `tick`, an ~8 fps counter from a Rust timer that
+// only runs while the saver is visible. No animation-tick(), no
+// continuous 60 fps repaints - a screensaver that hammers the vc4 for
+// hours would invite the exact GPU hangs it coexists with.
+
+import { Theme } from "theme.slint";
+
+// One column of Matrix rain: a vertical glyph string falling at a
+// per-column speed, wrapping around the screen. Glyphs are static per
+// column (the motion sells the effect at a fraction of the work).
+component MatrixColumn inherits Text {
+    in property <int> index;
+    in property <float> tick;
+    in property <length> screen-height;
+    property <float> speed: 30 + Math.mod(self.index * 37, 55); // px/s
+    property <length> len: self.font-size * 16 * 1.15;
+    x: 6px + self.index * 34px;
+    y: (Math.mod(self.tick * self.speed + self.index * 173, (self.screen-height + self.len) / 1px) * 1px) - self.len;
+    color: #00c355;
+    font-size: 22px;
+    horizontal-alignment: left;
+    // Glyphs restricted to the embedded Geist font's coverage (the
+    // appliance ships no CJK font, so movie-accurate katakana would
+    // rain tofu).
+    text: Math.mod(self.index, 4) == 0 ? "X\n7\nK\n$\n3\nZ\nR\nA\n%\n0\nT\nM\nc\n1\nJ\nS"
+        : Math.mod(self.index, 4) == 1 ? "0\nS\nW\n9\nE\n#\n4\nX\nn\nN\n8\nZ\nR\n2\n5\nT"
+        : Math.mod(self.index, 4) == 2 ? "V\n2\nO\n&\n6\nC\nH\ny\n1\nK\nB\n0\nE\nL\n9\nI"
+        : "7\nM\nG\n3\nN\n?\n0\nW\nF\n5\nU\nR\n2\nD\nO\n8";
+}
+
+export component Screensaver inherits Rectangle {
+    in property <string> kind; // "clock" | "matrix" | "art"
+    in property <float> tick; // seconds, ~8 fps while visible
+    in property <string> clock-h;
+    in property <string> clock-m;
+    in property <string> clock-day;
+    in property <image> artwork;
+    in property <bool> has-artwork;
+    in property <string> track-title;
+    callback dismissed();
+
+    background: black;
+
+    // Slow lissajous drift for the static savers: full period is
+    // minutes, so content never parks on the same pixels.
+    property <float> drift-x: Math.sin(root.tick * 1.9deg);
+    property <float> drift-y: Math.cos(root.tick * 1.3deg);
+
+    if root.kind == "matrix": Rectangle {
+        for i in 24: MatrixColumn {
+            index: i;
+            tick: root.tick;
+            screen-height: root.height;
+        }
+    }
+
+    if root.kind == "clock": VerticalLayout {
+        x: (root.width - self.preferred-width) * (0.5 + 0.38 * root.drift-x);
+        y: (root.height - self.preferred-height) * (0.5 + 0.38 * root.drift-y);
+        width: self.preferred-width;
+        height: self.preferred-height;
+        spacing: 0.2rem;
+        Text {
+            text: root.clock-h + ":" + root.clock-m;
+            color: #9999aa;
+            font-size: root.height * 0.24;
+            font-weight: 300;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.clock-day;
+            color: #444455;
+            font-size: root.height * 0.06;
+            horizontal-alignment: center;
+        }
+    }
+
+    // Art saver falls back to the clock layout when no art exists.
+    if root.kind == "art" && root.has-artwork: VerticalLayout {
+        x: (root.width - self.preferred-width) * (0.5 + 0.3 * root.drift-x);
+        y: (root.height - self.preferred-height) * (0.5 + 0.3 * root.drift-y);
+        width: self.preferred-width;
+        height: self.preferred-height;
+        spacing: 0.5rem;
+        Image {
+            source: root.artwork;
+            width: root.height * 0.42;
+            height: root.height * 0.42;
+            opacity: 0.75;
+        }
+        Text {
+            text: root.track-title;
+            color: #555566;
+            font-size: root.height * 0.045;
+            horizontal-alignment: center;
+            overflow: elide;
+        }
+    }
+    if root.kind == "art" && !root.has-artwork: Text {
+        x: (root.width - self.width) * (0.5 + 0.38 * root.drift-x);
+        y: (root.height - self.height) * (0.5 + 0.38 * root.drift-y);
+        text: root.clock-h + ":" + root.clock-m;
+        color: #9999aa;
+        font-size: root.height * 0.2;
+        font-weight: 300;
+    }
+
+    TouchArea {
+        clicked => {
+            root.dismissed();
+        }
+    }
+}

@@ -5,6 +5,8 @@ export type Theme = "dark" | "light";
 
 export type UpdateChannel = "stable" | "edge";
 
+export type ScreensaverKind = "off" | "clock" | "matrix" | "art";
+
 export interface Settings {
   ui_scale: number;
   /** Advertised AirPlay model - senders pick their picker icon from it.
@@ -14,6 +16,8 @@ export interface Settings {
   theme: Theme;
   online_art_fallback: boolean;
   update_channel: UpdateChannel;
+  screensaver: ScreensaverKind;
+  screensaver_min: number;
 }
 
 export interface SettingsPatch {
@@ -23,6 +27,8 @@ export interface SettingsPatch {
   theme?: Theme;
   online_art_fallback?: boolean;
   update_channel?: UpdateChannel;
+  screensaver?: ScreensaverKind;
+  screensaver_min?: number;
 }
 
 export type PairingState = "idle" | "discoverable" | "confirm" | "unavailable";

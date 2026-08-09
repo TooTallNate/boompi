@@ -207,6 +207,25 @@ fn default_ui_scale() -> f32 {
     1.0
 }
 
+/// Idle screensaver style (mostly-black, slowly moving content: the
+/// panels showed burn-in after long static idle).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreensaverKind {
+    Off,
+    /// Big drifting clock.
+    #[default]
+    Clock,
+    /// Matrix digital rain.
+    Matrix,
+    /// Drifting album art of the last-played track.
+    Art,
+}
+
+fn default_screensaver_min() -> u32 {
+    10
+}
+
 /// Which releases the software updater follows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -244,6 +263,13 @@ pub struct Settings {
     /// Which releases the software updater follows.
     #[serde(default)]
     pub update_channel: UpdateChannel,
+    /// Idle screensaver style (shown after `screensaver_min` minutes
+    /// without touches while nothing is playing).
+    #[serde(default)]
+    pub screensaver: ScreensaverKind,
+    /// Idle minutes before the screensaver starts.
+    #[serde(default = "default_screensaver_min")]
+    pub screensaver_min: u32,
 }
 
 impl Default for Settings {
@@ -255,6 +281,8 @@ impl Default for Settings {
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
             update_channel: UpdateChannel::default(),
+            screensaver: ScreensaverKind::default(),
+            screensaver_min: default_screensaver_min(),
         }
     }
 }
@@ -275,6 +303,10 @@ pub struct SettingsPatch {
     pub ui_scale: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_channel: Option<UpdateChannel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screensaver: Option<ScreensaverKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screensaver_min: Option<u32>,
 }
 
 /// Live Wi-Fi join progress, surfaced on the panel: the join usually

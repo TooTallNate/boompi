@@ -18,6 +18,7 @@ import type {
   Pairing,
   Settings,
   SettingsPatch,
+  ScreensaverKind,
   Theme,
   UpdateState,
 } from "./proto";
@@ -64,6 +65,7 @@ export default function App() {
               <EmojiFontSection emoji={state.emoji_fonts} send={send} />
             )}
             <ArtSection settings={settings} onSaved={applySettings} />
+            <ScreensaverSection settings={settings} onSaved={applySettings} />
             <AirplayIconSection settings={settings} onSaved={applySettings} />
           </>
         )}
@@ -707,6 +709,58 @@ function NameSection({ settings, onSaved }: SectionProps) {
         </button>
         <StatusText status={status} />
       </div>
+    </Section>
+  );
+}
+
+function ScreensaverSection({ settings, onSaved }: SectionProps) {
+  const { status, save } = useSave(onSaved);
+  const kinds: { label: string; value: ScreensaverKind }[] = [
+    { label: "Off", value: "off" },
+    { label: "Clock", value: "clock" },
+    { label: "Matrix rain", value: "matrix" },
+    { label: "Album art", value: "art" },
+  ];
+  return (
+    <Section title="Screensaver">
+      <p className="mb-2 text-sm text-dim">
+        Mostly-black moving content after the speaker sits idle - protects
+        the panel from burn-in. Playback or a tap wakes the screen.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {kinds.map((k) => (
+          <button
+            key={k.value}
+            className={`rounded-lg border px-3 py-1.5 text-sm ${
+              settings.screensaver === k.value
+                ? "border-accent bg-accent/10 text-fg"
+                : "border-line text-dim hover:text-fg"
+            }`}
+            onClick={() => save({ screensaver: k.value })}
+          >
+            {k.label}
+          </button>
+        ))}
+      </div>
+      {settings.screensaver !== "off" && (
+        <div className="mt-3 flex items-center justify-between gap-3 py-1.5">
+          <span>Start after</span>
+          <select
+            className="rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
+            value={settings.screensaver_min}
+            onChange={(e) =>
+              save({ screensaver_min: Number(e.target.value) })
+            }
+          >
+            {[2, 5, 10, 20, 30, 60].map((m) => (
+              <option key={m} value={m}>
+                {m} min
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <StatusText status={status} />
     </Section>
   );
 }

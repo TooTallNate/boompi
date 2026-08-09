@@ -135,6 +135,16 @@ pub struct SettingsConfig {
     /// "edge").
     #[serde(default)]
     pub update_channel: boompi_proto::UpdateChannel,
+    /// Idle screensaver style ("off" / "clock" / "matrix" / "art").
+    #[serde(default)]
+    pub screensaver: boompi_proto::ScreensaverKind,
+    /// Idle minutes before the screensaver starts.
+    #[serde(default = "default_screensaver_min")]
+    pub screensaver_min: u32,
+}
+
+fn default_screensaver_min() -> u32 {
+    10
 }
 
 fn default_emoji_font() -> String {
@@ -154,6 +164,8 @@ impl Default for SettingsConfig {
             ui_scale: default_ui_scale(),
             emoji_font: default_emoji_font(),
             update_channel: boompi_proto::UpdateChannel::default(),
+            screensaver: boompi_proto::ScreensaverKind::default(),
+            screensaver_min: default_screensaver_min(),
         }
     }
 }

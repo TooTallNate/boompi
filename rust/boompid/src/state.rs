@@ -159,6 +159,8 @@ impl App {
             airplay_model: cfg.settings.airplay_model.clone(),
             ui_scale: cfg.settings.ui_scale,
             update_channel: cfg.settings.update_channel,
+            screensaver: cfg.settings.screensaver,
+            screensaver_min: cfg.settings.screensaver_min,
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -294,6 +296,8 @@ impl App {
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.settings.ui_scale = s.settings.ui_scale;
             cfg.settings.update_channel = s.settings.update_channel;
+            cfg.settings.screensaver = s.settings.screensaver;
+            cfg.settings.screensaver_min = s.settings.screensaver_min;
             cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.bt_volume_modes = s.bt_volume_modes.clone();
@@ -604,6 +608,12 @@ impl App {
                     }
                     if let Some(scale) = patch.ui_scale {
                         s.settings.ui_scale = scale.clamp(1.0, 2.5);
+                    }
+                    if let Some(kind) = patch.screensaver {
+                        s.settings.screensaver = kind;
+                    }
+                    if let Some(min) = patch.screensaver_min {
+                        s.settings.screensaver_min = min.clamp(1, 240);
                     }
                     if let Some(channel) = patch.update_channel {
                         if channel != s.settings.update_channel {

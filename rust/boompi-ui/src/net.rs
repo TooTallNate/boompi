@@ -167,11 +167,15 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let updates = state.updates.clone();
             let edge = state.settings.update_channel == boompi_proto::UpdateChannel::Edge;
             let airplay_model = state.settings.airplay_model.clone();
+            let saver_kind = screensaver_kind_str(state.settings.screensaver);
+            let saver_min = state.settings.screensaver_min.min(240) as i32;
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 apply_emoji_fonts(&ui, &emoji);
                 apply_update(&ui, &updates);
                 ui.set_update_channel_edge(edge);
                 ui.set_airplay_model(airplay_model.into());
+                ui.set_saver_kind(saver_kind.into());
+                ui.set_saver_timeout_min(saver_min);
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
@@ -213,6 +217,8 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_speaker_name(settings.name.into());
                 ui.set_online_art(settings.online_art_fallback);
                 ui.set_airplay_model(settings.airplay_model.into());
+                ui.set_saver_kind(screensaver_kind_str(settings.screensaver).into());
+                ui.set_saver_timeout_min(settings.screensaver_min.min(240) as i32);
                 ui.set_update_channel_edge(
                     settings.update_channel == boompi_proto::UpdateChannel::Edge,
                 );
@@ -328,6 +334,15 @@ fn clear_track(ctx: &NetCtx) {
         ui.set_has_artwork(false);
         ui.global::<crate::Theme>().set_art_active(false);
     });
+}
+
+fn screensaver_kind_str(kind: boompi_proto::ScreensaverKind) -> &'static str {
+    match kind {
+        boompi_proto::ScreensaverKind::Off => "off",
+        boompi_proto::ScreensaverKind::Clock => "clock",
+        boompi_proto::ScreensaverKind::Matrix => "matrix",
+        boompi_proto::ScreensaverKind::Art => "art",
+    }
 }
 
 fn apply_source(ctx: &NetCtx, source: &SourceInfo) {

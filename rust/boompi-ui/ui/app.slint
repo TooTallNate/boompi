@@ -19,6 +19,7 @@ import { NowPlaying } from "components/now_playing.slint";
 import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
 import { SettingsPanel, EmojiFontRow } from "components/settings.slint";
+import { Screensaver } from "components/screensaver.slint";
 export { EmojiFontRow }
 import { SetupScreen } from "components/setup.slint";
 import { ActionButton } from "components/widgets.slint";
@@ -46,6 +47,12 @@ export component AppWindow inherits Window {
     in property <string> track-album;
     in property <bool> playing: false;
     in property <bool> controls-enabled: true;
+    // Idle screensaver (driven from Rust: idle detection + low-fps tick).
+    in-out property <bool> saver-active: false;
+    in property <string> saver-kind: "clock";
+    in property <int> saver-timeout-min: 10;
+    in property <float> saver-tick: 0;
+    callback saver-dismissed();
     in property <float> progress: 0.0;
     in property <string> elapsed: "--:--";
     in property <string> remaining: "--:--";
@@ -110,6 +117,7 @@ export component AppWindow inherits Window {
     callback scale-changed(float);
     callback emoji-font-tapped(string, string);
     callback airplay-model-tapped(string);
+    callback saver-kind-tapped(string);
     callback update-check();
     callback update-apply();
     callback update-channel-toggled(bool);
@@ -239,6 +247,10 @@ export component AppWindow inherits Window {
         airplay-model: root.airplay-model;
         airplay-model-tapped(value) => {
             root.airplay-model-tapped(value);
+        }
+        saver-kind: root.saver-kind;
+        saver-kind-tapped(value) => {
+            root.saver-kind-tapped(value);
         }
         update-version: root.update-version;
         update-status: root.update-status;
@@ -374,6 +386,24 @@ export component AppWindow inherits Window {
         open-settings => {
             root.screen = root.screen == "settings" ? "main" : "settings";
             root.screen-changed();
+        }
+    }
+
+    // Idle screensaver overlay - topmost, swallows the waking tap.
+    // Never over the first-boot setup screen.
+    if root.saver-active && !root.setup-required: Screensaver {
+        width: root.width;
+        height: root.height;
+        kind: root.saver-kind;
+        tick: root.saver-tick;
+        clock-h: root.clock-h;
+        clock-m: root.clock-m;
+        clock-day: root.clock-day;
+        artwork: root.artwork;
+        has-artwork: root.has-artwork;
+        track-title: root.track-title;
+        dismissed => {
+            root.saver-dismissed();
         }
     }
 }

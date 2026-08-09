@@ -198,7 +198,28 @@ fn main() -> anyhow::Result<()> {
             }
         }
     }
-    let (tx, rx) = mpsc::unbounded_channel::<ClientMessage>();
+    // Screensaver idle clock: reset by every user interaction. The
+    // command-channel wrapper covers all daemon-bound taps; navigation
+    // and the saver's waking tap reset it explicitly.
+    let last_activity = std::rc::Rc::new(std::cell::Cell::new(std::time::Instant::now()));
+
+    #[derive(Clone)]
+    struct ActivitySender {
+        tx: mpsc::UnboundedSender<ClientMessage>,
+        la: std::rc::Rc<std::cell::Cell<std::time::Instant>>,
+    }
+    impl ActivitySender {
+        fn send(&self, msg: ClientMessage) -> Result<(), mpsc::error::SendError<ClientMessage>> {
+            self.la.set(std::time::Instant::now());
+            self.tx.send(msg)
+        }
+    }
+
+    let (raw_tx, rx) = mpsc::unbounded_channel::<ClientMessage>();
+    let tx = ActivitySender {
+        tx: raw_tx,
+        la: last_activity.clone(),
+    };
 
     let track: Arc<Mutex<Option<TrackSnap>>> = Arc::new(Mutex::new(None));
     let fast_poll = Arc::new(AtomicBool::new(false));
@@ -241,7 +262,9 @@ fn main() -> anyhow::Result<()> {
         let tx = tx.clone();
         let weak = ui.as_weak();
         let fast_poll = fast_poll.clone();
+        let la = last_activity.clone();
         ui.on_screen_changed(move || {
+            la.set(std::time::Instant::now());
             if let Some(ui) = weak.upgrade() {
                 let enabled = ui.get_screen() == "battery";
                 if fast_poll.swap(enabled, Ordering::Relaxed) != enabled {
@@ -316,6 +339,21 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_saver_kind_tapped(move |kind| {
+            let kind = match kind.as_str() {
+                "clock" => boompi_proto::ScreensaverKind::Clock,
+                "matrix" => boompi_proto::ScreensaverKind::Matrix,
+                "art" => boompi_proto::ScreensaverKind::Art,
+                _ => boompi_proto::ScreensaverKind::Off,
+            };
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                screensaver: Some(kind),
+                ..SettingsPatch::default()
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_update_check(move || {
             let _ = tx.send(ClientMessage::Update {
                 action: boompi_proto::UpdateAction::Check,
@@ -364,6 +402,69 @@ fn main() -> anyhow::Result<()> {
                 ..SettingsPatch::default()
             }));
         });
+    }
+
+    // ---- idle screensaver ---------------------------------------------------
+    // Idle = no interaction for settings.screensaver_min while nothing
+    // plays. Interaction resets come from the callbacks below plus the
+    // saver's own waking tap; playback starting also wakes the screen.
+    {
+        let weak = ui.as_weak();
+        let la = last_activity.clone();
+        ui.on_saver_dismissed(move || {
+            la.set(std::time::Instant::now());
+            if let Some(ui) = weak.upgrade() {
+                ui.set_saver_active(false);
+            }
+        });
+    }
+    let saver_timer = slint::Timer::default();
+    {
+        let weak = ui.as_weak();
+        let la = last_activity.clone();
+        saver_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_secs(5),
+            move || {
+                let Some(ui) = weak.upgrade() else { return };
+                if ui.get_saver_active() {
+                    // Playback wakes the screen (a session starting is
+                    // the moment the display matters again).
+                    if ui.get_playing() {
+                        la.set(std::time::Instant::now());
+                        ui.set_saver_active(false);
+                    }
+                    return;
+                }
+                let kind = ui.get_saver_kind();
+                if kind == "off" || ui.get_playing() || ui.get_setup_required() {
+                    la.set(std::time::Instant::now());
+                    return;
+                }
+                let timeout =
+                    std::time::Duration::from_secs((ui.get_saver_timeout_min().max(1) as u64) * 60);
+                if la.get().elapsed() >= timeout {
+                    ui.set_saver_active(true);
+                }
+            },
+        );
+    }
+    // Low-fps tick driving all saver motion; deliberately ~8 fps and
+    // idle when the saver is hidden (sustained 60 fps GL for hours is
+    // exactly the load that wedges the Pi 3's GPU).
+    let saver_tick_timer = slint::Timer::default();
+    {
+        let weak = ui.as_weak();
+        saver_tick_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_millis(125),
+            move || {
+                let Some(ui) = weak.upgrade() else { return };
+                if ui.get_saver_active() {
+                    ui.set_saver_tick(ui.get_saver_tick() + 0.125);
+                }
+            },
+        );
     }
 
     // ---- clock (blinking colon, like v1) -----------------------------------
