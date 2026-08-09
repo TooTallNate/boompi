@@ -123,9 +123,11 @@ pub struct SettingsConfig {
     pub theme: boompi_proto::Theme,
     /// Advertised AirPlay device model ("" = shairport default).
     pub airplay_model: String,
-    /// AirPlay pairing code (None = no code required). Generated when
-    /// the setting is enabled; persisted so it survives reboots.
-    #[serde(default)]
+    /// Accepted and ignored: boxes that ran the withdrawn pairing-code
+    /// build (v2.0.0-7d5d003) may still have this key, and the struct
+    /// is deny_unknown_fields - without it their config would fail to
+    /// parse and the daemon would exit on boot. Never written back.
+    #[serde(default, skip_serializing)]
     pub airplay_pin: Option<String>,
     /// Panel UI scale (1.0 = design size); per-board seeds may ship
     /// larger defaults for small high-DPI panels.
@@ -300,5 +302,34 @@ mod tests {
         let cfg = load_with_seed(Some(&primary), Some(&seed)).unwrap();
         assert_eq!(cfg.name, "Boompi");
         std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+#[cfg(test)]
+mod compat_tests {
+    /// Boxes that ran the withdrawn pairing-code build carry an
+    /// airplay_pin key; deny_unknown_fields would otherwise make the
+    /// daemon exit on boot after they update past it.
+    #[test]
+    fn legacy_airplay_pin_key_still_parses() {
+        let raw = r#"
+name = "Test"
+[settings]
+online_art_fallback = false
+theme = "dark"
+airplay_model = "WiiM Amp"
+airplay_pin = "4016"
+ui_scale = 1.5
+emoji_font = "noto"
+update_channel = "edge"
+"#;
+        let cfg: super::Config = toml::from_str(raw).expect("legacy config must parse");
+        assert_eq!(cfg.settings.airplay_model, "WiiM Amp");
+        // and it is never written back out
+        let out = toml::to_string(&cfg).unwrap();
+        assert!(
+            !out.contains("airplay_pin"),
+            "pin must not be re-serialized"
+        );
     }
 }

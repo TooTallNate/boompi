@@ -64,8 +64,6 @@ export component SettingsPanel inherits Rectangle {
     in property <string> settings-url;
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
-    // AirPlay pairing code ("" = disabled); enabled via the web UI.
-    in property <string> airplay-pin;
     // Software update flow (built in net.rs from UpdateState).
     // status: "idle" | "checking" | "available" | "applying" | "error"
     in property <string> update-version;
@@ -228,18 +226,6 @@ export component SettingsPanel inherits Rectangle {
                         toggled => {
                             root.online-art-toggled(self.checked);
                         }
-                    }
-                }
-
-                if root.airplay-pin != "": Row {
-                    label: "AirPlay code";
-                    sublabel: "Phones enter this code once to connect";
-                    Text {
-                        text: root.airplay-pin;
-                        color: Theme.fg;
-                        font-size: 1.5rem;
-                        font-weight: 700;
-                        letter-spacing: 0.15rem;
                     }
                 }
 
