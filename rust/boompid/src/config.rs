@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct Config {
     /// Speaker name (Bluetooth alias, shown on the Connect screen).
     pub name: String,
@@ -56,7 +56,7 @@ impl Default for Config {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SpotifyConfig {
     /// Spotify Connect (embedded librespot). On by default.
     pub enabled: bool,
@@ -69,7 +69,7 @@ impl Default for SpotifyConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct AirplayConfig {
     /// AirPlay receiver (shairport-sync, spawned by boompid). On by default;
     /// silently unavailable when shairport-sync is not installed.
@@ -83,7 +83,7 @@ impl Default for AirplayConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct BatteryConfig {
     /// Linux I2C bus number. The Pi 3 box reaches the INA260 through the
     /// HyperPixel overlay's bit-banged i2c-gpio bus, which is dynamically
@@ -116,19 +116,13 @@ const fn ina260_default_address() -> u8 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(default, deny_unknown_fields)]
+#[serde(default)]
 pub struct SettingsConfig {
     pub online_art_fallback: bool,
     /// Panel UI theme ("dark" / "light").
     pub theme: boompi_proto::Theme,
     /// Advertised AirPlay device model ("" = shairport default).
     pub airplay_model: String,
-    /// Accepted and ignored: boxes that ran the withdrawn pairing-code
-    /// build (v2.0.0-7d5d003) may still have this key, and the struct
-    /// is deny_unknown_fields - without it their config would fail to
-    /// parse and the daemon would exit on boot. Never written back.
-    #[serde(default, skip_serializing)]
-    pub airplay_pin: Option<String>,
     /// Panel UI scale (1.0 = design size); per-board seeds may ship
     /// larger defaults for small high-DPI panels.
     #[serde(default = "default_ui_scale")]
@@ -157,7 +151,6 @@ impl Default for SettingsConfig {
             online_art_fallback: false,
             theme: boompi_proto::Theme::default(),
             airplay_model: String::new(),
-            airplay_pin: None,
             ui_scale: default_ui_scale(),
             emoji_font: default_emoji_font(),
             update_channel: boompi_proto::UpdateChannel::default(),
@@ -198,7 +191,16 @@ pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
         None => Ok(Config::default()),
         Some(p) => match std::fs::read_to_string(p) {
             Ok(raw) => {
-                toml::from_str(&raw).with_context(|| format!("parsing config {}", p.display()))
+                let (cfg, unknown) =
+                    parse(&raw).with_context(|| format!("parsing config {}", p.display()))?;
+                // Unknown keys warn instead of failing: configs written
+                // by newer builds (or leftovers from withdrawn features)
+                // must never keep the appliance from booting - the worst
+                // acceptable outcome of a config skew is a lost setting.
+                for key in &unknown {
+                    tracing::warn!(%key, path = %p.display(), "ignoring unknown config key");
+                }
+                Ok(cfg)
             }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
                 tracing::info!(path = %p.display(), "config not found; using defaults");
@@ -207,6 +209,15 @@ pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
             Err(err) => Err(err).with_context(|| format!("reading config {}", p.display())),
         },
     }
+}
+
+/// Parse a config, collecting the paths of unknown keys instead of
+/// rejecting them (the caller logs them).
+fn parse(raw: &str) -> Result<(Config, Vec<String>), toml::de::Error> {
+    let de = toml::de::Deserializer::new(raw);
+    let mut unknown = Vec::new();
+    let cfg = serde_ignored::deserialize(de, |path| unknown.push(path.to_string()))?;
+    Ok((cfg, unknown))
 }
 
 /// Persist config to `path` atomically (write sibling temp file + rename).
@@ -307,13 +318,16 @@ mod tests {
 
 #[cfg(test)]
 mod compat_tests {
-    /// Boxes that ran the withdrawn pairing-code build carry an
-    /// airplay_pin key; deny_unknown_fields would otherwise make the
-    /// daemon exit on boot after they update past it.
+    /// Unknown config keys (leftovers from withdrawn features, or
+    /// configs written by newer builds) must parse with a warning
+    /// instead of keeping the appliance from booting. The airplay_pin
+    /// key here is a real leftover: the withdrawn pairing-code build
+    /// (v2.0.0-7d5d003) persisted it.
     #[test]
-    fn legacy_airplay_pin_key_still_parses() {
+    fn unknown_keys_are_collected_not_fatal() {
         let raw = r#"
 name = "Test"
+some_future_toplevel_key = true
 [settings]
 online_art_fallback = false
 theme = "dark"
@@ -323,13 +337,18 @@ ui_scale = 1.5
 emoji_font = "noto"
 update_channel = "edge"
 "#;
-        let cfg: super::Config = toml::from_str(raw).expect("legacy config must parse");
+        let (cfg, unknown) = super::parse(raw).expect("config with unknown keys must parse");
         assert_eq!(cfg.settings.airplay_model, "WiiM Amp");
-        // and it is never written back out
-        let out = toml::to_string(&cfg).unwrap();
         assert!(
-            !out.contains("airplay_pin"),
-            "pin must not be re-serialized"
+            unknown.contains(&"settings.airplay_pin".to_string()),
+            "{unknown:?}"
         );
+        assert!(
+            unknown.contains(&"some_future_toplevel_key".to_string()),
+            "{unknown:?}"
+        );
+        // and unknown keys are not round-tripped back into the file
+        let out = toml::to_string(&cfg).unwrap();
+        assert!(!out.contains("airplay_pin"));
     }
 }

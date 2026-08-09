@@ -21,6 +21,8 @@ rust-embed = { version = "8", features = ["mime-guess"] }
 realfft = "3"
 clap = { workspace = true }
 serde = { workspace = true }
+# Unknown config keys warn instead of failing the boot (config.rs).
+serde_ignored = "0.1"
 serde_json = { workspace = true }
 tokio = { workspace = true, features = [
     "fs",
