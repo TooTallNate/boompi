@@ -12,6 +12,7 @@ component TransportButton inherits Rectangle {
     in property <bool> enabled: true;
     in property <float> fit: 1.0;
     callback clicked();
+    callback disabled-clicked();
     width: (root.primary ? 4.6667rem : 3.6667rem) * root.fit;
     height: self.width;
     border-radius: self.width / 2;
@@ -20,9 +21,12 @@ component TransportButton inherits Rectangle {
     border-color: #32324e;
     opacity: root.enabled ? 1.0 : 0.35;
     ta := TouchArea {
-        enabled: root.enabled;
         clicked => {
-            root.clicked();
+            if (root.enabled) {
+                root.clicked();
+            } else {
+                root.disabled-clicked();
+            }
         }
     }
     @children
@@ -47,6 +51,9 @@ export component NowPlaying inherits VerticalLayout {
     callback next();
     callback previous();
     callback volume-edited(float);
+    // A disabled transport button was tapped (AirPlay 2 sessions have
+    // no remote-control channel); the app shows a toast.
+    callback disabled-tapped();
 
     alignment: center;
     spacing: 0.8889rem * self.fit;
@@ -55,9 +62,14 @@ export component NowPlaying inherits VerticalLayout {
 
     // At larger UI scales the fixed-size graphics (album art, transport
     // buttons) stop fitting the physical screen; text keeps the user's
-    // chosen size while the graphics compress to make room. 1.0 at
-    // design scale; the floor keeps buttons comfortably tappable.
-    property <float> fit: max(0.45, min(1.0, (self.height - 8rem) / 14.7rem));
+    // chosen size while the graphics compress to make room. The budget
+    // solves fit so the column NEVER overflows into the footer:
+    //   fixed rows (padding 1.44 + footer clearance ~2.9 + volume 1.5
+    //   + slack 0.6) ≈ 6.7rem; fit-scaled rows (art 10 + transport
+    //   4.67 + 3 gaps × 0.89) ≈ 17.4rem. 1.0 at design scale; the
+    //   floor keeps buttons tappable (past it, e.g. 2.5× on 480px,
+    //   the screen is degenerate anyway).
+    property <float> fit: max(0.45, min(1.0, (self.height - 6.7rem) / 17.4rem));
 
     HorizontalLayout {
         spacing: 1.3333rem;
@@ -131,6 +143,9 @@ export component NowPlaying inherits VerticalLayout {
             clicked => {
                 root.previous();
             }
+            disabled-clicked => {
+                root.disabled-tapped();
+            }
             IconPrev {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
@@ -145,6 +160,9 @@ export component NowPlaying inherits VerticalLayout {
             enabled: root.controls-enabled;
             clicked => {
                 root.toggle-play();
+            }
+            disabled-clicked => {
+                root.disabled-tapped();
             }
             if root.playing: IconPause {
                 x: (parent.width - self.width) / 2;
@@ -167,6 +185,9 @@ export component NowPlaying inherits VerticalLayout {
             clicked => {
                 root.next();
             }
+            disabled-clicked => {
+                root.disabled-tapped();
+            }
             IconNext {
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
@@ -177,12 +198,7 @@ export component NowPlaying inherits VerticalLayout {
         }
     }
 
-    if !root.controls-enabled: Text {
-        text: "Control playback from the sending device";
-        color: Theme.dimmer;
-        font-size: 0.72rem;
-        horizontal-alignment: center;
-    }
+
 
     HorizontalLayout {
         alignment: center;

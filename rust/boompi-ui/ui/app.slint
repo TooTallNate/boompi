@@ -53,6 +53,9 @@ export component AppWindow inherits Window {
     in property <int> saver-timeout-min: 10;
     in property <float> saver-tick: 0;
     callback saver-dismissed();
+    // Transient toast message overlay.
+    in-out property <bool> toast-on: false;
+    in-out property <string> toast-text: "";
     in property <float> progress: 0.0;
     in property <string> elapsed: "--:--";
     in property <string> remaining: "--:--";
@@ -210,6 +213,10 @@ export component AppWindow inherits Window {
         has-artwork: root.has-artwork;
         playing: root.playing;
         controls-enabled: root.controls-enabled;
+        disabled-tapped => {
+            root.toast-text = "Control playback from the sending device";
+            root.toast-on = true;
+        }
         progress: root.progress;
         elapsed: root.elapsed;
         remaining: root.remaining;
@@ -394,6 +401,35 @@ export component AppWindow inherits Window {
         open-settings => {
             root.screen = root.screen == "settings" ? "main" : "settings";
             root.screen-changed();
+        }
+    }
+
+    // Transient toast (e.g. tapping transport controls an AirPlay 2
+    // sender doesn't allow). Auto-hides; sits above content, below the
+    // screensaver.
+    if root.toast-on: Rectangle {
+        x: (root.width - self.width) / 2;
+        y: root.height - Theme.footer-height-rem * 1rem - self.height - 1rem;
+        width: toast-label.preferred-width + 1.8rem;
+        height: toast-label.preferred-height + 1rem;
+        background: #000000d8;
+        border-radius: self.height / 2;
+        border-width: 0.06rem;
+        border-color: Theme.faint;
+        toast-label := Text {
+            x: 0.9rem;
+            y: 0.5rem;
+            text: root.toast-text;
+            color: Theme.fg;
+            font-size: 0.83rem;
+        }
+    }
+
+    toast-timer := Timer {
+        interval: 2.4s;
+        running: root.toast-on;
+        triggered => {
+            root.toast-on = false;
         }
     }
 

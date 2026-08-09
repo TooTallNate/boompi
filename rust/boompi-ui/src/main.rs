@@ -252,9 +252,36 @@ fn main() -> anyhow::Result<()> {
         });
     }
     {
+        // Throttle slider drags to ~10 volume commands/s: unthrottled,
+        // every pointer move queues a system-volume call and the level
+        // audibly crawls after the finger. Leading edge fires
+        // immediately (snappy first response); a trailing single-shot
+        // always delivers the final position.
         let tx = tx.clone();
+        let pending = std::rc::Rc::new(std::cell::Cell::new(Option::<f32>::None));
+        let last_sent = std::rc::Rc::new(std::cell::Cell::new(
+            std::time::Instant::now() - std::time::Duration::from_secs(1),
+        ));
+        let flush_timer = std::rc::Rc::new(slint::Timer::default());
+        const GAP: std::time::Duration = std::time::Duration::from_millis(100);
         ui.on_volume_edited(move |level| {
-            let _ = tx.send(ClientMessage::SetVolume { level });
+            let elapsed = last_sent.get().elapsed();
+            if elapsed >= GAP {
+                last_sent.set(std::time::Instant::now());
+                pending.set(None);
+                let _ = tx.send(ClientMessage::SetVolume { level });
+            } else {
+                pending.set(Some(level));
+                let tx = tx.clone();
+                let pending = pending.clone();
+                let last_sent = last_sent.clone();
+                flush_timer.start(slint::TimerMode::SingleShot, GAP - elapsed, move || {
+                    if let Some(level) = pending.take() {
+                        last_sent.set(std::time::Instant::now());
+                        let _ = tx.send(ClientMessage::SetVolume { level });
+                    }
+                });
+            }
         });
     }
     {
