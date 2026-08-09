@@ -293,19 +293,17 @@ fn write_config(name: &str, airplay_model: &str) -> anyhow::Result<()> {
     let model_line = if airplay_model.is_empty() {
         String::new()
     } else {
-        let apple_model =
-            airplay_model.starts_with("AudioAccessory") || airplay_model.starts_with("AppleTV");
-        let features_or = if apple_model {
-            ""
-        } else if airplay_model.to_ascii_uppercase().contains("TV") {
-            "  airplay_features_or = \"0x2000004000000\";\n" // bits 26 + 49
-        } else {
-            "  airplay_features_or = \"0x4000000\";\n" // bit 26
-        };
+        // Model string only - never feature bits. The third-party icon
+        // bits are booby-trapped on current iOS (AirPlay/935.x): bit 26
+        // (ThirdPartySpeaker) doubles as Authentication_4, making the
+        // sender demand MFi auth-setup that shairport cannot answer
+        // (connection aborts); bit 51 draws the icon too but demands
+        // HomeKit PIN pairing we do not implement (yet - a panel-
+        // displayed pairing code would be the way in). Apple model
+        // strings need no bits and handshake fine.
         format!(
-            "  airplay_device_model = \"{}\";\n{}",
-            airplay_model.replace('\\', "\\\\").replace('"', "\\\""),
-            features_or
+            "  airplay_device_model = \"{}\";\n",
+            airplay_model.replace('\\', "\\\\").replace('"', "\\\"")
         )
     };
     let conf = format!(

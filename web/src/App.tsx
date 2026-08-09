@@ -922,14 +922,14 @@ function ArtSection({ settings, onSaved }: SectionProps) {
 
 // Values are mDNS `model=` strings. Senders resolve Apple model strings
 // to product icons (only the HomePods and Apple TV have any; AirPort,
-// Mac, iPhone and Vision models all draw the generic glyph). Non-Apple
-// models draw the bookshelf icon via feature bit 26 (ThirdPartySpeaker)
-// or the TV icon via bits 26+49 (ThirdPartyTV); boompid advertises the
-// bits for non-Apple models ("TV" in the name selects the TV bits).
+// Mac, iPhone and Vision models all draw the generic glyph). There are
+// no non-Apple presets: the third-party icon feature bits are
+// booby-trapped on current iOS - bit 26 (bookshelf icon) doubles as
+// Authentication_4 and makes senders abort the handshake demanding
+// MFi auth, bit 51 draws the icon but demands HomeKit PIN pairing we
+// don't implement.
 const AIRPLAY_MODELS: { label: string; value: string }[] = [
   { label: "Generic speaker", value: "" },
-  { label: "Bookshelf speaker", value: "WiiM Amp" },
-  { label: "TV", value: "HiSense TV" },
   { label: "HomePod mini", value: "AudioAccessory5,1" },
   { label: "HomePod", value: "AudioAccessory1,1" },
   { label: "Apple TV", value: "AppleTV14,1" },
@@ -947,23 +947,6 @@ function AirplayModelIcon({ model }: { model: string }) {
   } as const;
   let art: ReactNode;
   switch (model) {
-    case "WiiM Amp": // bookshelf: squarish cabinet, tweeter dot, woofer ring
-      art = (
-        <>
-          <rect x="6" y="3.5" width="12" height="17" rx="2.5" {...stroke} />
-          <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" />
-          <circle cx="12" cy="14.5" r="2.9" {...stroke} />
-        </>
-      );
-      break;
-    case "HiSense TV": // TV: display with a bottom chin line
-      art = (
-        <>
-          <rect x="3" y="5.5" width="18" height="12.5" rx="2" {...stroke} />
-          <path d="M8.5 21h7" {...stroke} />
-        </>
-      );
-      break;
     case "AudioAccessory5,1": // HomePod mini: ball, flattened bottom
       art = (
         <path
