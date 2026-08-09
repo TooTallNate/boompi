@@ -1,9 +1,17 @@
 # Boompi v2 - Implementation Plan
 
+> **Status: shipped.** All phases below are complete and both boomboxes
+> run the resulting images (self-updating via the release channels).
+> This document is the historical plan, kept accurate where reality
+> diverged (see Phase 6 and the open-items list). Forward-looking work
+> lives in [`ROADMAP.md`](ROADMAP.md); the update system, whose design
+> changed the most between plan and bench, is documented in
+> [`UPDATES.md`](UPDATES.md).
+
 Boompi v2 is a ground-up rewrite of the boombox software stack as a native
 appliance: a Rust backend daemon, a Slint touchscreen UI, and flashable
 Buildroot SD card images. The v1 stack (Node.js + Next.js + Chromium kiosk on
-Raspberry Pi OS desktop) lives on the `main` branch and serves as the
+Raspberry Pi OS desktop) lives on the `v1` branch and serves as the
 behavioral reference/spec.
 
 ## Goals
@@ -288,42 +296,41 @@ input. Build order (1-4 are dev-Pi-testable; 5-6 need image loops):
    Remaining: `/data` writable partition for appliance config persistence
    (Phase 4 image work), panel BT device list, richer wizard polish.
 
-### Phase 6 - Boot polish, updates + release
+### Phase 6 - Boot polish, updates + release ✅
 
-**Software updates** - implemented for the Pi 4 (its SD card is
-physically inaccessible once assembled, so A/B landed before its first
-flash; the Pi 3 keeps single-slot - accessible card, no EEPROM tryboot):
-- Layout: boot-a/boot-b (FAT) + rootfs-a/rootfs-b + data. EEPROM-native
-  `tryboot` boots a candidate slot exactly once; `boompi-boot-commit`
-  makes it permanent only after boompid answers healthz, else the next
-  boot falls back automatically.
-- `boompi-update-slot` (on-box) writes a CI update bundle into the
-  inactive slot; `scripts/update-appliance.sh` (workstation) fetches the
-  latest green `boompi-pi4-update` artifact and drives the whole thing
-  over SSH.
-- ⚠ Bench task before final assembly: verify the Pi 4's EEPROM is
-  ≥ 2021-04 (`vcgencmd bootloader_version`) - tryboot/autoboot.txt need
-  it, and the v1 install is buster-era. Update with rpi-eeprom-update
-  while the card is still reachable.
+**Software updates - as shipped.** The original design (EEPROM-native
+`tryboot`, Pi 4-only A/B) did not survive the bench; what shipped is
+better and is documented in [`UPDATES.md`](UPDATES.md):
+- **Both** boards are A/B (boot-a/boot-b + rootfs-a/rootfs-b + data;
+  `/data` is never touched by updates, so state and OS lifecycles stay
+  decoupled).
+- Trial boots are per-board: the Pi 3 arms a one-shot PM_RSTS
+  partition request (crash/power-cycle falls back to the old slot
+  automatically); the Pi 4 rev ≤ 1.3 - whose PMIC power-cycle wipes
+  every firmware one-shot flag, tryboot included - flips autoboot to
+  the candidate and rolls back via `boompi-boot-commit` if it boots
+  sick. kexec trials were retired after hanging on both boards.
+- boompid's updater module + Settings sections (web + panel) shipped:
+  stable channel = tagged GitHub Releases (changesets "Version
+  Packages" flow), edge channel = a rolling prerelease of every green
+  `main` build. Assets stream directly into the inactive slot,
+  sha256-verified, then trial-booted. Auto-update toggle: see
+  [`ROADMAP.md`](ROADMAP.md).
+- `boompi-update-slot`/`boompi-trial-boot` (on-box) and
+  `scripts/update-appliance.sh` (workstation, CI artifacts over SSH)
+  drive the same flow.
 
-Remaining (original design notes):
-- Partition layout grows to boot / rootfs-A / rootfs-B / data; the Pi
-  bootloader's native `tryboot` mechanism gives atomic A/B switching with
-  automatic fallback when the new slot fails to mark itself healthy.
-- boompid gains an updater module + Settings section (web + panel):
-  "check for updates" hits a release feed - GitHub Releases once tagging
-  starts (CI artifacts as the interim nightly channel) - compares
-  versions, downloads the rootfs image into the inactive slot, verifies
-  (hash from the feed), sets the tryboot flag, reboots. An auto-update
-  toggle (default off) lives in Settings and persists like everything
-  else. RAUC (packaged in Buildroot, documented Pi tryboot support) is
-  the fallback if hand-rolling slot management proves annoying.
-- `/data` is never touched by updates - state and OS lifecycles stay
-  decoupled (same property that makes reflash-during-dev painless).
+Silent boot shipped (`quiet loglevel=3`, cursor off, no getty,
+`disable_splash=1`); service hardening shipped (`Restart=always`
+across the stack). Boot time vs the < 10 s goal is unmeasured - see
+ROADMAP.md. Releases are cut by changesets (`v2.x.y` tags with image
+assets); the version stamp (`/etc/boompi-version`) shows clean tags on
+release builds and `vX.Y.Z-<sha>` on edge builds.
 
-Silent boot (`quiet loglevel=0`, `disable_splash=1`, no cursor/rainbow),
-boot-time tuning to < 10 s, service hardening (`Restart=always`, watchdog),
-CI image builds with ccache. Tag v2.0.
+One deviation from the goals above: the rootfs ended up ext4
+read-write rather than squashfs read-only - the A/B slots plus the
+separated `/data` deliver the intended robustness, and a writable
+rootfs keeps the scp-a-binary dev loop.
 
 ## Risks
 
@@ -367,11 +374,14 @@ CI image builds with ccache. Tag v2.0.
       publishes are origin-gated (a late BT BIP thumbnail must not stomp an
       AirPlay cover). Note: iOS mirrors now-playing over AVRCP while
       AirPlaying - the BT provider must never treat that chatter as a claim.
-- [ ] Default state of online-art fallback (suggest: off until Wi-Fi configured)
+      **Carried to [`ROADMAP.md`](ROADMAP.md) (Tier 1).**
+- [x] Default state of online-art fallback: shipped **off** by default,
+      toggleable in both settings UIs.
 - [ ] Low-battery safeguard (new, motivated by Phase 0: the deeply
       discharged pack browned out the Pi and corrupted the SD mid-boot).
       v2 should surface a low-battery warning in the UI and consider a
       safe-shutdown voltage threshold via the INA260 - v1 had neither.
+      **Carried to [`ROADMAP.md`](ROADMAP.md) (release-blocker tier).**
 - [x] Pi 3 display rotation under Slint: `SLINT_KMS_ROTATION=270` env var
       (DRM panel-orientation hint is not auto-applied). Touch works
       unmodified alongside the existing DT touch transforms.

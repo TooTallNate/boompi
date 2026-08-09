@@ -9,10 +9,18 @@ native appliance:
 - **`boompi-ui`** - Slint touchscreen UI: renders directly on DRM/KMS on the
   boombox, or as a desktop app on a laptop for development.
 - **`buildroot/`** - flashable, pre-configured SD card images (silent boot,
-  read-only rootfs, first-boot setup).
+  A/B self-updates, first-boot setup).
 
 The v1 stack (Node.js + Next.js + Chromium kiosk) lives on the `v1` branch.
-The full design and phased plan is in [`docs/PLAN.md`](docs/PLAN.md).
+The (shipped) design and phased plan is in [`docs/PLAN.md`](docs/PLAN.md),
+the A/B update system in [`docs/UPDATES.md`](docs/UPDATES.md), and
+future work in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+
+Releases are cut with [changesets](.changeset/README.md): merging the
+"Version Packages" PR publishes a GitHub Release with flashable images
+and OTA assets; every green build of `main` also refreshes the rolling
+`edge` prerelease. The boxes update themselves from either channel
+(Settings → Software).
 
 ## Development
 
