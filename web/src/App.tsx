@@ -1081,6 +1081,20 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
           Custom model: <span className="font-mono">{settings.airplay_model}</span>
         </p>
       )}
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5 pb-1.5">
+        <div className="min-w-0">
+          <div>Classic AirPlay only</div>
+          <div className="text-[12px] text-dim">
+            Modern iPhones don't let AirPlay 2 receivers control playback,
+            so the speaker's own play/pause/next buttons only work in
+            classic mode. Trade: no multi-speaker audio while enabled.
+          </div>
+        </div>
+        <Toggle
+          checked={settings.airplay_classic}
+          onChange={(v) => save({ airplay_classic: v })}
+        />
+      </div>
       <StatusText status={status} />
     </Section>
   );

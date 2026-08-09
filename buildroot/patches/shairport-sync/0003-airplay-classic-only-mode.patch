@@ -1,0 +1,119 @@
+Add a runtime classic-AirPlay-only mode to the AirPlay 2 build
+
+general.airplay_classic_only makes an AirPlay-2-capable build
+advertise and serve classic AirPlay exclusively: the _airplay._tcp
+service is not registered (NULL secondary records - the exact shape
+the shared mdns code already handles for classic-only builds), and
+the _raop._tcp record set switches to the classic-build one, whose
+records carry no ft= AirPlay 2 feature bits, so senders negotiate
+classic AirPlay.
+
+Why anyone would want this: the receiver-side remote control channel
+(DACP) only exists for classic sessions - modern iOS runs no DACP
+server for AirPlay 2 (see mikebrady/shairport-sync#2186; the AP2
+control channel is encrypted and not reverse engineered), so a
+speaker with its own transport buttons faces a trade: AirPlay 2
+multi-room OR working play/pause/next from the speaker. This makes
+the trade a config option. Off by default.
+
+Group-status mdns updates are suppressed centrally in mdns_update so
+the unregistered AP2 service is never updated.
+
+Companion to 0001/0002; carried locally by boompi.
+
+--- a/common.h	2026-08-06 16:20:00
++++ b/common.h	2026-08-10 09:00:00
+@@ -327,6 +327,7 @@
+ 
+ #ifdef CONFIG_AIRPLAY_2
+   uint64_t airplay_features;
++  int airplay_classic_only; // advertise + serve classic AirPlay only
+   uint32_t airplay_statusflags;
+   char *airplay_device_id; // for the Bonjour advertisement and the GETINFO PList
+   char *airplay_pin;       // non-NULL, 4 char PIN, if required for pairing
+--- a/shairport.c	2026-08-06 16:20:00
++++ b/shairport.c	2026-08-10 09:00:00
+@@ -605,6 +605,15 @@
+       if (config_lookup_string(config.cfg, "general.airplay_features_or", &str)) {
+         config.airplay_features |= strtoull(str, NULL, 16);
+       }
++
++      /* Classic-only mode: advertise only the AirPlay 1 (_raop._tcp)
++         service with the classic record set, so senders speak classic
++         AirPlay - the only protocol whose receiver-side remote control
++         (DACP) still works. Trades away AirPlay 2 (multi-room) while
++         enabled. */
++      config.airplay_classic_only = 0;
++      config_set_lookup_bool(config.cfg, "general.airplay_classic_only",
++                             &config.airplay_classic_only);
+ #endif
+ #ifdef CONFIG_LIBDAEMON
+       /* Get the Daemonize setting. */
+--- a/rtsp.c	2026-08-06 16:20:00
++++ b/rtsp.c	2026-08-10 09:00:00
+@@ -271,6 +271,33 @@
+   snprintf(pkString, sizeof(pkString), "pk=");
+   pkString_make(pkString + strlen("pk="), sizeof(pkString) - strlen("pk="),
+                 config.airplay_device_id);
++  if (config.airplay_classic_only) {
++    /* The classic-build record set (see the #else branch below): no
++       ft= AirPlay 2 feature bits, so senders use classic AirPlay. */
++    txt_records[entry_number++] = "sf=0x4";
++    txt_records[entry_number++] = firmware_version;
++    txt_records[entry_number++] = "am=ShairportSync";
++    txt_records[entry_number++] = "vs=105.1";
++    txt_records[entry_number++] = "tp=TCP,UDP";
++    txt_records[entry_number++] = "vn=65537";
++#ifdef CONFIG_METADATA
++    if (config.get_coverart == 0)
++      txt_records[entry_number++] = "md=0,2";
++    else
++      txt_records[entry_number++] = "md=0,1,2";
++#endif
++    txt_records[entry_number++] = "ss=16";
++    txt_records[entry_number++] = "sr=44100";
++    txt_records[entry_number++] = "da=true";
++    txt_records[entry_number++] = "sv=false";
++    txt_records[entry_number++] = "et=0,1";
++    txt_records[entry_number++] = "ek=1";
++    txt_records[entry_number++] = "cn=0,1";
++    txt_records[entry_number++] = "ch=2";
++    txt_records[entry_number++] = "txtvers=1";
++    txt_records[entry_number++] = "pw=false";
++    txt_records[entry_number++] = NULL;
++  } else {
+   txt_records[entry_number++] = "cn=0,1";
+   txt_records[entry_number++] = "da=true";
+   txt_records[entry_number++] = "et=0,1";
+@@ -289,6 +316,7 @@
+   txt_records[entry_number++] = "vs=366.0";
+   txt_records[entry_number++] = pkString;
+   txt_records[entry_number++] = NULL;
++  }
+ 
+ #else
+   // here, just replicate what happens in mdns.h when using those #defines
+@@ -5540,7 +5568,8 @@
+     char **t2 = NULL;        // possibly two text records
+ #ifdef CONFIG_AIRPLAY_2
+     // make up a secondary set of text records
+-    t2 = secondary_txt_records; // second set of text records in AirPlay 2 only
++    if (config.airplay_classic_only == 0)
++      t2 = secondary_txt_records; // second set of text records in AirPlay 2 only
+ #endif
+     build_bonjour_strings(NULL); // no conn yet
+     mdns_register(t1, t2); // note that the dacp thread could still be using the mdns stuff after
+--- a/mdns.c	2026-08-06 16:20:00
++++ b/mdns.c	2026-08-10 09:00:00
+@@ -110,6 +110,11 @@
+ }
+ 
+ void mdns_update(char **txt_records, char **secondary_txt_records) {
++#ifdef CONFIG_AIRPLAY_2
++  // Classic-only mode never registered the AirPlay 2 service.
++  if (config.airplay_classic_only)
++    secondary_txt_records = NULL;
++#endif
+   if ((config.mdns) && (config.mdns->mdns_update)) {
+     config.mdns->mdns_update(txt_records, secondary_txt_records);
+   } else

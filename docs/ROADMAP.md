@@ -80,22 +80,23 @@ contributes to "the quintessential Raspberry Pi boombox".
   entities; the HA crowd overlaps heavily with the audience that
   would build one of these.
 
-- **AirPlay classic/AirPlay 2 receiver toggle.** Modern iOS runs no
-  DACP server for AirPlay 2 sessions, so speaker-side transport
-  controls cannot work (shairport-sync: "remote control facilities
-  are not implemented" for AP2; see issue #2186 - the AP2 control
-  channel is encrypted and un-reverse-engineered). Classic AirPlay
-  still carries DACP. A settings toggle choosing the advertised mode
-  would trade multi-speaker/AP2 senders for working panel controls;
-  needs investigation into how a 4.x AP2 build can be pinned to
-  classic. Also re-evaluate when Buildroot ships shairport-sync 5.x
-  (upstream restored classic remote control there).
-- **VC4 GPU hang hardening.** The Pi 3's GPU can wedge under
-  sustained GL load (dma-fence never signals, "[drm] Resetting GPU"
-  storm, UI unkillable in D state, choppy audio; orderly reboots hang
-  in stop jobs). A reset-storm watchdog now hard-reboots out of it;
-  reduce the trigger rate too: evaluate a newer 6.6.y kernel pin for
-  vc4 fixes, and lighter GPU load when idle (ties into ambient mode).
+- **AirPlay classic-only toggle: bench-verify.** Shipped as an
+  experimental settings toggle (shairport patch 0003: classic record
+  set, no _airplay._tcp service, so senders negotiate classic AirPlay
+  whose DACP remote control works). Needs live verification with an
+  iPhone: does modern iOS still speak classic to a vs=105.1 receiver,
+  does DACP come up (panel buttons light via the existing
+  RemoteControl.Available watch), and does audio behave. Re-evaluate
+  the whole area when Buildroot ships shairport-sync 5.x (upstream
+  restored classic remote control there, and metadata is currently
+  reported broken in 5.1 - issue #2239).
+- **VC4 GPU hang: verify the kernel bump helps.** The reset-storm
+  watchdog hard-reboots out of wedges; the kernel pin moved from
+  6.6.28 (2024-04) to rpi-6.6.y head (2025-02) picking up ~10 months
+  of vc4/HVS fixes in exactly the hang's code path (HVS channel stop
+  logic, atomic_flush dev_enter/exit matching, AXI panic modes).
+  Watch hang frequency on the bench; if wedges persist, lighter GPU
+  load when idle is the next lever (ties into ambient mode).
 
 ## Tier 3 - keeper of the fleet
 

@@ -135,6 +135,10 @@ pub struct SettingsConfig {
     /// "edge").
     #[serde(default)]
     pub update_channel: boompi_proto::UpdateChannel,
+    /// Classic-AirPlay-only receiver mode (working speaker-side
+    /// transport controls, no AirPlay 2 / multi-room).
+    #[serde(default)]
+    pub airplay_classic: bool,
     /// Idle screensaver style ("off" / "clock" / "matrix" / "art").
     #[serde(default)]
     pub screensaver: boompi_proto::ScreensaverKind,
@@ -164,6 +168,7 @@ impl Default for SettingsConfig {
             ui_scale: default_ui_scale(),
             emoji_font: default_emoji_font(),
             update_channel: boompi_proto::UpdateChannel::default(),
+            airplay_classic: false,
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }

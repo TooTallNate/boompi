@@ -263,6 +263,12 @@ pub struct Settings {
     /// Which releases the software updater follows.
     #[serde(default)]
     pub update_channel: UpdateChannel,
+    /// Advertise/serve classic AirPlay only (no AirPlay 2): trades
+    /// multi-room away for a working remote-control channel - modern
+    /// iOS runs no DACP server for AirPlay 2 sessions, so the
+    /// speaker's own transport buttons only work on classic.
+    #[serde(default)]
+    pub airplay_classic: bool,
     /// Idle screensaver style (shown after `screensaver_min` minutes
     /// without touches while nothing is playing).
     #[serde(default)]
@@ -281,6 +287,7 @@ impl Default for Settings {
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
             update_channel: UpdateChannel::default(),
+            airplay_classic: false,
             screensaver: ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }
@@ -303,6 +310,8 @@ pub struct SettingsPatch {
     pub ui_scale: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update_channel: Option<UpdateChannel>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub airplay_classic: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

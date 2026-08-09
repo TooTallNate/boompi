@@ -16,6 +16,7 @@ export interface Settings {
   theme: Theme;
   online_art_fallback: boolean;
   update_channel: UpdateChannel;
+  airplay_classic: boolean;
   screensaver: ScreensaverKind;
   screensaver_min: number;
 }
@@ -27,6 +28,7 @@ export interface SettingsPatch {
   theme?: Theme;
   online_art_fallback?: boolean;
   update_channel?: UpdateChannel;
+  airplay_classic?: boolean;
   screensaver?: ScreensaverKind;
   screensaver_min?: number;
 }
