@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- The white top-highlight ellipses of the web version are encoded
+       as a luminance mask here: Slint's colorize keeps only the alpha
+       channel, so highlights must be transparency, not color. -->
+  <defs>
+    <mask id="hl" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="white"/>
+      <ellipse cx="32" cy="12.5" rx="10.5" ry="3.8" fill="#b8b8b8"/>
+      <ellipse cx="32" cy="12.3" rx="7.2" ry="2.4" fill="#333333"/>
+    </mask>
+  </defs>
+  <path fill="black" mask="url(#hl)" d="M18 13.5C18 7.7 24.2 5 32 5s14 2.7 14 8.5v35C46 55 40.2 59 32 59s-14-4-14-10.5v-35Z"/>
+</svg>

@@ -99,3 +99,33 @@ export component IconNote inherits Image {
     colorize: root.icon-color;
     image-fit: contain;
 }
+
+// AirPlay icon-preset tiles (project-drawn; the HomePod highlights are
+// luminance masks so colorize's alpha-only tinting keeps them).
+export component IconAirplayGeneric inherits Image {
+    in property <color> icon-color: white;
+    source: @image-url("../icons/airplay-generic.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
+}
+
+export component IconAirplayHomePodMini inherits Image {
+    in property <color> icon-color: white;
+    source: @image-url("../icons/airplay-homepod-mini.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
+}
+
+export component IconAirplayHomePod inherits Image {
+    in property <color> icon-color: white;
+    source: @image-url("../icons/airplay-homepod.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
+}
+
+export component IconAirplayAppleTV inherits Image {
+    in property <color> icon-color: white;
+    source: @image-url("../icons/airplay-appletv.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
+}

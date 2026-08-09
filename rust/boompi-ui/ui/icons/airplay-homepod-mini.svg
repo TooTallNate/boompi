@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Highlights as a luminance mask; see airplay-homepod.svg. -->
+  <defs>
+    <mask id="hl" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <rect width="64" height="64" fill="white"/>
+      <ellipse cx="32" cy="13.5" rx="12.5" ry="5.2" fill="#b8b8b8"/>
+      <ellipse cx="32" cy="13.2" rx="8.8" ry="3.3" fill="#333333"/>
+    </mask>
+  </defs>
+  <path fill="black" mask="url(#hl)" d="M32 8C19.3 8 12 16.2 12 31.2 12 46.1 19.2 55 32 55s20-8.9 20-23.8C52 16.2 44.7 8 32 8Z"/>
+</svg>

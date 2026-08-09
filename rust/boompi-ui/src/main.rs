@@ -307,6 +307,15 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_airplay_model_tapped(move |model| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                airplay_model: Some(model.to_string()),
+                ..SettingsPatch::default()
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_update_check(move || {
             let _ = tx.send(ClientMessage::Update {
                 action: boompi_proto::UpdateAction::Check,

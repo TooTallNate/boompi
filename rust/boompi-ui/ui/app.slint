@@ -81,6 +81,7 @@ export component AppWindow inherits Window {
     in property <string> settings-url: "";
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
+    in property <string> airplay-model;
     in property <string> update-version;
     in property <string> update-status: "idle";
     in property <string> update-detail;
@@ -107,6 +108,7 @@ export component AppWindow inherits Window {
     callback theme-toggled(bool);
     callback scale-changed(float);
     callback emoji-font-tapped(string, string);
+    callback airplay-model-tapped(string);
     callback update-check();
     callback update-apply();
     callback update-channel-toggled(bool);
@@ -232,6 +234,10 @@ export component AppWindow inherits Window {
         speaker-name: root.speaker-name;
         version-line: root.version-line;
         emoji-fonts: root.emoji-fonts;
+        airplay-model: root.airplay-model;
+        airplay-model-tapped(value) => {
+            root.airplay-model-tapped(value);
+        }
         update-version: root.update-version;
         update-status: root.update-status;
         update-detail: root.update-detail;
