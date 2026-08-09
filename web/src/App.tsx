@@ -872,13 +872,15 @@ function UpdateSection({
               Update
             </button>
           )}
-          {updates.applying == null && updates.available == null && (
+          {/* Always allow a re-check while idle: a stored offer may have
+              been superseded by a newer build (edge moves fast). */}
+          {updates.applying == null && (
             <button
               className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg disabled:opacity-40"
               disabled={updates.checking}
               onClick={() => send({ type: "update", action: "check" })}
             >
-              Check now
+              {updates.available != null ? "Re-check" : "Check now"}
             </button>
           )}
         </div>
