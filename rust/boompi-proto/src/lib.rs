@@ -62,10 +62,31 @@ pub enum PlaybackStatus {
 
 /// The active source (if any) and the human-readable device/account name
 /// associated with it (e.g. the phone's Bluetooth alias).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceInfo {
     pub active: Option<SourceKind>,
     pub device_name: Option<String>,
+    /// Whether transport commands (play/pause/next/previous) can reach
+    /// the sender. Bluetooth (AVRCP) and Spotify always can; AirPlay
+    /// depends on the sender running a DACP server, which modern iOS
+    /// does not do for AirPlay 2 sessions - the panel dims its
+    /// transport controls when this is false.
+    #[serde(default = "default_true")]
+    pub controllable: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for SourceInfo {
+    fn default() -> Self {
+        Self {
+            active: None,
+            device_name: None,
+            controllable: true,
+        }
+    }
 }
 
 /// Track metadata. `position_ms` is a snapshot taken at `updated_at`;

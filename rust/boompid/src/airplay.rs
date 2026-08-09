@@ -69,6 +69,12 @@ trait RemoteControl {
     /// absolute volume on the Bluetooth path).
     #[zbus(property)]
     fn airplay_volume(&self) -> zbus::Result<f64>;
+    /// Whether the sender runs a DACP server the transport methods can
+    /// reach. Modern iOS does not for AirPlay 2 sessions, in which case
+    /// Play/Pause/Next/Previous silently no-op - surface this so the
+    /// panel can dim its controls instead of lying.
+    #[zbus(property)]
+    fn available(&self) -> zbus::Result<bool>;
     /// "Playing" / "Paused" / "Stopped" / "Not Available".
     #[zbus(property)]
     fn player_state(&self) -> zbus::Result<String>;
@@ -154,6 +160,7 @@ async fn run_once(
     let mut meta_stream = rc.receive_metadata_changed().await;
     let mut progress_stream = rc.receive_progress_string_changed().await;
     let mut volume_stream = rc.receive_airplay_volume_changed().await;
+    let mut available_stream = rc.receive_available_changed().await;
 
     let mut meta = MetaState::default();
 
@@ -223,6 +230,11 @@ async fn run_once(
                     if app.shared.read().await.source.active == Some(SourceKind::Airplay) {
                         apply_airplay_volume(app, db).await;
                     }
+                }
+            }
+            Some(a) = available_stream.next() => {
+                if let Ok(available) = a.get().await {
+                    apply_controllable(app, available).await;
                 }
             }
             _ = cfg_watch.changed() => {
@@ -438,12 +450,31 @@ async fn claim_source(app: &SharedApp, rc: &RemoteControlProxy<'_>) {
     let source = SourceInfo {
         active: Some(SourceKind::Airplay),
         device_name: Some(device_name),
+        controllable: rc.available().await.unwrap_or(false),
     };
     let mut s = app.shared.write().await;
     if s.source != source {
-        tracing::info!(device = ?source.device_name, "AirPlay session active");
+        tracing::info!(
+            device = ?source.device_name,
+            controllable = source.controllable,
+            "AirPlay session active"
+        );
         s.source = source.clone();
         drop(s);
+        app.broadcast(ServerMessage::Source(source));
+    }
+}
+
+/// Follow RemoteControl.Available mid-session (the DACP monitor can
+/// resolve the sender's control server after the session starts, or
+/// lose it).
+async fn apply_controllable(app: &SharedApp, available: bool) {
+    let mut s = app.shared.write().await;
+    if s.source.active == Some(SourceKind::Airplay) && s.source.controllable != available {
+        s.source.controllable = available;
+        let source = s.source.clone();
+        drop(s);
+        tracing::info!(available, "AirPlay remote control availability changed");
         app.broadcast(ServerMessage::Source(source));
     }
 }

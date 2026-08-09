@@ -332,6 +332,7 @@ fn clear_track(ctx: &NetCtx) {
 
 fn apply_source(ctx: &NetCtx, source: &SourceInfo) {
     let device = source.device_name.clone().unwrap_or_default();
+    let controllable = source.controllable;
     let kind = match source.active {
         Some(SourceKind::Bluetooth) => "bluetooth",
         Some(SourceKind::Spotify) => "spotify",
@@ -342,6 +343,7 @@ fn apply_source(ctx: &NetCtx, source: &SourceInfo) {
         clear_track(ctx);
     }
     let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_controls_enabled(controllable);
         ui.set_device_name(device.into());
         ui.set_source_kind(kind.into());
     });

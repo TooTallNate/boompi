@@ -636,6 +636,7 @@ async fn adopt_device_of(ctx: &Ctx, session: &mut Session, child_path: &str) {
     let source = SourceInfo {
         active: Some(SourceKind::Bluetooth),
         device_name: alias,
+        controllable: true,
     };
     ctx.app.shared.write().await.source = source.clone();
     ctx.app.broadcast(ServerMessage::Source(source));

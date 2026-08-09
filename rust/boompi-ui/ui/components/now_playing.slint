@@ -9,15 +9,18 @@ import { IconPlay, IconPause, IconPrev, IconNext, IconSpeaker, IconNote } from "
 
 component TransportButton inherits Rectangle {
     in property <bool> primary: false;
+    in property <bool> enabled: true;
     in property <float> fit: 1.0;
     callback clicked();
     width: (root.primary ? 4.6667rem : 3.6667rem) * root.fit;
     height: self.width;
     border-radius: self.width / 2;
-    background: ta.pressed ? #2c2c48 : #1b1b2e;
+    background: ta.pressed && root.enabled ? #2c2c48 : #1b1b2e;
     border-width: 0.0556rem;
     border-color: #32324e;
+    opacity: root.enabled ? 1.0 : 0.35;
     ta := TouchArea {
+        enabled: root.enabled;
         clicked => {
             root.clicked();
         }
@@ -36,6 +39,9 @@ export component NowPlaying inherits VerticalLayout {
     in property <string> elapsed;
     in property <string> remaining;
     in-out property <float> volume;
+    // False when transport commands cannot reach the sender (AirPlay 2
+    // senders run no DACP server) - buttons dim and go inert.
+    in property <bool> controls-enabled: true;
 
     callback toggle-play();
     callback next();
@@ -121,6 +127,7 @@ export component NowPlaying inherits VerticalLayout {
         spacing: 1.5556rem * root.fit;
         TransportButton {
             fit: root.fit;
+            enabled: root.controls-enabled;
             clicked => {
                 root.previous();
             }
@@ -135,6 +142,7 @@ export component NowPlaying inherits VerticalLayout {
         TransportButton {
             primary: true;
             fit: root.fit;
+            enabled: root.controls-enabled;
             clicked => {
                 root.toggle-play();
             }
@@ -155,6 +163,7 @@ export component NowPlaying inherits VerticalLayout {
         }
         TransportButton {
             fit: root.fit;
+            enabled: root.controls-enabled;
             clicked => {
                 root.next();
             }
@@ -166,6 +175,13 @@ export component NowPlaying inherits VerticalLayout {
                 icon-color: Theme.fg;
             }
         }
+    }
+
+    if !root.controls-enabled: Text {
+        text: "Control playback from the sending device";
+        color: Theme.dimmer;
+        font-size: 0.72rem;
+        horizontal-alignment: center;
     }
 
     HorizontalLayout {

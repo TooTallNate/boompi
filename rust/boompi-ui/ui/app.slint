@@ -45,6 +45,7 @@ export component AppWindow inherits Window {
     in property <string> track-artist;
     in property <string> track-album;
     in property <bool> playing: false;
+    in property <bool> controls-enabled: true;
     in property <float> progress: 0.0;
     in property <string> elapsed: "--:--";
     in property <string> remaining: "--:--";
@@ -197,6 +198,7 @@ export component AppWindow inherits Window {
         artwork: root.artwork;
         has-artwork: root.has-artwork;
         playing: root.playing;
+        controls-enabled: root.controls-enabled;
         progress: root.progress;
         elapsed: root.elapsed;
         remaining: root.remaining;

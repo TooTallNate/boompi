@@ -60,6 +60,7 @@ async fn track_loop(app: SharedApp) {
         s.source = SourceInfo {
             active: Some(SourceKind::Bluetooth),
             device_name: Some("Simulated Phone".into()),
+            controllable: true,
         };
         let source = s.source.clone();
         drop(s);

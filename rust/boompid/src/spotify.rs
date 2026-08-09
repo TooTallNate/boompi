@@ -265,6 +265,7 @@ async fn claim_source(app: &SharedApp, user: Option<String>) {
     let source = SourceInfo {
         active: Some(SourceKind::Spotify),
         device_name: Some(device_name),
+        controllable: true,
     };
     if s.source != source {
         s.source = source.clone();
