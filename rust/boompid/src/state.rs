@@ -160,6 +160,7 @@ impl App {
             ui_scale: cfg.settings.ui_scale,
             update_channel: cfg.settings.update_channel,
             airplay_classic: cfg.settings.airplay_classic,
+            clock_24h: cfg.settings.clock_24h,
             screensaver: cfg.settings.screensaver,
             screensaver_min: cfg.settings.screensaver_min,
         };
@@ -298,6 +299,7 @@ impl App {
             cfg.settings.ui_scale = s.settings.ui_scale;
             cfg.settings.update_channel = s.settings.update_channel;
             cfg.settings.airplay_classic = s.settings.airplay_classic;
+            cfg.settings.clock_24h = s.settings.clock_24h;
             cfg.settings.screensaver = s.settings.screensaver;
             cfg.settings.screensaver_min = s.settings.screensaver_min;
             cfg.settings.emoji_font = s.emoji_font.clone();
@@ -618,6 +620,9 @@ impl App {
                             // the shairport conf embeds the mode.
                             airplay_model_changed = true;
                         }
+                    }
+                    if let Some(v) = patch.clock_24h {
+                        s.settings.clock_24h = v;
                     }
                     if let Some(kind) = patch.screensaver {
                         s.settings.screensaver = kind;

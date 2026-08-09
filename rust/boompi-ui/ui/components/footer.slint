@@ -9,6 +9,7 @@ export component Footer inherits Rectangle {
     in property <string> clock-day;
     in property <string> clock-h;
     in property <string> clock-m;
+    in property <string> clock-ampm;
     in property <bool> colon-on: true;
     in property <string> device-name;
     /// "bluetooth" | "spotify" | "airplay" | "" (no active source).
@@ -50,6 +51,11 @@ export component Footer inherits Rectangle {
             Text {
                 text: root.clock-m;
                 color: Theme.dim;
+                vertical-alignment: center;
+            }
+            if root.clock-ampm != "": Text {
+                text: " " + root.clock-ampm;
+                color: Theme.dimmer;
                 vertical-alignment: center;
             }
         }

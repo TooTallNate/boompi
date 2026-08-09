@@ -102,6 +102,8 @@ export component AppWindow inherits Window {
     in property <string> clock-day: "";
     in property <string> clock-h: "";
     in property <string> clock-m: "";
+    in property <string> clock-ampm: "";
+    in property <bool> clock-24h: false;
     in property <bool> colon-on: true;
 
     // --- navigation ---
@@ -118,6 +120,7 @@ export component AppWindow inherits Window {
     callback emoji-font-tapped(string, string);
     callback airplay-model-tapped(string);
     callback saver-kind-tapped(string);
+    callback clock-24h-toggled(bool);
     callback update-check();
     callback update-apply();
     callback update-channel-toggled(bool);
@@ -252,6 +255,10 @@ export component AppWindow inherits Window {
         saver-kind-tapped(value) => {
             root.saver-kind-tapped(value);
         }
+        clock-24h: root.clock-24h;
+        clock-24h-toggled(v) => {
+            root.clock-24h-toggled(v);
+        }
         update-version: root.update-version;
         update-status: root.update-status;
         update-detail: root.update-detail;
@@ -373,6 +380,7 @@ export component AppWindow inherits Window {
         clock-day: root.clock-day;
         clock-h: root.clock-h;
         clock-m: root.clock-m;
+        clock-ampm: root.clock-ampm;
         colon-on: root.colon-on;
         device-name: root.device-name;
         source-kind: root.source-kind;
@@ -398,6 +406,7 @@ export component AppWindow inherits Window {
         tick: root.saver-tick;
         clock-h: root.clock-h;
         clock-m: root.clock-m;
+        clock-ampm: root.clock-ampm;
         clock-day: root.clock-day;
         artwork: root.artwork;
         has-artwork: root.has-artwork;

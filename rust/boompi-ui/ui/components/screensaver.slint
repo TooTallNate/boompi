@@ -36,6 +36,7 @@ export component Screensaver inherits Rectangle {
     in property <float> tick; // seconds, ~8 fps while visible
     in property <string> clock-h;
     in property <string> clock-m;
+    in property <string> clock-ampm;
     in property <string> clock-day;
     in property <image> artwork;
     in property <bool> has-artwork;
@@ -63,12 +64,21 @@ export component Screensaver inherits Rectangle {
         width: self.preferred-width;
         height: self.preferred-height;
         spacing: 0.2rem;
-        Text {
-            text: root.clock-h + ":" + root.clock-m;
-            color: #9999aa;
-            font-size: root.height * 0.24;
-            font-weight: 300;
-            horizontal-alignment: center;
+        HorizontalLayout {
+            alignment: center;
+            spacing: 0.4rem;
+            Text {
+                text: root.clock-h + ":" + root.clock-m;
+                color: #9999aa;
+                font-size: root.height * 0.24;
+                font-weight: 300;
+            }
+            if root.clock-ampm != "": Text {
+                text: root.clock-ampm;
+                color: #555566;
+                font-size: root.height * 0.07;
+                vertical-alignment: bottom;
+            }
         }
         Text {
             text: root.clock-day;
@@ -102,7 +112,8 @@ export component Screensaver inherits Rectangle {
     if root.kind == "art" && !root.has-artwork: Text {
         x: (root.width - self.width) * (0.5 + 0.38 * root.drift-x);
         y: (root.height - self.height) * (0.5 + 0.38 * root.drift-y);
-        text: root.clock-h + ":" + root.clock-m;
+        text: root.clock-ampm == "" ? root.clock-h + ":" + root.clock-m
+            : root.clock-h + ":" + root.clock-m + " " + root.clock-ampm;
         color: #9999aa;
         font-size: root.height * 0.2;
         font-weight: 300;

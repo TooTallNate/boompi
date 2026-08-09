@@ -269,6 +269,10 @@ pub struct Settings {
     /// speaker's own transport buttons only work on classic.
     #[serde(default)]
     pub airplay_classic: bool,
+    /// 24-hour clock (footer + screensaver); 12-hour with AM/PM when
+    /// false.
+    #[serde(default)]
+    pub clock_24h: bool,
     /// Idle screensaver style (shown after `screensaver_min` minutes
     /// without touches while nothing is playing).
     #[serde(default)]
@@ -288,6 +292,7 @@ impl Default for Settings {
             ui_scale: default_ui_scale(),
             update_channel: UpdateChannel::default(),
             airplay_classic: false,
+            clock_24h: false,
             screensaver: ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }
@@ -312,6 +317,8 @@ pub struct SettingsPatch {
     pub update_channel: Option<UpdateChannel>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airplay_classic: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clock_24h: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

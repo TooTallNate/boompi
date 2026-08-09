@@ -139,6 +139,9 @@ pub struct SettingsConfig {
     /// transport controls, no AirPlay 2 / multi-room).
     #[serde(default)]
     pub airplay_classic: bool,
+    /// 24-hour clock on the panel (12-hour with AM/PM when false).
+    #[serde(default)]
+    pub clock_24h: bool,
     /// Idle screensaver style ("off" / "clock" / "matrix" / "art").
     #[serde(default)]
     pub screensaver: boompi_proto::ScreensaverKind,
@@ -169,6 +172,7 @@ impl Default for SettingsConfig {
             emoji_font: default_emoji_font(),
             update_channel: boompi_proto::UpdateChannel::default(),
             airplay_classic: false,
+            clock_24h: false,
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }

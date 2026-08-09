@@ -354,6 +354,15 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_clock_24h_toggled(move |v| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                clock_24h: Some(v),
+                ..SettingsPatch::default()
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_update_check(move || {
             let _ = tx.send(ClientMessage::Update {
                 action: boompi_proto::UpdateAction::Check,
@@ -478,7 +487,13 @@ fn main() -> anyhow::Result<()> {
                 if let Some(ui) = weak.upgrade() {
                     let now = Local::now();
                     ui.set_clock_day(now.format("%a").to_string().into());
-                    ui.set_clock_h(now.format("%-I").to_string().into());
+                    if ui.get_clock_24h() {
+                        ui.set_clock_h(now.format("%H").to_string().into());
+                        ui.set_clock_ampm("".into());
+                    } else {
+                        ui.set_clock_h(now.format("%-I").to_string().into());
+                        ui.set_clock_ampm(now.format("%p").to_string().into());
+                    }
                     ui.set_clock_m(now.format("%M").to_string().into());
                     ui.set_colon_on(chrono::Timelike::nanosecond(&now) < 500_000_000);
                 }

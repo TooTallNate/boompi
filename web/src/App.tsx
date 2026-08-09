@@ -80,7 +80,9 @@ export default function App() {
         )}
 
         <WifiSection />
-        <ClockSection />
+        {settings && (
+          <ClockSection settings={settings} onSaved={applySettings} />
+        )}
         {state?.updates && settings && (
           <UpdateSection
             updates={state.updates}
@@ -277,7 +279,8 @@ function WifiSection() {
   );
 }
 
-function ClockSection() {
+function ClockSection({ settings, onSaved }: SectionProps) {
+  const { status: fmtStatus, save } = useSave(onSaved);
   const [clock, setClock] = useState<ClockStatus | null>(null);
   const [offset, setOffset] = useState(0); // device clock − browser clock
   const [now, setNow] = useState(Date.now());
@@ -315,6 +318,21 @@ function ClockSection() {
 
   return (
     <Section title="Clock & timezone">
+      <div className="mb-3 flex items-center justify-between gap-3 border-b border-line pb-2.5">
+        <div className="min-w-0">
+          <div>24-hour clock</div>
+          <div className="text-[12px] text-dim">
+            Footer and screensaver time format (AM/PM when off)
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusText status={fmtStatus} />
+          <Toggle
+            checked={settings.clock_24h}
+            onChange={(v) => save({ clock_24h: v })}
+          />
+        </div>
+      </div>
       {!clock ? (
         <p className="text-sm text-dim">{error ?? "loading…"}</p>
       ) : (

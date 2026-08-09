@@ -70,6 +70,8 @@ export component SettingsPanel inherits Rectangle {
     // Idle screensaver kind ("off"/"clock"/"matrix"/"art").
     in property <string> saver-kind;
     callback saver-kind-tapped(string);
+    in-out property <bool> clock-24h;
+    callback clock-24h-toggled(bool);
     // Software update flow (built in net.rs from UpdateState).
     // status: "idle" | "checking" | "available" | "applying" | "error"
     in property <string> update-version;
@@ -359,6 +361,17 @@ export component SettingsPanel inherits Rectangle {
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                Row {
+                    label: "24-hour clock";
+                    sublabel: "Footer and screensaver time format";
+                    Switch {
+                        checked <=> root.clock-24h;
+                        toggled => {
+                            root.clock-24h-toggled(self.checked);
                         }
                     }
                 }
