@@ -1,0 +1,6 @@
+[Unit]
+Description=Detect a wedged VC4 GPU (reset storm) and hard-reboot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-gpu-watchdog

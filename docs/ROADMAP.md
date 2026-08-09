@@ -64,9 +64,12 @@ contributes to "the quintessential Raspberry Pi boombox".
 - **Web now-playing remote.** The ws protocol already carries
   track/transport/volume; a now-playing page in the existing web UI
   turns every phone in the house into a remote for nearly free.
-- **Idle / ambient mode.** Auto-dim + big clock after N idle minutes
-  (panel longevity), wake on touch or audio. The visualizer as an
-  ambient screensaver variant.
+- **Idle / ambient mode + screensavers.** Auto-dim + screen-off after
+  N idle minutes, wake on touch or audio - promoted from nice-to-have
+  after visible burn-in appeared on both boxes' panels. Screensaver
+  options for when the display stays on: big clock, ambient
+  visualizer, drifting album art, and Matrix digital rain (the
+  important one).
 - **Physical controls.** GPIO rotary encoder for volume, play/pause
   button, config-mapped. Tactility makes it hardware, not a computer
   in a box. (Pairs naturally with the amp-enable GPIO work: both grow
@@ -76,6 +79,23 @@ contributes to "the quintessential Raspberry Pi boombox".
 - **Home Assistant / MQTT discovery.** Play state, volume, source as
   entities; the HA crowd overlaps heavily with the audience that
   would build one of these.
+
+- **AirPlay classic/AirPlay 2 receiver toggle.** Modern iOS runs no
+  DACP server for AirPlay 2 sessions, so speaker-side transport
+  controls cannot work (shairport-sync: "remote control facilities
+  are not implemented" for AP2; see issue #2186 - the AP2 control
+  channel is encrypted and un-reverse-engineered). Classic AirPlay
+  still carries DACP. A settings toggle choosing the advertised mode
+  would trade multi-speaker/AP2 senders for working panel controls;
+  needs investigation into how a 4.x AP2 build can be pinned to
+  classic. Also re-evaluate when Buildroot ships shairport-sync 5.x
+  (upstream restored classic remote control there).
+- **VC4 GPU hang hardening.** The Pi 3's GPU can wedge under
+  sustained GL load (dma-fence never signals, "[drm] Resetting GPU"
+  storm, UI unkillable in D state, choppy audio; orderly reboots hang
+  in stop jobs). A reset-storm watchdog now hard-reboots out of it;
+  reduce the trigger rate too: evaluate a newer 6.6.y kernel pin for
+  vc4 fixes, and lighter GPU load when idle (ties into ambient mode).
 
 ## Tier 3 - keeper of the fleet
 

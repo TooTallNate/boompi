@@ -1,0 +1,37 @@
+#!/bin/sh
+# Detect a wedged VC4/V3D GPU and hard-reboot out of it.
+#
+# Failure signature (bench, Pi 3 after ~47 min of playback): the GPU
+# hangs, the DRM commit worker blocks forever on a dma-fence, and the
+# kernel's hangcheck loops "[drm] Resetting GPU." roughly once a
+# second without ever recovering. The UI freezes (its process ends up
+# in unkillable D state), the reset storm starves USB audio into
+# choppiness, and an orderly `systemctl reboot` wedges in stop jobs -
+# on a sealed boombox the only way out was a power cycle.
+#
+# Healthy behavior, for contrast: isolated single resets minutes
+# apart, which recover on their own. So the detector is a RATE: eight
+# or more resets between two 30-second samples means the storm, and
+# nothing else looks like it.
+#
+# Recovery is `reboot -f` (sync + reboot(2), skipping service stops):
+# the stop jobs are exactly what hangs against an unkillable D-state
+# task, while the kernel itself reboots fine. A/B state is safe: a
+# marker-less reboot lands on the committed slot.
+set -eu
+
+STATE=/run/boompi-gpu-watchdog.count
+
+CUR=$(dmesg | grep -c 'Resetting GPU' || true)
+PREV=$(cat "$STATE" 2>/dev/null || echo "$CUR")
+echo "$CUR" > "$STATE"
+
+DELTA=$((CUR - PREV))
+[ "$DELTA" -ge 8 ] || exit 0
+
+UI_PID=$(systemctl show -p MainPID --value boompi-ui 2>/dev/null || echo 0)
+UI_STAT=$(awk '{print $3}' "/proc/$UI_PID/stat" 2>/dev/null || echo "?")
+logger -t boompi-gpu-watchdog \
+    "GPU reset storm: $DELTA resets in 30s (ui state $UI_STAT); hard reboot"
+sync
+reboot -f
