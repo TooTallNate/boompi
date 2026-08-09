@@ -12,6 +12,22 @@ use tokio::sync::{broadcast, Notify, RwLock};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Four random digits for the AirPlay pairing code, from the kernel
+/// RNG (clock-derived fallback keeps desktop builds working).
+fn generate_airplay_pin() -> String {
+    use std::io::Read;
+    let mut b = [0u8; 4];
+    let n = std::fs::File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut b).map(|()| u32::from_le_bytes(b)))
+        .unwrap_or_else(|_| {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.subsec_nanos())
+                .unwrap_or(1234)
+        });
+    format!("{:04}", n % 10000)
+}
+
 /// The OS image version stamp: "vX.Y.Z" for release builds,
 /// "vX.Y.Z-<sha>" for untagged CI builds (written by the image
 /// workflow to /etc/boompi-version), "dev" when absent (local builds,
@@ -157,6 +173,7 @@ impl App {
             theme: cfg.settings.theme,
             online_art_fallback: cfg.settings.online_art_fallback,
             airplay_model: cfg.settings.airplay_model.clone(),
+            airplay_pin: cfg.settings.airplay_pin.clone(),
             ui_scale: cfg.settings.ui_scale,
             update_channel: cfg.settings.update_channel,
         };
@@ -292,6 +309,7 @@ impl App {
             cfg.settings.theme = s.settings.theme;
             cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
+            cfg.settings.airplay_pin = s.settings.airplay_pin.clone();
             cfg.settings.ui_scale = s.settings.ui_scale;
             cfg.settings.update_channel = s.settings.update_channel;
             cfg.settings.emoji_font = s.emoji_font.clone();
@@ -587,6 +605,7 @@ impl App {
             }
             ClientMessage::SetSettings(patch) => {
                 let mut airplay_model_changed = false;
+                let mut airplay_pin_changed = false;
                 #[allow(unused_mut, unused_variables)]
                 let mut channel_changed = false;
                 let settings = {
@@ -601,6 +620,19 @@ impl App {
                         let model = model.trim().to_string();
                         airplay_model_changed = model != s.settings.airplay_model;
                         s.settings.airplay_model = model;
+                    }
+                    if let Some(enabled) = patch.airplay_pin_enabled {
+                        if enabled != s.settings.airplay_pin.is_some() {
+                            // The code is generated here, never chosen -
+                            // it only needs to be readable off the
+                            // panel. NB: changing the code does not
+                            // revoke devices that already paired (the
+                            // receiver identity they verify against is
+                            // derived from the device id, not the pin);
+                            // it only gates first-time pair-setup.
+                            s.settings.airplay_pin = enabled.then(generate_airplay_pin);
+                            airplay_pin_changed = true;
+                        }
                     }
                     if let Some(scale) = patch.ui_scale {
                         s.settings.ui_scale = scale.clamp(1.0, 2.5);
@@ -623,10 +655,11 @@ impl App {
                     None => false,
                 };
                 self.persist_config().await;
-                if renamed || airplay_model_changed {
-                    // Sources re-announce under the new name/model (BT
-                    // alias is updated in place; AirPlay/Spotify restart
-                    // discovery - the AirPlay conf embeds the model).
+                if renamed || airplay_model_changed || airplay_pin_changed {
+                    // Sources re-announce under the new name/model/pin
+                    // (BT alias is updated in place; AirPlay/Spotify
+                    // restart discovery - the AirPlay conf embeds the
+                    // model and pairing code).
                     self.cfg_generation.send_modify(|g| *g += 1);
                 }
                 // Switching channels re-checks immediately (also pushes

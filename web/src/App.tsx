@@ -922,12 +922,12 @@ function ArtSection({ settings, onSaved }: SectionProps) {
 
 // Values are mDNS `model=` strings. Senders resolve Apple model strings
 // to product icons (only the HomePods and Apple TV have any; AirPort,
-// Mac, iPhone and Vision models all draw the generic glyph). There are
-// no non-Apple presets: the third-party icon feature bits are
-// booby-trapped on current iOS - bit 26 (bookshelf icon) doubles as
-// Authentication_4 and makes senders abort the handshake demanding
-// MFi auth, bit 51 draws the icon but demands HomeKit PIN pairing we
-// don't implement.
+// Mac, iPhone and Vision models all draw the generic glyph). The
+// third-party icon feature bits are auth demands in disguise: bit 26
+// (bookshelf) means MFi hardware auth - senders abort the handshake -
+// and bit 51 (also bookshelf) means HomeKit PIN pairing. So Bookshelf
+// is only offered when PIN mode is on (bit 51 + a real code); there
+// is no MFi bit ever, and no TV preset (its combo includes bit 26).
 const AIRPLAY_MODELS: { label: string; value: string }[] = [
   { label: "Generic speaker", value: "" },
   { label: "HomePod mini", value: "AudioAccessory5,1" },
@@ -947,6 +947,15 @@ function AirplayModelIcon({ model }: { model: string }) {
   } as const;
   let art: ReactNode;
   switch (model) {
+    case "WiiM Amp": // bookshelf: squarish cabinet, tweeter dot, woofer ring
+      art = (
+        <>
+          <rect x="6" y="3.5" width="12" height="17" rx="2.5" {...stroke} />
+          <circle cx="12" cy="8" r="0.9" fill="currentColor" stroke="none" />
+          <circle cx="12" cy="14.5" r="2.9" {...stroke} />
+        </>
+      );
+      break;
     case "AudioAccessory5,1": // HomePod mini: ball, flattened bottom
       art = (
         <path
@@ -1003,7 +1012,14 @@ function AirplayModelIcon({ model }: { model: string }) {
 
 function AirplayIconSection({ settings, onSaved }: SectionProps) {
   const { status, save } = useSave(onSaved);
-  const preset = AIRPLAY_MODELS.some((m) => m.value === settings.airplay_model);
+  const pinOn = settings.airplay_pin != null;
+  // The bookshelf icon needs the SystemPairing feature bit, which
+  // makes phones demand the pairing code - so it's only offered while
+  // PIN mode is on.
+  const models = pinOn
+    ? [...AIRPLAY_MODELS, { label: "Bookshelf speaker", value: "WiiM Amp" }]
+    : AIRPLAY_MODELS;
+  const preset = models.some((m) => m.value === settings.airplay_model);
 
   return (
     <Section title="AirPlay device icon">
@@ -1013,7 +1029,7 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
         wait a minute) after changing this.
       </p>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-        {AIRPLAY_MODELS.map((m) => {
+        {models.map((m) => {
           const selected = settings.airplay_model === m.value;
           return (
             <button
@@ -1034,6 +1050,27 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
       {!preset && (
         <p className="mt-2 text-[13px] text-dim">
           Custom model: <span className="font-mono">{settings.airplay_model}</span>
+        </p>
+      )}
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-line pt-2.5 pb-1.5">
+        <div className="min-w-0">
+          <div>Require pairing code</div>
+          <div className="text-[12px] text-dim">
+            Phones must enter a code (shown on the speaker's screen) once
+            before they can stream. Unlocks the bookshelf icon.
+          </div>
+        </div>
+        <Toggle
+          checked={pinOn}
+          onChange={(v) => save({ airplay_pin_enabled: v })}
+        />
+      </div>
+      {pinOn && (
+        <p className="mt-1 text-sm">
+          Pairing code:{" "}
+          <span className="font-mono text-[16px] font-semibold tracking-widest">
+            {settings.airplay_pin}
+          </span>
         </p>
       )}
       <StatusText status={status} />

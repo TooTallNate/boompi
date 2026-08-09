@@ -166,10 +166,12 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let emoji = state.emoji_fonts.clone();
             let updates = state.updates.clone();
             let edge = state.settings.update_channel == boompi_proto::UpdateChannel::Edge;
+            let airplay_pin = state.settings.airplay_pin.clone().unwrap_or_default();
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 apply_emoji_fonts(&ui, &emoji);
                 apply_update(&ui, &updates);
                 ui.set_update_channel_edge(edge);
+                ui.set_airplay_pin(airplay_pin.into());
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
@@ -210,6 +212,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 // OOBE) must land through this broadcast too.
                 ui.set_speaker_name(settings.name.into());
                 ui.set_online_art(settings.online_art_fallback);
+                ui.set_airplay_pin(settings.airplay_pin.unwrap_or_default().into());
                 ui.set_update_channel_edge(
                     settings.update_channel == boompi_proto::UpdateChannel::Edge,
                 );

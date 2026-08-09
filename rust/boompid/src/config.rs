@@ -123,6 +123,10 @@ pub struct SettingsConfig {
     pub theme: boompi_proto::Theme,
     /// Advertised AirPlay device model ("" = shairport default).
     pub airplay_model: String,
+    /// AirPlay pairing code (None = no code required). Generated when
+    /// the setting is enabled; persisted so it survives reboots.
+    #[serde(default)]
+    pub airplay_pin: Option<String>,
     /// Panel UI scale (1.0 = design size); per-board seeds may ship
     /// larger defaults for small high-DPI panels.
     #[serde(default = "default_ui_scale")]
@@ -151,6 +155,7 @@ impl Default for SettingsConfig {
             online_art_fallback: false,
             theme: boompi_proto::Theme::default(),
             airplay_model: String::new(),
+            airplay_pin: None,
             ui_scale: default_ui_scale(),
             emoji_font: default_emoji_font(),
             update_channel: boompi_proto::UpdateChannel::default(),
