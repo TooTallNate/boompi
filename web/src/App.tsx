@@ -1159,7 +1159,7 @@ function HomeAssistantSection({ settings, onSaved }: SectionProps) {
           <span className="text-sm">Broker</span>
           <input
             className="w-56 rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
-            placeholder="homeassistant.local:1883"
+            placeholder="e.g. 192.168.1.89:1883"
             value={broker}
             onChange={(e) => setBroker(e.target.value)}
           />
