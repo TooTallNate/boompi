@@ -8,27 +8,55 @@
 
 import { Theme } from "theme.slint";
 
-// One column of Matrix rain: a vertical glyph string falling at a
-// per-column speed, wrapping around the screen. Glyphs are static per
-// column (the motion sells the effect at a fraction of the work).
-component MatrixColumn inherits Text {
+// One column of Matrix rain, drawn with Rezmason's film-traced glyph
+// font (rust/boompi-ui/ui/fonts/Matrix-Code.ttf, MIT - see
+// github.com/Rezmason/matrix): mirrored katakana + digits + symbols
+// at their real codepoints, so plain Text renders the movie glyphs.
+// A falling string wraps around the screen; the whole column swaps
+// its glyphs every ~1.5s (staggered per column) which reads as the
+// film's in-place glyph mutation, and a brighter leader glyph rides
+// the falling edge.
+component MatrixColumn inherits Rectangle {
     in property <int> index;
     in property <float> tick;
     in property <length> screen-height;
     property <float> speed: 30 + Math.mod(self.index * 37, 55); // px/s
-    property <length> len: self.font-size * 16 * 1.15;
+    property <length> len: 22px * 20 * 1.15;
+    property <length> head-y: (Math.mod(self.tick * self.speed + self.index * 173, (self.screen-height + self.len) / 1px) * 1px);
+    property <int> mutation: Math.floor(self.tick / 1.5) + self.index * 13;
     x: 6px + self.index * 34px;
-    y: (Math.mod(self.tick * self.speed + self.index * 173, (self.screen-height + self.len) / 1px) * 1px) - self.len;
-    color: #00c355;
-    font-size: 22px;
-    horizontal-alignment: left;
-    // Glyphs restricted to the embedded Geist font's coverage (the
-    // appliance ships no CJK font, so movie-accurate katakana would
-    // rain tofu).
-    text: Math.mod(self.index, 4) == 0 ? "X\n7\nK\n$\n3\nZ\nR\nA\n%\n0\nT\nM\nc\n1\nJ\nS"
-        : Math.mod(self.index, 4) == 1 ? "0\nS\nW\n9\nE\n#\n4\nX\nn\nN\n8\nZ\nR\n2\n5\nT"
-        : Math.mod(self.index, 4) == 2 ? "V\n2\nO\n&\n6\nC\nH\ny\n1\nK\nB\n0\nE\nL\n9\nI"
-        : "7\nM\nG\n3\nN\n?\n0\nW\nF\n5\nU\nR\n2\nD\nO\n8";
+    width: 30px;
+    height: 100%;
+
+    Text {
+        y: root.head-y - root.len;
+        color: #00c355;
+        font-family: "Matrix-Code";
+        font-size: 22px;
+        horizontal-alignment: left;
+        text: Math.mod(root.mutation, 4) == 0 ? "モ\nエ\nヤ\nキ\nオ\nカ\n7\nケ\nサ\nス\nz\n1\n5\n2\nヨ\nタ\nワ\n4\nネ\nヌ"
+            : Math.mod(root.mutation, 4) == 1 ? "ナ\n9\n8\nヒ\n0\nホ\nア\n3\nウ\nセ\nミ\nラ\nリ\nツ\nテ\nニ\nハ\nソ\nコ\nシ"
+            : Math.mod(root.mutation, 4) == 2 ? "マ\nム\nメ\n<\nヤ\n8\nエ\nー\n5\nオ\nネ\n0\n╌\nキ\nサ\n2\nモ\nテ\n9\nリ"
+            : "ツ\n4\nホ\nz\nミ\n>\nヌ\n1\nカ\nウ\n7\nア\nタ\n*\nヒ\n5\nマ\nソ\n+\nメ";
+    }
+
+    // The bright leader at the falling edge, mutating fast like the
+    // film's head glyphs.
+    Text {
+        y: root.head-y - 26px;
+        color: #d4ffd8;
+        font-family: "Matrix-Code";
+        font-size: 22px;
+        horizontal-alignment: left;
+        text: Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 0 ? "ハ"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 1 ? "3"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 2 ? "セ"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 3 ? "ワ"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 4 ? "ネ"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 5 ? "0"
+            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 6 ? "リ"
+            : "タ";
+    }
 }
 
 export component Screensaver inherits Rectangle {
