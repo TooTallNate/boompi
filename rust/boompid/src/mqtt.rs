@@ -549,11 +549,21 @@ async fn publish_server_message(
             } else {
                 format!("https://github.com/TooTallNate/boompi/releases/tag/{latest}")
             };
+            // HA compares versions with semver, where "-sha" means
+            // PRERELEASE - an edge build would rank OLDER than its
+            // base release and HA would show "Up-to-date" despite the
+            // differing versions (bench). Render suffixed stamps in a
+            // non-semver shape so HA falls back to plain string
+            // comparison; clean stable tags keep real semver ordering.
+            let ha_version = |v: &str| match v.split_once('-') {
+                Some((b, sha)) => format!("{b} ({sha})"),
+                None => v.to_string(),
+            };
             publish(
                 format!("{base}/update"),
                 json!({
-                    "installed_version": u.version,
-                    "latest_version": latest,
+                    "installed_version": ha_version(&u.version),
+                    "latest_version": ha_version(&latest),
                     "in_progress": u.applying.is_some(),
                     "update_percentage": u.progress.map(|p| (p * 100.0).round() as i64),
                     "release_url": release_url,
