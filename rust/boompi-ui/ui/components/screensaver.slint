@@ -12,49 +12,72 @@ import { Theme } from "theme.slint";
 // font (rust/boompi-ui/ui/fonts/Matrix-Code.ttf, MIT - see
 // github.com/Rezmason/matrix): mirrored katakana + digits + symbols
 // at their real codepoints, so plain Text renders the movie glyphs.
-// A falling string wraps around the screen; the whole column swaps
-// its glyphs every ~1.5s (staggered per column) which reads as the
-// film's in-place glyph mutation, and a brighter leader glyph rides
-// the falling edge.
+//
+// Variety without per-glyph rendering (the GPU budget is 8 fps and a
+// few dozen Text elements): each column is TWO stacked half-strings
+// selected independently from ten variants - 100 combinations per
+// column, reselected on different cadences per half - plus scrambled
+// selectors (index² mixing, so neighbors and every-Nth columns don't
+// rhyme), one-in-five short trails, and a little x jitter. A bright
+// leader glyph rides the falling edge, mutating fast like the film's.
+component HalfString inherits Text {
+    in property <int> variant;
+    color: #00c355;
+    font-family: "Matrix-Code";
+    font-size: 22px;
+    horizontal-alignment: left;
+    text: self.variant == 0 ? "モ\nエ\nヤ\nキ\nオ\nカ\n7\nケ\nサ\nス"
+        : self.variant == 1 ? "z\n1\n5\n2\nヨ\nタ\nワ\n4\nネ\nヌ"
+        : self.variant == 2 ? "ナ\n9\n8\nヒ\n0\nホ\nア\n3\nウ\nセ"
+        : self.variant == 3 ? "ミ\nラ\nリ\nツ\nテ\nニ\nハ\nソ\nコ\nシ"
+        : self.variant == 4 ? "マ\nム\nメ\n<\nヤ\n8\nエ\nー\n5\nオ"
+        : self.variant == 5 ? "ネ\n0\n╌\nキ\nサ\n2\nモ\nテ\n9\nリ"
+        : self.variant == 6 ? "ツ\n4\nホ\nz\nミ\n>\nヌ\n1\nカ\nウ"
+        : self.variant == 7 ? "7\nア\nタ\n*\nヒ\n5\nマ\nソ\n+\nメ"
+        : self.variant == 8 ? "ス\nヨ\n:\n3\nラ\nコ\n0\nセ\nエ\n9"
+        : "|\nニ\n8\nワ\nシ\n1\nテ\nム\n2\nナ";
+}
+
 component MatrixColumn inherits Rectangle {
     in property <int> index;
     in property <float> tick;
     in property <length> screen-height;
-    property <float> speed: 30 + Math.mod(self.index * 37, 55); // px/s
-    property <length> len: 22px * 20 * 1.15;
-    property <length> head-y: (Math.mod(self.tick * self.speed + self.index * 173, (self.screen-height + self.len) / 1px) * 1px);
-    property <int> mutation: Math.floor(self.tick / 1.5) + self.index * 13;
-    x: 6px + self.index * 34px;
+    property <float> speed: 30 + Math.mod(self.index * self.index * 7 + self.index * 37, 61); // px/s
+    property <bool> long-trail: Math.mod(self.index * 5 + 3, 5) != 0;
+    property <length> len: 22px * (self.long-trail ? 20 : 10) * 1.15;
+    property <length> half: 22px * 10 * 1.15;
+    property <length> head-y: (Math.mod(self.tick * self.speed + Math.mod(self.index * self.index * 53 + self.index * 173, 700), (self.screen-height + self.len) / 1px) * 1px);
+    // Independent mutation clocks per half; index² mixing keeps
+    // every-Nth-column patterns from lining up.
+    property <int> mut-a: Math.floor(self.tick / 1.3) * 5 + self.index * 7 + Math.mod(self.index * self.index, 13);
+    property <int> mut-b: Math.floor(self.tick / 1.9) * 3 + self.index * 11 + Math.mod(self.index * self.index * 3, 17);
+    x: 6px + self.index * 34px + (Math.mod(self.index * 17, 7) - 3) * 1px;
     width: 30px;
     height: 100%;
 
-    Text {
+    if root.long-trail: HalfString {
         y: root.head-y - root.len;
-        color: #00c355;
-        font-family: "Matrix-Code";
-        font-size: 22px;
-        horizontal-alignment: left;
-        text: Math.mod(root.mutation, 4) == 0 ? "モ\nエ\nヤ\nキ\nオ\nカ\n7\nケ\nサ\nス\nz\n1\n5\n2\nヨ\nタ\nワ\n4\nネ\nヌ"
-            : Math.mod(root.mutation, 4) == 1 ? "ナ\n9\n8\nヒ\n0\nホ\nア\n3\nウ\nセ\nミ\nラ\nリ\nツ\nテ\nニ\nハ\nソ\nコ\nシ"
-            : Math.mod(root.mutation, 4) == 2 ? "マ\nム\nメ\n<\nヤ\n8\nエ\nー\n5\nオ\nネ\n0\n╌\nキ\nサ\n2\nモ\nテ\n9\nリ"
-            : "ツ\n4\nホ\nz\nミ\n>\nヌ\n1\nカ\nウ\n7\nア\nタ\n*\nヒ\n5\nマ\nソ\n+\nメ";
+        variant: Math.mod(root.mut-a, 10);
+    }
+    HalfString {
+        y: root.head-y - root.half;
+        variant: Math.mod(root.mut-b, 10);
     }
 
-    // The bright leader at the falling edge, mutating fast like the
-    // film's head glyphs.
+    // The bright leader at the falling edge.
     Text {
         y: root.head-y - 26px;
         color: #d4ffd8;
         font-family: "Matrix-Code";
         font-size: 22px;
         horizontal-alignment: left;
-        text: Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 0 ? "ハ"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 1 ? "3"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 2 ? "セ"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 3 ? "ワ"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 4 ? "ネ"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 5 ? "0"
-            : Math.mod(root.mutation + Math.floor(root.tick * 4), 8) == 6 ? "リ"
+        text: Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 0 ? "ハ"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 1 ? "3"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 2 ? "セ"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 3 ? "ワ"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 4 ? "ネ"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 5 ? "0"
+            : Math.mod(root.mut-a + Math.floor(root.tick * 4), 8) == 6 ? "リ"
             : "タ";
     }
 }

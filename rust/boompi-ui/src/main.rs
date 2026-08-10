@@ -464,7 +464,10 @@ fn main() -> anyhow::Result<()> {
     {
         let weak = ui.as_weak();
         let la = last_activity.clone();
-        let was_playing = std::rc::Rc::new(std::cell::Cell::new(false));
+        // Starts true: until the first real tick settles it, a stale
+        // false->true "edge" right after connect must not dismiss a
+        // fresh preview.
+        let was_playing = std::rc::Rc::new(std::cell::Cell::new(true));
         saver_timer.start(
             slint::TimerMode::Repeated,
             Duration::from_secs(5),
