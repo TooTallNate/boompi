@@ -25,12 +25,29 @@ use serde_json::json;
 
 use crate::state::SharedApp;
 
-/// Stable per-box identifier (hostname, e.g. "boompi-57fe").
+/// Stable per-box identifier: "boompi-" + the last four hex digits of
+/// the SoC serial - computed directly rather than read from the
+/// hostname, whose file can lag the serial-derived rename on a fresh
+/// A/B slot (a boot where that happened re-registered every HA entity
+/// under a duplicate device). Falls back to the hostname, then a dev
+/// constant.
 fn device_id() -> String {
-    std::fs::read_to_string("/etc/hostname")
-        .map(|s| s.trim().to_string())
+    let serial_id = std::fs::read_to_string("/proc/cpuinfo")
         .ok()
-        .filter(|s| !s.is_empty())
+        .and_then(|ci| {
+            ci.lines()
+                .find(|l| l.starts_with("Serial"))
+                .and_then(|l| l.split_whitespace().last())
+                .filter(|s| s.len() >= 4)
+                .map(|s| format!("boompi-{}", &s[s.len() - 4..]))
+        });
+    serial_id
+        .or_else(|| {
+            std::fs::read_to_string("/etc/hostname")
+                .map(|s| s.trim().to_string())
+                .ok()
+                .filter(|s| !s.is_empty())
+        })
         .unwrap_or_else(|| "boompi-dev".into())
 }
 

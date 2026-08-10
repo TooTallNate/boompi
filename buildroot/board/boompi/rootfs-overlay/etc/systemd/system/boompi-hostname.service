@@ -5,14 +5,20 @@ Description=Unique hostname from the SoC serial (mDNS collision avoidance)
 # Connect discovery) on BOTH boxes. Suffix the hostname with the last
 # four hex digits of the CPU serial before anything network-facing
 # starts.
+#
+# After systemd-remount-fs: /etc/hostname must actually be WRITTEN -
+# at local-fs the rootfs is still read-only, the write failed
+# silently, and NetworkManager later re-asserted the hostname from
+# the stale file ("boompi"), undoing the transient rename. Latent on
+# every fresh A/B slot until the first pristine rootfs exposed it.
 DefaultDependencies=no
-After=local-fs.target
+After=local-fs.target systemd-remount-fs.service
 Before=network-pre.target avahi-daemon.service NetworkManager.service sysinit.target
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/sh -c 'S=$(grep Serial /proc/cpuinfo | awk "{print \$3}" | tail -c 5); [ -n "$S" ] && { echo "boompi-$S" > /etc/hostname; hostname "boompi-$S"; } || true'
+ExecStart=/bin/sh -c 'S=$(grep Serial /proc/cpuinfo | awk "{print $$3}" | tail -c 5); [ -n "$S" ] && { echo "boompi-$S" > /etc/hostname; hostname "boompi-$S"; } || true'
 
 [Install]
 WantedBy=sysinit.target
