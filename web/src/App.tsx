@@ -65,7 +65,11 @@ export default function App() {
               <EmojiFontSection emoji={state.emoji_fonts} send={send} />
             )}
             <ArtSection settings={settings} onSaved={applySettings} />
-            <ScreensaverSection settings={settings} onSaved={applySettings} />
+            <ScreensaverSection
+              settings={settings}
+              onSaved={applySettings}
+              send={send}
+            />
             <AirplayIconSection settings={settings} onSaved={applySettings} />
           </>
         )}
@@ -731,7 +735,11 @@ function NameSection({ settings, onSaved }: SectionProps) {
   );
 }
 
-function ScreensaverSection({ settings, onSaved }: SectionProps) {
+function ScreensaverSection({
+  settings,
+  onSaved,
+  send,
+}: SectionProps & { send: (msg: ClientMessage) => void }) {
   const { status, save } = useSave(onSaved);
   const kinds: { label: string; value: ScreensaverKind }[] = [
     { label: "Off", value: "off" },
@@ -762,7 +770,13 @@ function ScreensaverSection({ settings, onSaved }: SectionProps) {
       </div>
       {settings.screensaver !== "off" && (
         <div className="mt-3 flex items-center justify-between gap-3 py-1.5">
-          <span>Start after</span>
+          <button
+            className="rounded-lg border border-line px-3 py-1.5 text-sm text-dim hover:text-fg"
+            onClick={() => send({ type: "preview_screensaver" })}
+          >
+            Preview on speaker
+          </button>
+          <span className="ml-auto">Start after</span>
           <select
             className="rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
             value={settings.screensaver_min}
@@ -1103,9 +1117,11 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
         <div className="min-w-0">
           <div>Classic AirPlay only</div>
           <div className="text-[12px] text-dim">
-            Modern iPhones don't let AirPlay 2 receivers control playback,
-            so the speaker's own play/pause/next buttons only work in
-            classic mode. Trade: no multi-speaker audio while enabled.
+            The speaker's play/pause/next buttons only work over classic
+            AirPlay: iOS drops the classic control channel on AirPlay 2
+            sessions, and AirPlay 2's own one is encrypted and not yet
+            reverse-engineered. Trade: no multi-speaker audio while
+            enabled.
           </div>
         </div>
         <Toggle

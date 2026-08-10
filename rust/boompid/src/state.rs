@@ -678,6 +678,9 @@ impl App {
                     self.cfg_generation.send_modify(|g| *g += 1);
                 }
             }
+            ClientMessage::PreviewScreensaver => {
+                self.broadcast(ServerMessage::ScreensaverPreview);
+            }
             ClientMessage::FactoryReset => {
                 tracing::warn!("factory reset requested - wiping /data and rebooting");
                 #[cfg(target_os = "linux")]

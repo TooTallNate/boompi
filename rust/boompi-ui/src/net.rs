@@ -235,6 +235,13 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 .weak
                 .upgrade_in_event_loop(move |ui| apply_emoji_fonts(&ui, &state));
         }
+        ServerMessage::ScreensaverPreview => {
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                if ui.get_saver_kind() != "off" {
+                    ui.set_saver_active(true);
+                }
+            });
+        }
         ServerMessage::Update(state) => {
             let _ = ctx
                 .weak

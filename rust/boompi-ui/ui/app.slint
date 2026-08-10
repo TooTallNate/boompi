@@ -123,6 +123,7 @@ export component AppWindow inherits Window {
     callback emoji-font-tapped(string, string);
     callback airplay-model-tapped(string);
     callback saver-kind-tapped(string);
+    callback saver-preview-tapped();
     callback clock-24h-toggled(bool);
     callback update-check();
     callback update-apply();
@@ -261,6 +262,9 @@ export component AppWindow inherits Window {
         saver-kind: root.saver-kind;
         saver-kind-tapped(value) => {
             root.saver-kind-tapped(value);
+        }
+        saver-preview-tapped => {
+            root.saver-preview-tapped();
         }
         clock-24h: root.clock-24h;
         clock-24h-toggled(v) => {

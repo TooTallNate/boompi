@@ -381,6 +381,12 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_saver_preview_tapped(move || {
+            let _ = tx.send(ClientMessage::PreviewScreensaver);
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_clock_24h_toggled(move |v| {
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
                 clock_24h: Some(v),
@@ -458,22 +464,28 @@ fn main() -> anyhow::Result<()> {
     {
         let weak = ui.as_weak();
         let la = last_activity.clone();
+        let was_playing = std::rc::Rc::new(std::cell::Cell::new(false));
         saver_timer.start(
             slint::TimerMode::Repeated,
             Duration::from_secs(5),
             move || {
                 let Some(ui) = weak.upgrade() else { return };
+                let playing = ui.get_playing();
+                let started = playing && !was_playing.get();
+                was_playing.set(playing);
                 if ui.get_saver_active() {
-                    // Playback wakes the screen (a session starting is
-                    // the moment the display matters again).
-                    if ui.get_playing() {
+                    // Playback STARTING wakes the screen (that's the
+                    // moment the display matters again). Edge, not
+                    // level: previewing the saver while music already
+                    // plays must not self-dismiss.
+                    if started {
                         la.set(std::time::Instant::now());
                         ui.set_saver_active(false);
                     }
                     return;
                 }
                 let kind = ui.get_saver_kind();
-                if kind == "off" || ui.get_playing() || ui.get_setup_required() {
+                if kind == "off" || playing || ui.get_setup_required() {
                     la.set(std::time::Instant::now());
                     return;
                 }

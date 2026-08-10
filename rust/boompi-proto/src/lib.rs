@@ -503,16 +503,23 @@ pub enum ServerMessage {
     State(State),
     Source(SourceInfo),
     Track(Track),
-    Volume { level: f32 },
+    Volume {
+        level: f32,
+    },
     Battery(Battery),
     Pairing(Pairing),
     // NB: struct form - internally-tagged serde can't represent a newtype
     // variant wrapping a sequence.
-    BtDevices { devices: Vec<BtDevice> },
+    BtDevices {
+        devices: Vec<BtDevice>,
+    },
     Settings(Settings),
     Setup(SetupState),
     EmojiFonts(EmojiFontsState),
     Update(UpdateState),
+    /// Relay: a client asked to preview the screensaver; the panel
+    /// activates it immediately.
+    ScreensaverPreview,
 }
 
 /// Client → server messages (JSON text frames).
@@ -551,6 +558,9 @@ pub enum ClientMessage {
     },
     SetSettings(SettingsPatch),
     Setup(SetupCommand),
+    /// Preview the configured screensaver on the panel right now
+    /// (relayed to the panel via [`ServerMessage::ScreensaverPreview`]).
+    PreviewScreensaver,
     /// Wipe all persistent state (config, Wi-Fi, Bluetooth pairings,
     /// caches) and reboot into first-boot setup. The OS slots are
     /// untouched - this is a data reset, not a reflash.

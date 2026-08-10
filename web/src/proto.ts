@@ -143,6 +143,7 @@ export type ServerMessage =
 export type ClientMessage =
   | { type: "emoji_font"; action: EmojiFontAction; id: string }
   | { type: "update"; action: UpdateAction }
+  | { type: "preview_screensaver" }
   | { type: "pairing"; action: PairingAction }
   | { type: "bt_device"; address: string; action: BtDeviceAction }
   | { type: "factory_reset" };
