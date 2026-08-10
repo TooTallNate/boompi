@@ -1059,7 +1059,10 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
                 // If a previous cycle was interrupted (daemon restart
                 // between the writes), the device sits de-authorized -
                 // recover that first instead of toggling deeper down.
-                if std::fs::read_to_string(&auth).map(|v| v.trim() == "0") == Ok(true) {
+                if std::fs::read_to_string(&auth)
+                    .map(|v| v.trim() == "0")
+                    .unwrap_or(false)
+                {
                     std::fs::write(&auth, "1")?;
                     continue;
                 }
