@@ -1048,12 +1048,30 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
         next_retry_secs = delay,
         "BT adapter refuses to power on; USB-resetting the dongle"
     );
-    let reset = tokio::task::spawn_blocking(|| -> std::io::Result<()> {
+    // Escalation: the `authorized` toggle clears transport-level
+    // wedges, but the dwc_otg-level ones (urb resubmit failures at
+    // boot on 6.6.78; bench 2-of-3 boots) survive it - only cutting
+    // port power does the job (verified live: the hub's per-port
+    // `disable` attribute revived a wedge the softer resets could
+    // not). Port power on the Pi 3 hub is ganged, so sibling devices
+    // (USB audio) re-enumerate too - acceptable while BT is dead.
+    let escalate = failures >= 2;
+    let reset = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
         // hciN -> .../usbX/X-Y/X-Y.Z/X-Y.Z:1.0/bluetooth/hciN; the usb
         // DEVICE (with `authorized`) is two levels above the interface.
         for entry in std::fs::read_dir("/sys/class/bluetooth")? {
             let hci = entry?.path();
             let dev = hci.join("device").join("..");
+            if escalate {
+                if let Some(port_disable) = hub_port_disable_path(&hci) {
+                    tracing::warn!(path = %port_disable.display(), "escalating: USB port power cycle");
+                    let off = std::fs::write(&port_disable, "1");
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    let on = std::fs::write(&port_disable, "0");
+                    off.and(on)?;
+                    continue;
+                }
+            }
             let auth = dev.join("authorized");
             if auth.exists() {
                 // If a previous cycle was interrupted (daemon restart
@@ -1090,6 +1108,24 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
         }
         other => tracing::warn!(?other, "USB reset of BT dongle failed"),
     }
+}
+
+/// The hub port `disable` attribute for the usb device behind an hci:
+/// /sys/class/bluetooth/hciN/device resolves to the usb INTERFACE
+/// (e.g. 1-1.2:1.0); its parent is the device (1-1.2), whose name
+/// encodes hub (1-1) and port (2). The hub's own interface dir holds
+/// the per-port controls: .../1-1:1.0/1-1-port2/disable.
+fn hub_port_disable_path(hci: &std::path::Path) -> Option<std::path::PathBuf> {
+    let iface = std::fs::canonicalize(hci.join("device")).ok()?;
+    let dev = iface.parent()?;
+    let devname = dev.file_name()?.to_str()?;
+    let (hub, port) = devname.rsplit_once('.')?;
+    let path = dev
+        .parent()?
+        .join(format!("{hub}:1.0"))
+        .join(format!("{hub}-port{port}"))
+        .join("disable");
+    path.exists().then_some(path)
 }
 
 /// Consecutive failed dongle recoveries; drives the reset backoff.

@@ -700,7 +700,13 @@ mod ripple {
     /// the compositor-less panel does with its output.
     #[cfg(target_os = "linux")]
     pub fn spawn_touch_reader(weak: slint::Weak<crate::AppWindow>) {
-        let rotation: u32 = std::env::var("SLINT_KMS_ROTATION")
+        // NB: no rotation handling. The device-tree touch transforms
+        // (swapped/inverted axes) already orient the evdev coordinates
+        // to match the DISPLAY; SLINT_KMS_ROTATION rotates the render
+        // only, and Slint passes touch through untransformed - so raw
+        // normalized coordinates map straight onto the window (bench:
+        // applying the rotation here double-transformed the ripples).
+        let rotation: u32 = std::env::var("BOOMPI_RIPPLE_ROTATION")
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
