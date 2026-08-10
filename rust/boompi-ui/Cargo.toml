@@ -31,6 +31,11 @@ slint = { version = "1", default-features = false, features = [
 tokio = { workspace = true, features = ["rt", "macros", "net", "sync", "time"] }
 tokio-tungstenite = "0.24"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Touch-ripple feedback reads touch events from evdev in parallel with
+# Slint's own input path (evdev fans out to all readers).
+evdev = "0.12"
+
 [build-dependencies]
 slint-build = "1"
 

@@ -518,6 +518,68 @@ fn main() -> anyhow::Result<()> {
         );
     }
 
+    // ---- touch ripples ------------------------------------------------------
+    // v1's water-drop touch feedback. Positions arrive from an evdev
+    // reader thread (parallel to Slint's own input path); the clock
+    // timer is cheap when idle and only animates while ripples live.
+    {
+        let ripples = std::rc::Rc::new(slint::VecModel::<Ripple>::default());
+        ui.set_ripples(slint::ModelRc::from(ripples.clone()));
+        let weak = ui.as_weak();
+        let ripple_timer = slint::Timer::default();
+        ripple_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_millis(33),
+            move || {
+                use slint::Model;
+                if ripples.row_count() == 0 {
+                    return;
+                }
+                let Some(ui) = weak.upgrade() else { return };
+                let clock = ui.get_ripple_clock() + 0.033;
+                ui.set_ripple_clock(clock);
+                // Purge finished ripples (oldest first).
+                while ripples.row_count() > 0 {
+                    let done = ripples
+                        .row_data(0)
+                        .map(|r| clock - r.born > 0.5)
+                        .unwrap_or(true);
+                    if done {
+                        ripples.remove(0);
+                    } else {
+                        break;
+                    }
+                }
+            },
+        );
+        // Keep the timer alive for the app's lifetime.
+        std::mem::forget(ripple_timer);
+    }
+    #[cfg(target_os = "linux")]
+    ripple::spawn_touch_reader(ui.as_weak());
+    if std::env::var("BOOMPI_RIPPLE_TEST").is_ok() {
+        let weak = ui.as_weak();
+        let test_timer = slint::Timer::default();
+        let n = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        test_timer.start(
+            slint::TimerMode::Repeated,
+            Duration::from_millis(700),
+            move || {
+                let Some(ui) = weak.upgrade() else { return };
+                let i = n.get();
+                n.set(i + 1);
+                let w = ui.window().size().width as f32 / ui.window().scale_factor();
+                let h = ui.window().size().height as f32 / ui.window().scale_factor();
+                ripple::spawn(
+                    &ui,
+                    (0.15 + 0.35 * ((i % 3) as f32)) * w,
+                    (0.2 + 0.3 * ((i % 2) as f32)) * h,
+                );
+            },
+        );
+        std::mem::forget(test_timer);
+    }
+
     // ---- clock (blinking colon, like v1) -----------------------------------
     let clock_timer = slint::Timer::default();
     {
@@ -602,4 +664,127 @@ fn main() -> anyhow::Result<()> {
 
     ui.run()?;
     Ok(())
+}
+
+/// Touch-ripple feedback plumbing: spawning ripples into the UI model
+/// and (on the appliance) watching evdev for touch-down events in
+/// parallel with Slint's own input handling.
+mod ripple {
+    #[allow(unused_imports)]
+    use slint::ComponentHandle;
+
+    /// Push a ripple at logical coordinates.
+    pub fn spawn(ui: &crate::AppWindow, x: f32, y: f32) {
+        use slint::Model;
+        let model = ui.get_ripples();
+        if let Some(v) = model
+            .as_any()
+            .downcast_ref::<slint::VecModel<crate::Ripple>>()
+        {
+            // Cap simultaneous ripples (a ten-finger mash is not a
+            // render workload worth having).
+            if v.row_count() < 12 {
+                v.push(crate::Ripple {
+                    x,
+                    y,
+                    born: ui.get_ripple_clock(),
+                });
+            }
+        }
+    }
+
+    /// Watch every evdev touch device for touch-down events and map
+    /// them to logical window coordinates. Runs on its own thread;
+    /// evdev delivers events to all readers, so Slint's input path is
+    /// untouched. Rotation follows SLINT_KMS_ROTATION, matching what
+    /// the compositor-less panel does with its output.
+    #[cfg(target_os = "linux")]
+    pub fn spawn_touch_reader(weak: slint::Weak<crate::AppWindow>) {
+        let rotation: u32 = std::env::var("SLINT_KMS_ROTATION")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+        std::thread::spawn(move || {
+            let devices: Vec<evdev::Device> = evdev::enumerate()
+                .map(|(_, d)| d)
+                .filter(|d| {
+                    d.supported_keys()
+                        .map(|k| k.contains(evdev::Key::BTN_TOUCH))
+                        .unwrap_or(false)
+                })
+                .collect();
+            if devices.is_empty() {
+                eprintln!("ripples: no evdev touch device (desktop?)");
+                return;
+            }
+            for dev in devices {
+                let weak = weak.clone();
+                std::thread::spawn(move || touch_loop(dev, weak, rotation));
+            }
+        });
+    }
+
+    #[cfg(target_os = "linux")]
+    fn touch_loop(mut dev: evdev::Device, weak: slint::Weak<crate::AppWindow>, rotation: u32) {
+        let name = dev.name().unwrap_or("?").to_string();
+        let abs = match dev.get_abs_state() {
+            Ok(a) => a,
+            Err(err) => {
+                eprintln!("ripples: {name}: abs state unavailable: {err}");
+                return;
+            }
+        };
+        let ax = evdev::AbsoluteAxisType::ABS_X.0 as usize;
+        let ay = evdev::AbsoluteAxisType::ABS_Y.0 as usize;
+        let (x_min, x_max) = (abs[ax].minimum as f32, abs[ax].maximum as f32);
+        let (y_min, y_max) = (abs[ay].minimum as f32, abs[ay].maximum as f32);
+        if x_max <= x_min || y_max <= y_min {
+            eprintln!("ripples: {name}: no usable ABS_X/Y; skipping");
+            return;
+        }
+        eprintln!("ripples: attached to {name} (rotation {rotation})");
+        let (mut cur_x, mut cur_y) = (0f32, 0f32);
+        let mut pending_down = false;
+        loop {
+            let events = match dev.fetch_events() {
+                Ok(ev) => ev,
+                Err(err) => {
+                    eprintln!("ripples: {name}: read failed, ripples off: {err}");
+                    return;
+                }
+            };
+            for ev in events {
+                match ev.kind() {
+                    evdev::InputEventKind::AbsAxis(evdev::AbsoluteAxisType::ABS_X) => {
+                        cur_x = (ev.value() as f32 - x_min) / (x_max - x_min);
+                    }
+                    evdev::InputEventKind::AbsAxis(evdev::AbsoluteAxisType::ABS_Y) => {
+                        cur_y = (ev.value() as f32 - y_min) / (y_max - y_min);
+                    }
+                    evdev::InputEventKind::Key(evdev::Key::BTN_TOUCH) if ev.value() == 1 => {
+                        pending_down = true;
+                    }
+                    evdev::InputEventKind::Synchronization(_) if pending_down => {
+                        pending_down = false;
+                        let (nx, ny) = (cur_x, cur_y);
+                        let _ = weak.upgrade_in_event_loop(move |ui| {
+                            let w = ui.window().size().width as f32 / ui.window().scale_factor();
+                            let h = ui.window().size().height as f32 / ui.window().scale_factor();
+                            // Map panel-space normals through the output
+                            // rotation into logical window coordinates
+                            // (same rotation the KMS output applies).
+                            let (lx, ly) = match rotation {
+                                90 => ((1.0 - ny) * w, nx * h),
+                                180 => ((1.0 - nx) * w, (1.0 - ny) * h),
+                                270 => (ny * w, (1.0 - nx) * h),
+                                _ => (nx * w, ny * h),
+                            };
+                            spawn(&ui, lx, ly);
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
 }

@@ -21,6 +21,13 @@ import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
 import { SettingsPanel, EmojiFontRow } from "components/settings.slint";
 import { Screensaver } from "components/screensaver.slint";
+
+// One touch-feedback ripple (spawned from Rust's evdev reader).
+export struct Ripple {
+    x: float,
+    y: float,
+    born: float,
+}
 export { EmojiFontRow }
 import { SetupScreen } from "components/setup.slint";
 import { ActionButton } from "components/widgets.slint";
@@ -57,6 +64,10 @@ export component AppWindow inherits Window {
     // Transient toast message overlay.
     in-out property <bool> toast-on: false;
     in-out property <string> toast-text: "";
+    // Touch-feedback ripples (positions in logical px; clock advances
+    // ~30fps from Rust only while ripples are alive).
+    in property <[Ripple]> ripples: [];
+    in property <float> ripple-clock: 0;
     in property <float> progress: 0.0;
     in property <string> elapsed: "--:--";
     in property <string> remaining: "--:--";
@@ -455,5 +466,21 @@ export component AppWindow inherits Window {
         dismissed => {
             root.saver-dismissed();
         }
+    }
+
+    // Touch ripples - topmost (feedback even over the screensaver),
+    // never interactive. An expanding, fading ring like v1's
+    // water-drop effect.
+    for r in root.ripples: Rectangle {
+        property <float> p: Math.min(1.0, Math.max(0.0, (root.ripple-clock - r.born) / 0.45));
+        property <float> pe: 1 - (1 - self.p) * (1 - self.p); // ease-out
+        x: r.x * 1px - self.width / 2;
+        y: r.y * 1px - self.height / 2;
+        width: (16 + 74 * self.pe) * 1px;
+        height: self.width;
+        border-radius: self.width / 2;
+        border-width: 2px;
+        border-color: #ffffff.transparentize(0.25 + 0.75 * self.p);
+        background: #ffffff.transparentize(0.90 + 0.10 * self.p);
     }
 }
