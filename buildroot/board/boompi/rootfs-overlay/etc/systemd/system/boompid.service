@@ -9,6 +9,11 @@ Type=simple
 # /etc file only seeds the very first boot (hardware facts: model,
 # battery bus). Streaming credential caches land in /data/cache.
 ExecStart=/usr/bin/boompid --config /data/boompi.toml --config-seed /etc/boompi/boompi.toml
+# /run/boompi: the AirPlay PCM FIFO lives here (NOT /tmp - the boot
+# clock predates NTP by months without an RTC, and tmpfiles' age-based
+# clean reaps /tmp entries whose timestamps look ancient).
+RuntimeDirectory=boompi
+RuntimeDirectoryPreserve=yes
 Environment=PIPEWIRE_RUNTIME_DIR=/run/pipewire
 Environment=XDG_RUNTIME_DIR=/run/pipewire
 Environment=XDG_CACHE_HOME=/data/cache

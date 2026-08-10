@@ -1020,13 +1020,34 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
         Err(_) => return,
     };
     if adapter.powered().await.unwrap_or(false) {
+        RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
         return;
     }
     if adapter.set_powered(true).await.is_ok() {
         tracing::info!("BT adapter powered on");
+        RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
         return;
     }
-    tracing::warn!("BT adapter refuses to power on; USB-resetting the dongle");
+    // Exponential backoff between reset attempts: a dongle that is
+    // wedged beyond software recovery (bench: dwc_otg-level FSM
+    // timeouts only a power cycle clears) must not be USB-reset every
+    // few seconds forever - 14 hours of 4-second resets thrashed the
+    // shared USB bus for nothing.
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    if now < NEXT_RESET_AT.load(std::sync::atomic::Ordering::Relaxed) {
+        return;
+    }
+    let failures = RESET_FAILURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let delay = 4u64.saturating_mul(1 << failures.min(8)).min(600);
+    NEXT_RESET_AT.store(now + delay, std::sync::atomic::Ordering::Relaxed);
+    tracing::warn!(
+        attempt = failures + 1,
+        next_retry_secs = delay,
+        "BT adapter refuses to power on; USB-resetting the dongle"
+    );
     let reset = tokio::task::spawn_blocking(|| -> std::io::Result<()> {
         // hciN -> .../usbX/X-Y/X-Y.Z/X-Y.Z:1.0/bluetooth/hciN; the usb
         // DEVICE (with `authorized`) is two levels above the interface.
@@ -1035,9 +1056,19 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
             let dev = hci.join("device").join("..");
             let auth = dev.join("authorized");
             if auth.exists() {
-                std::fs::write(&auth, "0")?;
+                // If a previous cycle was interrupted (daemon restart
+                // between the writes), the device sits de-authorized -
+                // recover that first instead of toggling deeper down.
+                if std::fs::read_to_string(&auth).map(|v| v.trim() == "0") == Ok(true) {
+                    std::fs::write(&auth, "1")?;
+                    continue;
+                }
+                // Always attempt the re-authorize even if the
+                // de-authorize failed: never strand the device off.
+                let off = std::fs::write(&auth, "0");
                 std::thread::sleep(std::time::Duration::from_millis(1000));
-                std::fs::write(&auth, "1")?;
+                let on = std::fs::write(&auth, "1");
+                off.and(on)?;
             }
         }
         Ok(())
@@ -1050,11 +1081,18 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
             tokio::time::sleep(std::time::Duration::from_secs(4)).await;
             if adapter.set_powered(true).await.is_ok() {
                 tracing::info!("BT adapter recovered after USB reset");
+                RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
+                NEXT_RESET_AT.store(0, std::sync::atomic::Ordering::Relaxed);
             }
         }
         other => tracing::warn!(?other, "USB reset of BT dongle failed"),
     }
 }
+
+/// Consecutive failed dongle recoveries; drives the reset backoff.
+static RESET_FAILURES: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+/// Unix seconds before which no further USB reset is attempted.
+static NEXT_RESET_AT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Set the BlueZ controller alias - the advertised speaker name.
 async fn apply_adapter_alias(ctx: &Ctx, session: &Session, name: &str) {

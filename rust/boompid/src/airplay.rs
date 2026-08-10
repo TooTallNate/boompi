@@ -33,7 +33,13 @@ use tokio::sync::mpsc;
 use zbus::zvariant::OwnedValue;
 
 const CONF_PATH: &str = "/tmp/boompi-shairport.conf";
-const FIFO_PATH: &str = "/tmp/boompi-airplay.pcm";
+// In /run, NOT /tmp: the boxes boot with a wrong clock (no RTC), so
+// boot-created files carry months-old timestamps until NTP lands, and
+// systemd-tmpfiles' daily clean reaps anything in /tmp "older" than
+// ten days - it deleted this FIFO mid-flight and AirPlay audio
+// streamed into a dead inode (bench, Aug 2026). /run/boompi is a
+// RuntimeDirectory: always present, never age-cleaned.
+const FIFO_PATH: &str = "/run/boompi/airplay.pcm";
 /// AirPlay PCM timestamps run at the RTP frame rate.
 const FRAME_RATE: u64 = 44_100;
 
