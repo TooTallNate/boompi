@@ -51,7 +51,11 @@ component MatrixColumn inherits Rectangle {
     // every-Nth-column patterns from lining up.
     property <int> mut-a: Math.floor(self.tick / 1.3) * 5 + self.index * 7 + Math.mod(self.index * self.index, 13);
     property <int> mut-b: Math.floor(self.tick / 1.9) * 3 + self.index * 11 + Math.mod(self.index * self.index * 3, 17);
-    x: 6px + self.index * 34px + (Math.mod(self.index * 17, 7) - 3) * 1px;
+    // Base offset from the parent centers the column field on any
+    // screen width (hardcoding overflowed 800px panels and underfilled
+    // 1024px ones).
+    in property <length> x0: 0;
+    x: self.x0 + self.index * 34px + (Math.mod(self.index * 17, 7) - 3) * 1px;
     width: 30px;
     height: 100%;
 
@@ -96,16 +100,20 @@ export component Screensaver inherits Rectangle {
 
     background: black;
 
+    // Rain columns sized to the screen: as many 34px columns as fit.
+    property <int> matrix-cols: Math.max(1, Math.floor((self.width - 8px) / 34px));
+
     // Slow lissajous drift for the static savers: full period is
     // minutes, so content never parks on the same pixels.
     property <float> drift-x: Math.sin(root.tick * 1.9deg);
     property <float> drift-y: Math.cos(root.tick * 1.3deg);
 
     if root.kind == "matrix": Rectangle {
-        for i in 24: MatrixColumn {
+        for i in root.matrix-cols: MatrixColumn {
             index: i;
             tick: root.tick;
             screen-height: root.height;
+            x0: (root.width - root.matrix-cols * 34px) / 2;
         }
     }
 
