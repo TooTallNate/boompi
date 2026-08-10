@@ -28,6 +28,7 @@ mod fonts;
 // the Linux-only visualizer.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod dsp;
+mod mqtt;
 mod server;
 mod sim;
 #[cfg(target_os = "linux")]
@@ -116,6 +117,12 @@ async fn main() -> anyhow::Result<()> {
             {
                 let app = app.clone();
                 tokio::spawn(update::periodic(app));
+            }
+            // Home Assistant integration (idles until a broker is
+            // configured in settings).
+            {
+                let app = app.clone();
+                tokio::spawn(mqtt::run(app));
             }
             // Seed the volume from the current system state.
             {

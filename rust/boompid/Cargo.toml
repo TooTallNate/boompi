@@ -19,6 +19,8 @@ libc = "0.2"
 # Settings web UI (web/dist, committed prebuilt - regenerate via `make web`).
 rust-embed = { version = "8", features = ["mime-guess"] }
 realfft = "3"
+# Home Assistant integration (MQTT discovery).
+rumqttc = "0.24"
 clap = { workspace = true }
 serde = { workspace = true }
 # Unknown config keys warn instead of failing the boot (config.rs).

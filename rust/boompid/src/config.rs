@@ -142,6 +142,14 @@ pub struct SettingsConfig {
     /// 24-hour clock on the panel (12-hour with AM/PM when false).
     #[serde(default)]
     pub clock_24h: bool,
+    /// MQTT broker ("host" or "host:port"; empty = disabled) +
+    /// credentials for the Home Assistant integration.
+    #[serde(default)]
+    pub mqtt_broker: String,
+    #[serde(default)]
+    pub mqtt_username: String,
+    #[serde(default)]
+    pub mqtt_password: String,
     /// Idle screensaver style ("off" / "clock" / "matrix" / "art").
     #[serde(default)]
     pub screensaver: boompi_proto::ScreensaverKind,
@@ -173,6 +181,9 @@ impl Default for SettingsConfig {
             update_channel: boompi_proto::UpdateChannel::default(),
             airplay_classic: false,
             clock_24h: false,
+            mqtt_broker: String::new(),
+            mqtt_username: String::new(),
+            mqtt_password: String::new(),
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }

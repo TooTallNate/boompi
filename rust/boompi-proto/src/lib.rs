@@ -273,6 +273,15 @@ pub struct Settings {
     /// false.
     #[serde(default)]
     pub clock_24h: bool,
+    /// MQTT broker for Home Assistant integration ("host" or
+    /// "host:port"; empty = disabled). Entities appear in HA via MQTT
+    /// discovery.
+    #[serde(default)]
+    pub mqtt_broker: String,
+    #[serde(default)]
+    pub mqtt_username: String,
+    #[serde(default)]
+    pub mqtt_password: String,
     /// Idle screensaver style (shown after `screensaver_min` minutes
     /// without touches while nothing is playing).
     #[serde(default)]
@@ -293,6 +302,9 @@ impl Default for Settings {
             update_channel: UpdateChannel::default(),
             airplay_classic: false,
             clock_24h: false,
+            mqtt_broker: String::new(),
+            mqtt_username: String::new(),
+            mqtt_password: String::new(),
             screensaver: ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }
@@ -319,6 +331,12 @@ pub struct SettingsPatch {
     pub airplay_classic: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock_24h: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mqtt_broker: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mqtt_username: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mqtt_password: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

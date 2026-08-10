@@ -18,6 +18,9 @@ export interface Settings {
   update_channel: UpdateChannel;
   airplay_classic: boolean;
   clock_24h: boolean;
+  mqtt_broker: string;
+  mqtt_username: string;
+  mqtt_password: string;
   screensaver: ScreensaverKind;
   screensaver_min: number;
 }
@@ -31,6 +34,9 @@ export interface SettingsPatch {
   update_channel?: UpdateChannel;
   airplay_classic?: boolean;
   clock_24h?: boolean;
+  mqtt_broker?: string;
+  mqtt_username?: string;
+  mqtt_password?: string;
   screensaver?: ScreensaverKind;
   screensaver_min?: number;
 }

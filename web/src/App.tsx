@@ -87,6 +87,9 @@ export default function App() {
         {settings && (
           <ClockSection settings={settings} onSaved={applySettings} />
         )}
+        {settings && (
+          <HomeAssistantSection settings={settings} onSaved={applySettings} />
+        )}
         {state?.updates && settings && (
           <UpdateSection
             updates={state.updates}
@@ -1130,6 +1133,71 @@ function AirplayIconSection({ settings, onSaved }: SectionProps) {
         />
       </div>
       <StatusText status={status} />
+    </Section>
+  );
+}
+
+function HomeAssistantSection({ settings, onSaved }: SectionProps) {
+  const { status, save } = useSave(onSaved);
+  const [broker, setBroker] = useState(settings.mqtt_broker);
+  const [username, setUsername] = useState(settings.mqtt_username);
+  const [password, setPassword] = useState(settings.mqtt_password);
+  const dirty =
+    broker !== settings.mqtt_broker ||
+    username !== settings.mqtt_username ||
+    password !== settings.mqtt_password;
+  return (
+    <Section title="Home Assistant">
+      <p className="mb-2 text-sm text-dim">
+        Point the speaker at your MQTT broker and it appears in Home
+        Assistant automatically (MQTT discovery): playback, volume,
+        battery graphs, pairing, and OS updates - installable straight
+        from HA's update dashboard. Leave the broker empty to disable.
+      </p>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm">Broker</span>
+          <input
+            className="w-56 rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
+            placeholder="homeassistant.local:1883"
+            value={broker}
+            onChange={(e) => setBroker(e.target.value)}
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm">Username</span>
+          <input
+            className="w-56 rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        </label>
+        <label className="flex items-center justify-between gap-3">
+          <span className="text-sm">Password</span>
+          <input
+            type="password"
+            className="w-56 rounded-lg border border-line bg-panel px-2 py-1.5 text-sm"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </label>
+        <div className="flex items-center justify-end gap-2">
+          <StatusText status={status} />
+          <button
+            className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-ink disabled:opacity-40"
+            disabled={!dirty}
+            onClick={() =>
+              save({
+                mqtt_broker: broker,
+                mqtt_username: username,
+                mqtt_password: password,
+              })
+            }
+          >
+            Save
+          </button>
+        </div>
+      </div>
     </Section>
   );
 }

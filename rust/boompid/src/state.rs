@@ -161,6 +161,9 @@ impl App {
             update_channel: cfg.settings.update_channel,
             airplay_classic: cfg.settings.airplay_classic,
             clock_24h: cfg.settings.clock_24h,
+            mqtt_broker: cfg.settings.mqtt_broker.clone(),
+            mqtt_username: cfg.settings.mqtt_username.clone(),
+            mqtt_password: cfg.settings.mqtt_password.clone(),
             screensaver: cfg.settings.screensaver,
             screensaver_min: cfg.settings.screensaver_min,
         };
@@ -300,6 +303,9 @@ impl App {
             cfg.settings.update_channel = s.settings.update_channel;
             cfg.settings.airplay_classic = s.settings.airplay_classic;
             cfg.settings.clock_24h = s.settings.clock_24h;
+            cfg.settings.mqtt_broker = s.settings.mqtt_broker.clone();
+            cfg.settings.mqtt_username = s.settings.mqtt_username.clone();
+            cfg.settings.mqtt_password = s.settings.mqtt_password.clone();
             cfg.settings.screensaver = s.settings.screensaver;
             cfg.settings.screensaver_min = s.settings.screensaver_min;
             cfg.settings.emoji_font = s.emoji_font.clone();
@@ -595,6 +601,7 @@ impl App {
             }
             ClientMessage::SetSettings(patch) => {
                 let mut airplay_model_changed = false;
+                let mut mqtt_changed = false;
                 #[allow(unused_mut, unused_variables)]
                 let mut channel_changed = false;
                 let settings = {
@@ -624,6 +631,25 @@ impl App {
                     if let Some(v) = patch.clock_24h {
                         s.settings.clock_24h = v;
                     }
+                    if let Some(v) = patch.mqtt_broker {
+                        let v = v.trim().to_string();
+                        if v != s.settings.mqtt_broker {
+                            s.settings.mqtt_broker = v;
+                            mqtt_changed = true;
+                        }
+                    }
+                    if let Some(v) = patch.mqtt_username {
+                        if v != s.settings.mqtt_username {
+                            s.settings.mqtt_username = v;
+                            mqtt_changed = true;
+                        }
+                    }
+                    if let Some(v) = patch.mqtt_password {
+                        if v != s.settings.mqtt_password {
+                            s.settings.mqtt_password = v;
+                            mqtt_changed = true;
+                        }
+                    }
                     if let Some(kind) = patch.screensaver {
                         s.settings.screensaver = kind;
                     }
@@ -648,7 +674,7 @@ impl App {
                     None => false,
                 };
                 self.persist_config().await;
-                if renamed || airplay_model_changed {
+                if renamed || airplay_model_changed || mqtt_changed {
                     // Sources re-announce under the new name/model (BT
                     // alias is updated in place; AirPlay/Spotify restart
                     // discovery - the AirPlay conf embeds the model).
