@@ -324,6 +324,20 @@ async fn publish_discovery(
         ),
         (
             "sensor",
+            "battery_current",
+            json!({
+                "name": "Battery current",
+                "state_topic": format!("{base}/battery"),
+                "value_template": "{{ value_json.current }}",
+                "device_class": "current",
+                "unit_of_measurement": "A",
+                "state_class": "measurement",
+                "suggested_display_precision": 2,
+                "entity_category": "diagnostic",
+            }),
+        ),
+        (
+            "sensor",
             "battery_power",
             json!({
                 "name": "Battery power",
@@ -411,6 +425,12 @@ async fn publish_discovery(
     for (component, object, mut cfg) in entities {
         let obj = cfg.as_object_mut().unwrap();
         obj.insert("unique_id".into(), json!(format!("{id}_{object}")));
+        // Entity names are device-scoped ("Battery current", not
+        // "George's Battery current"): HA composes the friendly name
+        // and derives a clean entity_id. Without this, entities
+        // registered later than their siblings picked up a doubled
+        // device prefix (sensor.georges_georges_battery_current).
+        obj.insert("has_entity_name".into(), json!(true));
         obj.insert("device".into(), device.clone());
         obj.insert("availability".into(), avail.clone());
         let topic = format!("homeassistant/{component}/{id}_{object}/config");
