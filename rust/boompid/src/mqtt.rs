@@ -148,8 +148,16 @@ async fn session(
         .subscribe(format!("{base}/set/#"), QoS::AtLeastOnce)
         .await?;
 
+    // Diagnostics (CPU temperature) have no event source; publish on
+    // a fixed cadence so HA's history isn't just connect-time samples.
+    let mut diag_interval = tokio::time::interval(Duration::from_secs(60));
+    diag_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
         tokio::select! {
+            _ = diag_interval.tick() => {
+                publish_diag(&client, &base).await;
+            }
             event = eventloop.poll() => {
                 match event? {
                     Event::Incoming(Packet::Publish(p)) => {
