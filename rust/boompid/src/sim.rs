@@ -116,6 +116,20 @@ async fn battery_loop(app: SharedApp) {
         Some(b) => (b.min_voltage, b.max_voltage),
         None => (18.0, 24.98),
     };
+    // Drive the real estimator so the sim exercises SoC/time-remaining
+    // display paths. Pre-seeded calibration = a pack that has already
+    // learned itself.
+    let mut estimator = crate::soc::SocEstimator::new(
+        crate::soc::SocParams {
+            min_voltage: min_v,
+            default_full_voltage: max_v,
+        },
+        crate::soc::Calibration {
+            full_voltage: Some(max_v),
+            capacity_ah: Some(4.2),
+            ..Default::default()
+        },
+    );
     let mut t: f32 = 0.0;
     loop {
         let fast = app.shared.read().await.fast_poll_clients > 0;
@@ -128,12 +142,15 @@ async fn battery_loop(app: SharedApp) {
         let wobble = (t / 9.0).sin() * 0.15;
         let voltage = max_v - (max_v - min_v) * discharge + wobble * 0.1;
         let current = 1.4 + wobble; // amps; flip sign to simulate charging
+        estimator.update(voltage, current, interval);
         let battery = Battery {
             voltage,
             current,
             power: voltage * current,
-            percentage: ((voltage - min_v) / (max_v - min_v)).clamp(0.0, 1.0),
+            percentage: estimator.soc(),
             charging: current <= -0.02,
+            full: estimator.full(),
+            time_remaining_secs: estimator.time_remaining_secs(),
             ts: now_ms(),
         };
         {

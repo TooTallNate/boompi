@@ -11,6 +11,7 @@ import {
 import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
 import { useBoompi } from "./useBoompi";
 import type {
+  Battery,
   BtDevice,
   BtVolumeMode,
   ClientMessage,
@@ -83,6 +84,8 @@ export default function App() {
           />
         )}
 
+        {state?.battery && <BatterySection battery={state.battery} />}
+
         <WifiSection />
         {settings && (
           <ClockSection settings={settings} onSaved={applySettings} />
@@ -117,6 +120,47 @@ function SignalBars({ signal }: { signal: number }) {
       ))}
     </span>
   );
+}
+
+function BatterySection({ battery }: { battery: Battery }) {
+  const pct = Math.round(battery.percentage * 100);
+  const status = battery.full
+    ? "Full"
+    : battery.charging
+      ? "Charging"
+      : battery.time_remaining_secs != null
+        ? `${formatDuration(battery.time_remaining_secs)} remaining`
+        : "On battery";
+  const low = !battery.charging && !battery.full && pct <= 20;
+  return (
+    <Section title="Battery">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-[15px]">
+          {pct}%{" "}
+          <span className={battery.charging || battery.full ? "text-ok" : "text-dim"}>
+            {(battery.charging || battery.full) && "⚡ "}
+            {status}
+          </span>
+        </span>
+        <span className="text-[13px] text-dim">
+          {battery.voltage.toFixed(2)} V · {battery.current >= 0 ? "+" : ""}
+          {battery.current.toFixed(2)} A · {battery.power.toFixed(1)} W
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-bg">
+        <div
+          className={`h-full rounded-full ${low ? "bg-err" : "bg-ok"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </Section>
+  );
+}
+
+function formatDuration(secs: number): string {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
 function WifiSection() {

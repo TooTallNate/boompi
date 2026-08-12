@@ -125,7 +125,20 @@ export interface AppState {
   // Present but unused by the settings UI so far:
   source: unknown;
   track: unknown;
-  battery: unknown;
+  battery: Battery | null;
+}
+
+/** INA260 battery telemetry; null on boxes without one. */
+export interface Battery {
+  voltage: number;
+  current: number;
+  power: number;
+  /** 0.0-1.0 state of charge. */
+  percentage: number;
+  charging: boolean;
+  full: boolean;
+  time_remaining_secs?: number;
+  ts: number;
 }
 
 export interface StateResponse {
@@ -143,6 +156,7 @@ export type ServerMessage =
   | ({ type: "pairing" } & Pairing)
   | { type: "bt_devices"; devices: BtDevice[] }
   | { type: "volume"; level: number }
+  | ({ type: "battery" } & Battery)
   | { type: string; [k: string]: unknown };
 
 /** Client → server WebSocket messages used by the settings UI. */

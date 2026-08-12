@@ -351,6 +351,31 @@ async fn publish_discovery(
             }),
         ),
         (
+            "sensor",
+            "battery_time_remaining",
+            json!({
+                "name": "Battery time remaining",
+                "state_topic": format!("{base}/battery"),
+                // Key is omitted while charging/full/unlearned; a
+                // literal None renders the sensor unknown.
+                "value_template": "{{ value_json.time_remaining_min | default('None') }}",
+                "device_class": "duration",
+                "unit_of_measurement": "min",
+                "icon": "mdi:battery-clock",
+            }),
+        ),
+        (
+            "binary_sensor",
+            "battery_charging",
+            json!({
+                "name": "Battery charging",
+                "state_topic": format!("{base}/battery"),
+                "value_template": "{{ 'ON' if value_json.charging else 'OFF' }}",
+                "device_class": "battery_charging",
+                "entity_category": "diagnostic",
+            }),
+        ),
+        (
             "select",
             "screensaver",
             json!({
@@ -540,6 +565,9 @@ async fn publish_server_message(
                     "voltage": (b.voltage * 100.0).round() / 100.0,
                     "current": (b.current * 100.0).round() / 100.0,
                     "power": (b.power * 100.0).round() / 100.0,
+                    "charging": b.charging,
+                    "full": b.full,
+                    "time_remaining_min": b.time_remaining_secs.map(|s| s / 60),
                 })
                 .to_string(),
             )

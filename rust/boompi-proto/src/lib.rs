@@ -116,9 +116,19 @@ pub struct Battery {
     pub current: f32,
     /// Watts.
     pub power: f32,
-    /// 0.0-1.0, linear between the configured min/max pack voltages.
+    /// 0.0-1.0 state of charge. Coulomb-counted once a full charge has
+    /// anchored the estimator; voltage-mapped against the learned full
+    /// voltage until then. Exactly 1.0 only when `full`.
     pub percentage: f32,
     pub charging: bool,
+    /// Charge termination detected: the charger is holding the pack at
+    /// its CV plateau with ~zero current.
+    #[serde(default)]
+    pub full: bool,
+    /// Estimated time to empty. Present only while discharging with a
+    /// learned pack capacity.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_remaining_secs: Option<u32>,
     /// Unix timestamp (milliseconds).
     pub ts: u64,
 }

@@ -381,16 +381,23 @@ fn apply_battery(ctx: &NetCtx, history: &mut BatteryHistory, battery: Battery) {
     let stat_amps = format!("{:+.2}", battery.current);
     let stat_watts = format!("{:.1}", battery.power);
     let stat_percent = format!("{:.0}%", battery.percentage * 100.0);
+    let stat_time = match battery.time_remaining_secs {
+        Some(secs) if secs >= 3600 => format!("{}h {}m", secs / 3600, (secs % 3600) / 60),
+        Some(secs) => format!("{}m", secs / 60),
+        None => "-".into(),
+    };
     let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
         ui.set_battery_present(true);
         ui.set_battery_percentage(battery.percentage);
         ui.set_battery_charging(battery.charging);
+        ui.set_battery_full(battery.full);
         ui.set_battery_voltage_path(volts_path.into());
         ui.set_battery_current_path(amps_path.into());
         ui.set_stat_volts(stat_volts.into());
         ui.set_stat_amps(stat_amps.into());
         ui.set_stat_watts(stat_watts.into());
         ui.set_stat_percent(stat_percent.into());
+        ui.set_stat_time(stat_time.into());
     });
 }
 

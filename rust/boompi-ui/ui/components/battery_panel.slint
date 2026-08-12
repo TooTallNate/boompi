@@ -36,7 +36,9 @@ export component BatteryPanel inherits Rectangle {
     in property <string> stat-amps;
     in property <string> stat-watts;
     in property <string> stat-percent;
+    in property <string> stat-time;
     in property <bool> charging;
+    in property <bool> full;
 
     callback close();
 
@@ -69,7 +71,7 @@ export component BatteryPanel inherits Rectangle {
                 vertical-alignment: center;
             }
             Rectangle { }
-            if root.charging: HorizontalLayout {
+            if root.charging || root.full: HorizontalLayout {
                 spacing: 0.3333rem;
                 Rectangle {
                     width: 0.8889rem;
@@ -82,7 +84,7 @@ export component BatteryPanel inherits Rectangle {
                     }
                 }
                 Text {
-                    text: "charging";
+                    text: root.full ? "full" : "charging";
                     color: Theme.good;
                     vertical-alignment: center;
                 }
@@ -128,6 +130,7 @@ export component BatteryPanel inherits Rectangle {
             Stat { value: root.stat-amps; label: "AMPS"; }
             Stat { value: root.stat-watts; label: "WATTS"; }
             Stat { value: root.stat-percent; label: "CHARGE"; }
+            Stat { value: root.stat-time; label: "TIME LEFT"; }
         }
     }
 }

@@ -31,6 +31,10 @@ mod dsp;
 mod mqtt;
 mod server;
 mod sim;
+// SoC estimation is platform-independent (unit-tested everywhere) but only
+// consumed by the Linux-only battery thread.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod soc;
 #[cfg(target_os = "linux")]
 mod spotify;
 mod state;

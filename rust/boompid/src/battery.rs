@@ -1,19 +1,61 @@
 //! INA260 battery telemetry.
 //!
-//! Runs on a dedicated thread (I2C reads are blocking). Poll cadence
-//! matches v1: 30 s normally, 1 s while any client fast-polls (battery
-//! panel open). Absent or unresponsive hardware disables the feature
-//! gracefully - the Pi 4 box may not have one.
+//! Runs on a dedicated thread (I2C reads are blocking). The INA260 is
+//! sampled every second to feed the SoC estimator (coulomb counting
+//! needs continuous integration); broadcasts keep the old cadence -
+//! 30 s normally, 1 s while any client fast-polls (battery panel
+//! open). Absent or unresponsive hardware disables the feature
+//! gracefully - not every box has one.
+//!
+//! Learned calibration (full voltage, capacity) and the coulomb anchor
+//! persist in /data so they survive restarts and OTA updates.
 
 #![cfg(target_os = "linux")]
 
 use crate::config::BatteryConfig;
+use crate::soc::{Calibration, Snapshot, SocEstimator, SocParams};
 use crate::state::{now_ms, SharedApp};
 use boompi_proto::{Battery, ServerMessage};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Charging when current into the pack exceeds 20 mA (v1 rule).
 const CHARGING_THRESHOLD_A: f64 = -0.020;
+
+const CAL_PATH: &str = "/data/boompi-battery.json";
+/// Snapshot the coulomb anchor this often (also written on calibration
+/// changes).
+const PERSIST_INTERVAL: Duration = Duration::from_secs(600);
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+struct Persisted {
+    calibration: Calibration,
+    snapshot: Option<Snapshot>,
+}
+
+fn load_persisted() -> Persisted {
+    match std::fs::read(CAL_PATH) {
+        Ok(bytes) => match serde_json::from_slice(&bytes) {
+            Ok(p) => p,
+            Err(err) => {
+                tracing::warn!(%err, "unparseable {CAL_PATH}; starting fresh");
+                Persisted::default()
+            }
+        },
+        Err(_) => Persisted::default(),
+    }
+}
+
+fn save_persisted(p: &Persisted) {
+    let tmp = format!("{CAL_PATH}.tmp");
+    let write = || -> std::io::Result<()> {
+        std::fs::write(&tmp, serde_json::to_vec_pretty(p).expect("serialize"))?;
+        std::fs::rename(&tmp, CAL_PATH)
+    };
+    if let Err(err) = write() {
+        tracing::warn!(%err, "failed to persist battery calibration");
+    }
+}
 
 pub fn spawn(app: SharedApp) {
     let Some(cfg) = app.cfg.battery.clone() else {
@@ -53,39 +95,78 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
     }
     tracing::info!(%path, address = format!("{:#04x}", cfg.address), "INA260 battery telemetry active");
 
-    let mut ticks_until_poll = 0u32;
-    loop {
-        let fast = app.shared.blocking_read().fast_poll_clients > 0;
-        if ticks_until_poll == 0 || fast {
-            match read_battery(&mut ina, &cfg) {
-                Ok(battery) => {
-                    app.shared.blocking_write().battery = Some(battery.clone());
-                    app.broadcast(ServerMessage::Battery(battery));
-                }
-                Err(err) => tracing::warn!(%err, "battery read failed"),
-            }
-            ticks_until_poll = 30; // slow cadence: one poll per 30 ticks (30 s)
+    let persisted = load_persisted();
+    let mut estimator = SocEstimator::new(
+        SocParams {
+            min_voltage: cfg.min_voltage,
+            default_full_voltage: cfg.max_voltage,
+        },
+        persisted.calibration.clone(),
+    );
+    if let Some(snap) = &persisted.snapshot {
+        if let Ok((v, _, _)) = read_ina(&mut ina) {
+            estimator.restore(snap, v as f32);
         }
-        ticks_until_poll -= 1;
+    }
+    if let Some(fv) = estimator.calibration().full_voltage {
+        tracing::info!(
+            full_voltage = fv,
+            capacity_ah = estimator.calibration().capacity_ah,
+            "battery calibration loaded"
+        );
+    }
+
+    let mut ticks_until_broadcast = 0u32;
+    let mut last_sample = Instant::now();
+    let mut last_persist = Instant::now();
+    loop {
         std::thread::sleep(Duration::from_secs(1));
+        let (voltage, current, power) = match read_ina(&mut ina) {
+            Ok(t) => t,
+            Err(err) => {
+                tracing::warn!(%err, "battery read failed");
+                last_sample = Instant::now(); // do not integrate the gap
+                continue;
+            }
+        };
+        let dt = last_sample.elapsed().as_secs_f32();
+        last_sample = Instant::now();
+        estimator.update(voltage as f32, current as f32, dt);
+
+        if estimator.take_dirty() || last_persist.elapsed() >= PERSIST_INTERVAL {
+            last_persist = Instant::now();
+            save_persisted(&Persisted {
+                calibration: estimator.calibration().clone(),
+                snapshot: Some(estimator.snapshot()),
+            });
+        }
+
+        let fast = app.shared.blocking_read().fast_poll_clients > 0;
+        if ticks_until_broadcast == 0 || fast {
+            ticks_until_broadcast = 30; // slow cadence: 30 s
+            let battery = Battery {
+                voltage: voltage as f32,
+                current: current as f32,
+                power: power as f32,
+                percentage: estimator.soc(),
+                charging: current <= CHARGING_THRESHOLD_A,
+                full: estimator.full(),
+                time_remaining_secs: estimator.time_remaining_secs(),
+                ts: now_ms(),
+            };
+            app.shared.blocking_write().battery = Some(battery.clone());
+            app.broadcast(ServerMessage::Battery(battery));
+        }
+        ticks_until_broadcast -= 1;
     }
 }
 
-fn read_battery(
+/// One INA260 read: (volts, amps, watts).
+fn read_ina(
     ina: &mut ina260::Ina260<linux_embedded_hal::I2cdev>,
-    cfg: &BatteryConfig,
-) -> anyhow::Result<Battery> {
+) -> anyhow::Result<(f64, f64, f64)> {
     let voltage = ina.voltage().map_err(|e| anyhow::anyhow!("voltage: {e}"))?;
     let current = ina.current().map_err(|e| anyhow::anyhow!("current: {e}"))?;
     let power = ina.power().map_err(|e| anyhow::anyhow!("power: {e}"))?;
-    let percentage =
-        ((voltage as f32 - cfg.min_voltage) / (cfg.max_voltage - cfg.min_voltage)).clamp(0.0, 1.0);
-    Ok(Battery {
-        voltage: voltage as f32,
-        current: current as f32,
-        power: power as f32,
-        percentage,
-        charging: current <= CHARGING_THRESHOLD_A,
-        ts: now_ms(),
-    })
+    Ok((voltage, current, power))
 }

@@ -95,6 +95,8 @@ export component AppWindow inherits Window {
     in property <string> stat-amps: "-";
     in property <string> stat-watts: "-";
     in property <string> stat-percent: "-";
+    in property <string> stat-time: "-";
+    in property <bool> battery-full: false;
 
     // --- pairing / settings ---
     in property <string> pairing-state: "idle";
@@ -256,7 +258,9 @@ export component AppWindow inherits Window {
         stat-amps: root.stat-amps;
         stat-watts: root.stat-watts;
         stat-percent: root.stat-percent;
+        stat-time: root.stat-time;
         charging: root.battery-charging;
+        full: root.battery-full;
         close => {
             root.screen = "main";
             root.screen-changed();
