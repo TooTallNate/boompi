@@ -352,6 +352,23 @@ async fn publish_discovery(
         ),
         (
             "sensor",
+            "battery_state",
+            json!({
+                "name": "Battery state",
+                "state_topic": format!("{base}/battery"),
+                "value_template": concat!(
+                    "{% if value_json.full %}full",
+                    "{% elif value_json.charging %}charging",
+                    "{% elif value_json.current > 0.08 %}discharging",
+                    "{% else %}idle{% endif %}",
+                ),
+                "device_class": "enum",
+                "options": ["full", "charging", "discharging", "idle"],
+                "icon": "mdi:battery-heart-variant",
+            }),
+        ),
+        (
+            "sensor",
             "battery_time_remaining",
             json!({
                 "name": "Battery time remaining",
