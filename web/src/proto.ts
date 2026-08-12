@@ -137,6 +137,7 @@ export interface Battery {
   percentage: number;
   charging: boolean;
   full: boolean;
+  low: boolean;
   time_remaining_secs?: number;
   ts: number;
 }

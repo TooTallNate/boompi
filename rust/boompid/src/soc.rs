@@ -401,6 +401,103 @@ impl SocEstimator {
     }
 }
 
+/// Low-battery safeguard: a warn level with hysteresis (panel banner,
+/// HA flag) and a critical level that powers the box off before the
+/// pack reaches the BMS cutoff. Both boxes have latching power
+/// switches, so poweroff leaves a small residual draw (amp, power
+/// LED) - but the Pi is down cleanly and the SD card is safe.
+///
+/// The critical condition must hold *continuously* for a sustain
+/// window: bass transients sag the pack voltage for seconds at a
+/// time, and a single dip must never power the box off.
+#[derive(Debug, Clone, Copy)]
+pub struct SafeguardParams {
+    /// SoC at or below which the low-battery warning shows.
+    pub warn_soc: f32,
+    /// Warning clears above this (hysteresis; also clears on charge).
+    pub warn_clear_soc: f32,
+    /// SoC at or below which shutdown triggers (after sustain).
+    pub shutdown_soc: f32,
+    /// Pack voltage at or below which shutdown triggers (after
+    /// sustain) regardless of SoC - the pack is at the edge under the
+    /// present load even if the coulomb estimate disagrees.
+    pub shutdown_voltage: f32,
+    /// Seconds the critical condition must hold continuously.
+    pub sustain_secs: f32,
+}
+
+impl Default for SafeguardParams {
+    fn default() -> Self {
+        Self {
+            warn_soc: 0.15,
+            warn_clear_soc: 0.20,
+            shutdown_soc: 0.05,
+            shutdown_voltage: 18.3,
+            sustain_secs: 60.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SafeguardAction {
+    None,
+    /// Critical held for the sustain window: power off now. Returned
+    /// exactly once.
+    PowerOff,
+}
+
+#[derive(Debug)]
+pub struct Safeguard {
+    params: SafeguardParams,
+    warn: bool,
+    critical_secs: f32,
+    fired: bool,
+}
+
+impl Safeguard {
+    pub fn new(params: SafeguardParams) -> Self {
+        Self {
+            params,
+            warn: false,
+            critical_secs: 0.0,
+            fired: false,
+        }
+    }
+
+    /// Low-battery warning currently active.
+    pub fn low(&self) -> bool {
+        self.warn
+    }
+
+    pub fn update(
+        &mut self,
+        soc: f32,
+        voltage: f32,
+        charging: bool,
+        dt_secs: f32,
+    ) -> SafeguardAction {
+        // Warning with hysteresis; any charge current clears it.
+        if charging || soc >= self.params.warn_clear_soc {
+            self.warn = false;
+        } else if soc <= self.params.warn_soc {
+            self.warn = true;
+        }
+
+        let critical = !charging
+            && (soc <= self.params.shutdown_soc || voltage <= self.params.shutdown_voltage);
+        if critical {
+            self.critical_secs += dt_secs;
+        } else {
+            self.critical_secs = 0.0;
+        }
+        if self.critical_secs >= self.params.sustain_secs && !self.fired {
+            self.fired = true;
+            return SafeguardAction::PowerOff;
+        }
+        SafeguardAction::None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -582,6 +679,59 @@ mod tests {
         // Falls back to the voltage map (not the stale anchor).
         let expect = (22.8 - 18.0) / (24.84 - 18.0);
         assert!((moved.soc() - expect).abs() < 0.05);
+    }
+
+    #[test]
+    fn safeguard_warn_hysteresis_and_charge_clear() {
+        let mut g = Safeguard::new(SafeguardParams::default());
+        assert_eq!(g.update(0.30, 22.0, false, 1.0), SafeguardAction::None);
+        assert!(!g.low());
+        g.update(0.15, 21.0, false, 1.0);
+        assert!(g.low());
+        // Rises a little (load drop): stays low until clear threshold.
+        g.update(0.18, 21.2, false, 1.0);
+        assert!(g.low());
+        g.update(0.21, 21.4, false, 1.0);
+        assert!(!g.low());
+        // Low again, then the charger comes on: clears immediately.
+        g.update(0.12, 20.8, false, 1.0);
+        assert!(g.low());
+        g.update(0.12, 21.5, true, 1.0);
+        assert!(!g.low());
+    }
+
+    #[test]
+    fn safeguard_transient_sag_never_fires() {
+        let mut g = Safeguard::new(SafeguardParams::default());
+        // Bass hits: 10 s sags below the voltage floor, recovery between.
+        for _ in 0..100 {
+            for _ in 0..10 {
+                assert_eq!(g.update(0.40, 18.1, false, 1.0), SafeguardAction::None);
+            }
+            for _ in 0..5 {
+                assert_eq!(g.update(0.40, 20.5, false, 1.0), SafeguardAction::None);
+            }
+        }
+    }
+
+    #[test]
+    fn safeguard_sustained_critical_fires_once() {
+        let mut g = Safeguard::new(SafeguardParams::default());
+        let mut fired = 0;
+        for _ in 0..120 {
+            if g.update(0.03, 19.0, false, 1.0) == SafeguardAction::PowerOff {
+                fired += 1;
+            }
+        }
+        assert_eq!(fired, 1);
+    }
+
+    #[test]
+    fn safeguard_charging_blocks_shutdown() {
+        let mut g = Safeguard::new(SafeguardParams::default());
+        for _ in 0..300 {
+            assert_eq!(g.update(0.02, 18.2, true, 1.0), SafeguardAction::None);
+        }
     }
 
     #[test]

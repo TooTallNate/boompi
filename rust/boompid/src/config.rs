@@ -98,6 +98,17 @@ pub struct BatteryConfig {
     pub min_voltage: f32,
     /// Pack voltage considered 100% (v1: 24.98).
     pub max_voltage: f32,
+    /// State of charge at or below which the panel shows the
+    /// low-battery warning (clears at +5 points or on charge).
+    pub warn_soc: f32,
+    /// Automatic shutdown: SoC floor. 0 disables SoC-based shutdown.
+    pub shutdown_soc: f32,
+    /// Automatic shutdown: sustained pack-voltage floor. 0 disables
+    /// voltage-based shutdown.
+    pub shutdown_voltage: f32,
+    /// Set false to disable the automatic shutdown entirely (the
+    /// warning banner still shows).
+    pub auto_shutdown: bool,
 }
 
 impl Default for BatteryConfig {
@@ -107,6 +118,10 @@ impl Default for BatteryConfig {
             address: ina260_default_address(),
             min_voltage: 18.0,
             max_voltage: 24.98,
+            warn_soc: 0.15,
+            shutdown_soc: 0.05,
+            shutdown_voltage: 18.3,
+            auto_shutdown: true,
         }
     }
 }

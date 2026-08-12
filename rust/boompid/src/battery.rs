@@ -13,10 +13,16 @@
 #![cfg(target_os = "linux")]
 
 use crate::config::BatteryConfig;
-use crate::soc::{Calibration, Snapshot, SocEstimator, SocParams};
+use crate::soc::{
+    Calibration, Safeguard, SafeguardAction, SafeguardParams, Snapshot, SocEstimator, SocParams,
+};
 use crate::state::{now_ms, SharedApp};
 use boompi_proto::{Battery, ServerMessage};
 use std::time::{Duration, Instant};
+
+/// Grace period between the poweroff broadcast (panel notice) and the
+/// actual shutdown.
+const POWEROFF_GRACE_SECS: u32 = 20;
 
 /// Charging when current into the pack exceeds 20 mA (v1 rule).
 const CHARGING_THRESHOLD_A: f64 = -0.020;
@@ -116,6 +122,18 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
         );
     }
 
+    let mut safeguard = Safeguard::new(SafeguardParams {
+        warn_soc: cfg.warn_soc,
+        warn_clear_soc: cfg.warn_soc + 0.05,
+        shutdown_soc: if cfg.shutdown_soc > 0.0 {
+            cfg.shutdown_soc
+        } else {
+            -1.0
+        },
+        shutdown_voltage: cfg.shutdown_voltage,
+        sustain_secs: 60.0,
+    });
+    let mut was_low = false;
     let mut ticks_until_broadcast = 0u32;
     let mut last_sample = Instant::now();
     let mut last_persist = Instant::now();
@@ -141,16 +159,25 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
             });
         }
 
+        let charging = current <= CHARGING_THRESHOLD_A;
+        let action = safeguard.update(estimator.soc(), voltage as f32, charging, dt);
+        if action == SafeguardAction::PowerOff && cfg.auto_shutdown {
+            power_off(&app, voltage as f32, estimator.soc());
+        }
+
         let fast = app.shared.blocking_read().fast_poll_clients > 0;
-        if ticks_until_broadcast == 0 || fast {
+        let low_edge = safeguard.low() != was_low;
+        was_low = safeguard.low();
+        if ticks_until_broadcast == 0 || fast || low_edge {
             ticks_until_broadcast = 30; // slow cadence: 30 s
             let battery = Battery {
                 voltage: voltage as f32,
                 current: current as f32,
                 power: power as f32,
                 percentage: estimator.soc(),
-                charging: current <= CHARGING_THRESHOLD_A,
+                charging,
                 full: estimator.full(),
+                low: safeguard.low(),
                 time_remaining_secs: estimator.time_remaining_secs(),
                 ts: now_ms(),
             };
@@ -159,6 +186,25 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
         }
         ticks_until_broadcast -= 1;
     }
+}
+
+/// Battery empty: broadcast the notice (panel shows it during the
+/// grace period), then orderly poweroff. The GPU-wedge incident taught
+/// us orderly shutdown can hang in stop jobs, so a forced poweroff
+/// backstops it - at this point the alternative is draining into the
+/// BMS cutoff anyway.
+fn power_off(app: &SharedApp, voltage: f32, soc: f32) {
+    tracing::error!(voltage, soc, "battery empty - powering off");
+    app.broadcast(ServerMessage::PowerOff {
+        reason: "Battery empty".into(),
+        in_secs: POWEROFF_GRACE_SECS,
+    });
+    std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(POWEROFF_GRACE_SECS as u64));
+        let _ = std::process::Command::new("sh")
+            .args(["-c", "systemctl poweroff; sleep 90; poweroff -f"])
+            .spawn();
+    });
 }
 
 /// One INA260 read: (volts, amps, watts).

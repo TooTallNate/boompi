@@ -128,16 +128,18 @@ function BatterySection({ battery }: { battery: Battery }) {
     ? "Full"
     : battery.charging
       ? "Charging"
-      : battery.time_remaining_secs != null
-        ? `${formatDuration(battery.time_remaining_secs)} remaining`
-        : "On battery";
-  const low = !battery.charging && !battery.full && pct <= 20;
+      : battery.low
+        ? `Low battery${battery.time_remaining_secs != null ? ` — ${formatDuration(battery.time_remaining_secs)} left` : ""} — plug in soon`
+        : battery.time_remaining_secs != null
+          ? `${formatDuration(battery.time_remaining_secs)} remaining`
+          : "On battery";
+  const low = battery.low;
   return (
     <Section title="Battery">
       <div className="mb-2 flex items-baseline justify-between">
         <span className="text-[15px]">
           {pct}%{" "}
-          <span className={battery.charging || battery.full ? "text-ok" : "text-dim"}>
+          <span className={battery.charging || battery.full ? "text-ok" : low ? "text-err" : "text-dim"}>
             {(battery.charging || battery.full) && "⚡ "}
             {status}
           </span>

@@ -125,6 +125,9 @@ pub struct Battery {
     /// its CV plateau with ~zero current.
     #[serde(default)]
     pub full: bool,
+    /// Low-battery warning (hysteresis; clears while charging).
+    #[serde(default)]
+    pub low: bool,
     /// Estimated time to empty. Present only while discharging with a
     /// learned pack capacity.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -548,6 +551,12 @@ pub enum ServerMessage {
     /// Relay: a client asked to preview the screensaver; the panel
     /// activates it immediately.
     ScreensaverPreview,
+    /// The box is about to power itself off (e.g. battery empty). The
+    /// panel shows a full-screen notice for the grace period.
+    PowerOff {
+        reason: String,
+        in_secs: u32,
+    },
 }
 
 /// Client → server messages (JSON text frames).

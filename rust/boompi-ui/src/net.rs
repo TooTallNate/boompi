@@ -196,6 +196,13 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 .upgrade_in_event_loop(move |ui| ui.set_volume(level));
         }
         ServerMessage::Battery(battery) => apply_battery(ctx, history, battery),
+        ServerMessage::PowerOff { reason, in_secs: _ } => {
+            let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                ui.set_saver_active(false);
+                ui.set_poweroff_reason(reason.into());
+                ui.set_poweroff_active(true);
+            });
+        }
         ServerMessage::Pairing(pairing) => {
             let state = pairing_str(pairing.state);
             let device = pairing.device_name.unwrap_or_default();
@@ -391,6 +398,11 @@ fn apply_battery(ctx: &NetCtx, history: &mut BatteryHistory, battery: Battery) {
         ui.set_battery_percentage(battery.percentage);
         ui.set_battery_charging(battery.charging);
         ui.set_battery_full(battery.full);
+        if battery.low && !ui.get_battery_low() {
+            // Warning edge: wake the screensaver so the banner shows.
+            ui.set_saver_active(false);
+        }
+        ui.set_battery_low(battery.low);
         ui.set_battery_voltage_path(volts_path.into());
         ui.set_battery_current_path(amps_path.into());
         ui.set_stat_volts(stat_volts.into());

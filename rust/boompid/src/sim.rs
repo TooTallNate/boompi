@@ -150,6 +150,7 @@ async fn battery_loop(app: SharedApp) {
             percentage: estimator.soc(),
             charging: current <= -0.02,
             full: estimator.full(),
+            low: estimator.soc() <= 0.15,
             time_remaining_secs: estimator.time_remaining_secs(),
             ts: now_ms(),
         };

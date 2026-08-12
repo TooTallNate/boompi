@@ -64,6 +64,11 @@ export component AppWindow inherits Window {
     // Transient toast message overlay.
     in-out property <bool> toast-on: false;
     in-out property <string> toast-text: "";
+    // Low-battery warning banner (server-driven, hysteresis in boompid).
+    in property <bool> battery-low: false;
+    // Imminent self-poweroff notice (battery empty).
+    in property <bool> poweroff-active: false;
+    in property <string> poweroff-reason: "";
     // Touch-feedback ripples (positions in logical px; clock advances
     // ~30fps from Rust only while ripples are alive).
     in property <[Ripple]> ripples: [];
@@ -424,6 +429,27 @@ export component AppWindow inherits Window {
         }
     }
 
+    // Low-battery banner: persistent while the warning is active,
+    // above content, below the screensaver (waking the panel shows it;
+    // boompid wakes the saver on the warning edge).
+    if root.battery-low && !root.setup-required: Rectangle {
+        x: (root.width - self.width) / 2;
+        y: 0.6rem;
+        width: low-label.preferred-width + 1.8rem;
+        height: low-label.preferred-height + 0.9rem;
+        background: #7a1f1fe0;
+        border-radius: self.height / 2;
+        border-width: 0.06rem;
+        border-color: #ff5d5d80;
+        low-label := Text {
+            x: 0.9rem;
+            y: 0.45rem;
+            text: "Low battery — " + Math.round(root.battery-percentage * 100) + "% — plug in soon";
+            color: #ffe3e3;
+            font-size: 0.83rem;
+        }
+    }
+
     // Transient toast (e.g. tapping transport controls an AirPlay 2
     // sender doesn't allow). Auto-hides; sits above content, below the
     // screensaver.
@@ -469,6 +495,35 @@ export component AppWindow inherits Window {
         track-title: root.track-title;
         dismissed => {
             root.saver-dismissed();
+        }
+    }
+
+    // Imminent poweroff notice - covers everything (including the
+    // screensaver): the box is about to turn itself off.
+    if root.poweroff-active: Rectangle {
+        width: root.width;
+        height: root.height;
+        background: #000000f0;
+        VerticalLayout {
+            alignment: center;
+            spacing: 0.6rem;
+            Text {
+                text: "🪫";
+                horizontal-alignment: center;
+                font-size: 3.2rem;
+            }
+            Text {
+                text: root.poweroff-reason;
+                horizontal-alignment: center;
+                font-size: 1.6rem;
+                color: Theme.fg;
+            }
+            Text {
+                text: "Shutting down — flip the power switch, then charge";
+                horizontal-alignment: center;
+                font-size: 0.95rem;
+                color: Theme.dim;
+            }
         }
     }
 

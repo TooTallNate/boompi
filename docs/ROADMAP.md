@@ -8,13 +8,13 @@ contributes to "the quintessential Raspberry Pi boombox".
 
 ## Before / alongside the first stable release
 
-- **Low-battery safeguard.** The one plan item promoted to
-  release-blocker: a deeply discharged pack browned out a Pi mid-boot
-  and corrupted its SD card during Phase 0, and today the box measures
-  its battery without ever acting on it. Config-driven warning
-  threshold (panel banner) + safe-shutdown voltage floor with
-  hysteresis via the INA260. Bench-testable when the rebuilt battery
-  arrives.
+- ~~**Low-battery safeguard.**~~ Shipped: warning banner on the panel
+  (SoC threshold with hysteresis, clears on charge) and an automatic
+  orderly poweroff when SoC or sustained pack voltage crosses the
+  configured floor - the sustain window exists because bass transients
+  sag the pack for seconds at a time. Thresholds and an opt-out live
+  in `[battery]` config. Poweroff into the latching switch leaves the
+  amp + LED drawing, but the Pi is down cleanly and the SD card safe.
 - **Boot-time measurement.** The plan targets < 10 s power → UI;
   quiet boot shipped but the number was never measured. Stopwatch it,
   `systemd-analyze blame` the stragglers, tune or honestly amend the
@@ -55,9 +55,12 @@ contributes to "the quintessential Raspberry Pi boombox".
 - **EQ / loudness.** PipeWire filter-chain parametric EQ with panel
   presets ("Outdoor", "Bass boost", "Night"). Cheap to build,
   dramatic to hear, very boombox.
-- **Battery intelligence.** Beyond the safeguard: time-remaining
-  estimation from live current draw, charge/discharge history in the
-  battery panel (the INA260 already measures everything needed).
+- ~~**Battery intelligence.**~~ Shipped: self-calibrating SoC
+  estimator (learned full-charge voltage per box, coulomb counting
+  anchored at full, learned pack capacity) and time-remaining while
+  discharging, surfaced on the panel, web UI, and Home Assistant.
+  Still open: charge/discharge history in the battery panel beyond
+  the live 3-minute chart.
 
 ## Tier 2 - appliance polish
 

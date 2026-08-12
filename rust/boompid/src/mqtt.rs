@@ -584,6 +584,7 @@ async fn publish_server_message(
                     "power": (b.power * 100.0).round() / 100.0,
                     "charging": b.charging,
                     "full": b.full,
+                    "low": b.low,
                     "time_remaining_min": b.time_remaining_secs.map(|s| s / 60),
                 })
                 .to_string(),
