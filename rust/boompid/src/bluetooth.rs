@@ -1002,7 +1002,7 @@ async fn enumerate_devices(
 }
 
 /// Make sure the controller is actually powered - AutoEnable does this
-/// on healthy hardware, but the Pi 3 box's counterfeit-CSR dongle
+/// on healthy hardware, but the Pi 3 box's CSR8510 dongle (UB400)
 /// sometimes wedges at the HCI transport (HCI_Reset times out, mgmt
 /// Set Powered fails) and only a USB-level reset revives it. Detect
 /// the powered-off + power-on-fails combination and perform the reset

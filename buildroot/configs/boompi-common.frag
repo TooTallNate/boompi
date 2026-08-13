@@ -41,7 +41,7 @@ BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,bba53a117a4a5c29da892962332ff1605990e17a)/linux-bba53a117a4a5c29da892962332ff1605990e17a.tar.gz"
 # kexec for A/B trial boots - firmware tryboot is not used on either
 # board (see board/boompi/linux-kexec.fragment).
-BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment"
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
@@ -126,6 +126,13 @@ BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 # generic images leave onboard BT enabled, so hci0 must come up on an
 # unprovisioned box. Profiles that use a USB dongle disable-bt anyway.
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
+
+# USB Bluetooth dongle firmware: Realtek RTL8761B/BU (TP-Link UB500,
+# ASUS USB-BT500, newer UB400 revisions - the recommended dongles).
+# Without rtl_bt/*.bin the dongle enumerates but hci0 never appears,
+# which inside a sealed enclosure is a miserable failure mode.
+BR2_PACKAGE_LINUX_FIRMWARE=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_87XX_BT=y
 
 # UI runtime deps (Slint linuxkms + Skia GPU renderer on both boards:
 # EGL/GLES on KMS/GBM via mesa - V3D binds on the Pi 4, VC4 on the

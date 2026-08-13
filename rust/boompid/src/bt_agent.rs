@@ -9,7 +9,7 @@
 //! out into a degraded bond.
 //!
 //! Capability is `NoInputNoOutput` (JustWorks), not `DisplayYesNo`: the
-//! boombox's USB dongle is a counterfeit CSR (0a12:0001) whose SSP
+//! boombox's USB dongle is a CSR8510 (TP-Link UB400, 0a12:0001) whose SSP
 //! implementation cannot complete MITM numeric comparison - advertising
 //! display capability makes iOS request it and pairing dies at the radio
 //! layer before bluetoothd says a word (v1 worked because JustWorks never
@@ -108,7 +108,7 @@ impl Agent {
 #[zbus::interface(name = "org.bluez.Agent1")]
 impl Agent {
     /// SSP numeric comparison - only reachable on adapters with real
-    /// display-capable SSP (not the counterfeit-CSR dongle).
+    /// display-capable SSP (not the CSR8510 dongle).
     async fn request_confirmation(
         &self,
         device: OwnedObjectPath,

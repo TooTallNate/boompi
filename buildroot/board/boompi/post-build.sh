@@ -90,4 +90,12 @@ for hcd in BCM4345C0 BCM43430A1; do
         || fail "${hcd}.hcd missing (onboard Bluetooth firmware)"
 done
 
+# --- USB Bluetooth dongle firmware (both boards). -----------------------------
+# The recommended dongles are Realtek RTL8761B/BU (TP-Link UB500 et
+# al); without rtl_bt firmware they enumerate but hci0 never appears.
+for fw in rtl8761bu_fw.bin rtl8761bu_config.bin rtl8761b_fw.bin; do
+    [ -f "${TARGET_DIR}/lib/firmware/rtl_bt/$fw" ] \
+        || fail "rtl_bt/$fw missing (USB Bluetooth dongle firmware)"
+done
+
 echo "post-build assertions OK"
