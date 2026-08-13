@@ -8,7 +8,10 @@ BR2_cortex_a53=y
 BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi3/post-image.sh"
 
-BR2_LINUX_KERNEL_DEFCONFIG="bcmrpi3"
+# Same kernel config as the Pi 4 (and as Raspberry Pi OS's kernel8.img,
+# which boots Pi 3/3+/4/Zero 2 from one binary): the first step toward
+# a single unified image is both boards building the identical kernel.
+BR2_LINUX_KERNEL_DEFCONFIG="bcm2711"
 BR2_LINUX_KERNEL_INTREE_DTS_NAME="broadcom/bcm2710-rpi-3-b"
 
 # Pi 3 boots via bootcode.bin (supports autoboot.txt/boot_partition).
@@ -17,11 +20,8 @@ BR2_PACKAGE_RPI_FIRMWARE_VARIANT_PI=y
 BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi3/config.txt"
 BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi3/cmdline.txt"
 
-# TF-A rpi3 port (armstub8.bin): needs fixed kernel/DTB addresses
-# (matching kernel_address/device_tree_address in pi3/config.txt) and a
-# local patch to advertise PSCI in the DT like the rpi4 port does
-# (patches/arm-trusted-firmware/). 'all' builds armstub8.bin (bl1+fip);
-# FIP=y just pulls the host-openssl dependency fiptool needs.
-BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="rpi3"
-BR2_TARGET_ARM_TRUSTED_FIRMWARE_FIP=y
-BR2_TARGET_ARM_TRUSTED_FIRMWARE_ADDITIONAL_VARIABLES="RPI3_DIRECT_LINUX_BOOT=1 RPI3_PRELOADED_DTB_BASE=0x03800000 PRELOADED_BL33_BASE=0x02000000"
+# No TF-A: the rpi3 armstub existed to provide PSCI for kexec (parked
+# CPUs), and kexec is retired. Stock firmware boot chain - no fixed
+# kernel/DTB addresses, spin-table SMP. This also frees the bcm2711
+# kernel (bigger than bcmrpi3's) from the old 24MB Image ceiling the
+# fixed addresses imposed.

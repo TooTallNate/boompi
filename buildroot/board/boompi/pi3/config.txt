@@ -5,20 +5,8 @@
 kernel=Image
 arm_64bit=1
 
-# TF-A BL31 armstub (armstub8.bin, auto-loaded by name for arm_64bit):
-# provides PSCI so secondary CPUs can be parked - required by kexec
-# (the A/B update trial boot). The rpi3 TF-A port uses fixed load
-# addresses: kernel and DTB locations must match the PRELOADED_BL33_BASE
-# and RPI3_PRELOADED_DTB_BASE build options in the board fragment.
-#
-# The DTB must sit ABOVE the kernel image: with a 20MB Image at 32MB,
-# a DTB at the TF-A-documented 0x01000000 hangs start.elf before it
-# even shows the splash (bench-bisected on firmware 2026-05-21; the
-# firmware appears to stage the kernel low in RAM before moving it to
-# kernel_address, and the DTB write tramples the staging area).
-kernel_address=0x02000000
-device_tree_address=0x03800000
-
+# Stock boot chain: no armstub (TF-A left with the retired kexec
+# mechanism), firmware-default kernel/DTB placement, spin-table SMP.
 disable_overscan=1
 disable_splash=1
 boot_delay=0

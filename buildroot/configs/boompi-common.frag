@@ -51,11 +51,6 @@ BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y
 BR2_PACKAGE_RPI_FIRMWARE=y
 BR2_PACKAGE_RPI_FIRMWARE_INSTALL_DTB_OVERLAYS=y
 
-# TF-A BL31 armstub: PSCI for CPU park/wake - without it the CPUs use
-# spin-tables and kexec_load (the A/B update trial boot) fails with
-# EBUSY. Platform + build options are per-board (the rpi3 port needs
-# fixed load addresses and a local DT patch; see the board fragments).
-BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
 
 # System bits
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
