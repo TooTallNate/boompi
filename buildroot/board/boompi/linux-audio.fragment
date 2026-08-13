@@ -1,0 +1,16 @@
+# Audio output paths the appliance promises out of the box. The rpi
+# defconfigs normally enable all of these, but a boombox that boots
+# with no way to make sound is pointless: force them so a kernel bump
+# cannot silently drop one.
+#
+# USB sound cards are a class standard (UAC1/2/3): this single driver
+# covers essentially every USB audio device, no per-chipset firmware.
+CONFIG_SND_USB_AUDIO=m
+# I2S DAC HATs (dtoverlays ship with the firmware DTB set): the
+# machine drivers for the common HiFiBerry-compatible cards - the
+# Raspiaudio HAT on the bench Pi 4 speaks hifiberry-dac - plus the
+# PCM51xx codec family behind them.
+CONFIG_SND_BCM2708_SOC_HIFIBERRY_DAC=m
+CONFIG_SND_BCM2708_SOC_HIFIBERRY_DACPLUS=m
+CONFIG_SND_SOC_PCM5102A=m
+CONFIG_SND_SOC_PCM512x_I2C=m

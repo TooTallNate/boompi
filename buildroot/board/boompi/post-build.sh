@@ -105,4 +105,14 @@ done
 find "${TARGET_DIR}/lib/firmware/rtl_bt" -name "rtl88*.bin" 2>/dev/null | grep -q . \
     || fail "rtl_bt/rtl88*.bin missing (Realtek combo BT firmware)"
 
+# --- Audio output paths (both boards). ----------------------------------------
+# USB sound cards are one class driver (covers ~every device, no
+# firmware); I2S DAC HATs need their machine + codec modules. A
+# boombox image that cannot make sound must not build.
+for mod in snd-usb-audio snd-soc-hifiberry-dac snd-soc-hifiberry-dacplus \
+           snd-soc-pcm5102a snd-soc-pcm512x; do
+    find "${TARGET_DIR}/lib/modules" -name "${mod}.ko*" 2>/dev/null | grep -q . \
+        || fail "kernel module $mod missing (audio output)"
+done
+
 echo "post-build assertions OK"
