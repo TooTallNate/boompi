@@ -109,7 +109,11 @@ find "${TARGET_DIR}/lib/firmware/rtl_bt" -name "rtl88*.bin" 2>/dev/null | grep -
 # USB sound cards are one class driver (covers ~every device, no
 # firmware); I2S DAC HATs need their machine + codec modules. A
 # boombox image that cannot make sound must not build.
-for mod in snd-usb-audio snd-soc-hifiberry-dac snd-soc-hifiberry-dacplus \
+# NB the plain hifiberry-dac card (CONFIG_SND_BCM2708_SOC_HIFIBERRY_DAC)
+# builds into the shared rpi-simple-soundcard module, not one named
+# after itself - verified against the bench Pi 4 (lsmod) after this
+# assertion failed a build under the wrong name.
+for mod in snd-usb-audio snd-soc-rpi-simple-soundcard snd-soc-hifiberry-dacplus \
            snd-soc-pcm5102a snd-soc-pcm512x; do
     find "${TARGET_DIR}/lib/modules" -name "${mod}.ko*" 2>/dev/null | grep -q . \
         || fail "kernel module $mod missing (audio output)"
