@@ -8,7 +8,7 @@ Type=simple
 # Runtime config lives on /data (survives reflashes); the image-baked
 # /etc file only seeds the very first boot (hardware facts: model,
 # battery bus). Streaming credential caches land in /data/cache.
-ExecStart=/usr/bin/boompid --config /data/boompi.toml --config-seed /etc/boompi/boompi.toml
+ExecStart=/usr/bin/boompid --config /data/boompi.toml --config-seed /etc/boompi/boompi.toml --hardware-profile /data/box/hardware.toml
 # /run/boompi: the AirPlay PCM FIFO lives here (NOT /tmp - the boot
 # clock predates NTP by months without an RTC, and tmpfiles' age-based
 # clean reaps /tmp entries whose timestamps look ancient).

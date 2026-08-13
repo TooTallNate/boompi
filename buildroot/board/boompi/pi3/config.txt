@@ -36,3 +36,8 @@ dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
 # antenna/UART). Audio out is the USB adapter, not onboard analog.
 dtoverlay=disable-bt
 dtparam=audio=off
+
+# Box-specific firmware config (display overlay, rotation, wiring,
+# amp GPIO) belongs in /data/box/config.txt, not here: it is merged
+# into a fenced section below by boompi-apply-box-config whenever a
+# boot partition is written, and survives OS updates.

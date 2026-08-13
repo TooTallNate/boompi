@@ -228,6 +228,75 @@ pub fn load_with_seed(path: Option<&Path>, seed: Option<&Path>) -> anyhow::Resul
     load(path)
 }
 
+/// Load the fully layered appliance config: the runtime config (or
+/// its image seed) as the base, with the box hardware profile merged
+/// over it.
+///
+/// The profile (`/data/box/hardware.toml`) describes one physical
+/// build - battery wiring, panel DPI seed, amp GPIO - and wins for
+/// exactly the keys it specifies. It survives OS updates and factory
+/// resets; user-editable runtime settings continue to live in the
+/// base config.
+pub fn load_layered(
+    path: Option<&Path>,
+    seed: Option<&Path>,
+    hardware: Option<&Path>,
+) -> anyhow::Result<Config> {
+    let hw = match hardware {
+        Some(p) => match std::fs::read_to_string(p) {
+            Ok(raw) => Some((p, raw)),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+            Err(err) => {
+                return Err(err)
+                    .with_context(|| format!("reading hardware profile {}", p.display()))
+            }
+        },
+        None => None,
+    };
+    let Some((hw_path, hw_raw)) = hw else {
+        return load_with_seed(path, seed);
+    };
+
+    let base_raw = [path, seed]
+        .into_iter()
+        .flatten()
+        .find(|p| p.exists())
+        .map(std::fs::read_to_string)
+        .transpose()
+        .context("reading base config")?
+        .unwrap_or_default();
+
+    let mut merged: toml::Value = toml::from_str(&base_raw).context("parsing base config")?;
+    let overlay: toml::Value = toml::from_str(&hw_raw)
+        .with_context(|| format!("parsing hardware profile {}", hw_path.display()))?;
+    merge_toml(&mut merged, overlay);
+    let raw = toml::to_string(&merged).context("serializing merged config")?;
+    let (cfg, unknown) = parse(&raw).context("parsing merged config")?;
+    for key in &unknown {
+        tracing::warn!(%key, "ignoring unknown config key (merged config)");
+    }
+    tracing::info!(profile = %hw_path.display(), "hardware profile merged");
+    Ok(cfg)
+}
+
+/// Deep-merge `over` into `base`: tables merge recursively, everything
+/// else (scalars, arrays) is replaced.
+fn merge_toml(base: &mut toml::Value, over: toml::Value) {
+    match (base, over) {
+        (toml::Value::Table(b), toml::Value::Table(o)) => {
+            for (k, v) in o {
+                match b.get_mut(&k) {
+                    Some(slot) => merge_toml(slot, v),
+                    None => {
+                        b.insert(k, v);
+                    }
+                }
+            }
+        }
+        (b, o) => *b = o,
+    }
+}
+
 /// Load config from `path`, or defaults when `None`.
 ///
 /// A missing file is not an error when the path was given explicitly: the
@@ -280,6 +349,71 @@ pub fn save(cfg: &Config, path: &Path) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hardware_profile_merges_over_base() {
+        let dir = std::env::temp_dir().join(format!("boompi-hw-merge-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = dir.join("boompi.toml");
+        let hw = dir.join("hardware.toml");
+        std::fs::write(
+            &base,
+            r#"
+            name = "Kitchen Boombox"
+            model = "pi3"
+
+            [battery]
+            i2c_bus = 1
+            min_voltage = 18.0
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            &hw,
+            r#"
+            [battery]
+            i2c_bus = 11
+            shutdown_voltage = 18.5
+
+            [settings]
+            ui_scale = 1.5
+            "#,
+        )
+        .unwrap();
+        let cfg = load_layered(Some(&base), None, Some(&hw)).unwrap();
+        // Profile wins for the keys it names...
+        let b = cfg.battery.as_ref().unwrap();
+        assert_eq!(b.i2c_bus, 11);
+        assert_eq!(b.shutdown_voltage, 18.5);
+        assert_eq!(cfg.settings.ui_scale, 1.5);
+        // ...tables merge instead of replacing...
+        assert_eq!(b.min_voltage, 18.0);
+        // ...and untouched base keys survive.
+        assert_eq!(cfg.name, "Kitchen Boombox");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn missing_hardware_profile_is_fine() {
+        let dir = std::env::temp_dir().join(format!("boompi-hw-missing-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let base = dir.join("boompi.toml");
+        std::fs::write(&base, "name = \"Solo\"").unwrap();
+        let cfg = load_layered(Some(&base), None, Some(&dir.join("nope.toml"))).unwrap();
+        assert_eq!(cfg.name, "Solo");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn hardware_profile_without_base_config() {
+        let dir = std::env::temp_dir().join(format!("boompi-hw-nobase-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let hw = dir.join("hardware.toml");
+        std::fs::write(&hw, "[battery]\ni2c_bus = 11").unwrap();
+        let cfg = load_layered(Some(&dir.join("nope.toml")), None, Some(&hw)).unwrap();
+        assert_eq!(cfg.battery.as_ref().unwrap().i2c_bus, 11);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn parses_full_config() {

@@ -5,8 +5,11 @@ After=boompid.service systemd-udevd.service
 [Service]
 Type=simple
 ExecStart=/usr/bin/boompi-ui
-# Panel rotation is board-specific: the Pi 3 overlay adds a drop-in
-# with SLINT_KMS_ROTATION for its portrait-native HyperPixel.
+# Box profile environment (e.g. SLINT_KMS_ROTATION for a
+# portrait-native panel mounted landscape). Optional; survives OS
+# updates on /data. The Pi 3 image's rotation drop-in still exists
+# for boxes provisioned before the profile did.
+EnvironmentFile=-/data/box/env
 Environment=XDG_CACHE_HOME=/var/cache/boompi
 CacheDirectory=boompi
 Environment=HOME=/root

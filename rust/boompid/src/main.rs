@@ -69,6 +69,12 @@ struct Cli {
     /// (appliance: image-baked hardware facts seeding /data on first boot).
     #[arg(long)]
     config_seed: Option<PathBuf>,
+
+    /// Box hardware profile merged over the config (per-build facts:
+    /// battery wiring, panel DPI, amp GPIO). Survives updates and
+    /// factory resets.
+    #[arg(long)]
+    hardware_profile: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -81,7 +87,11 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     let cli = Cli::parse();
-    let cfg = config::load_with_seed(cli.config.as_deref(), cli.config_seed.as_deref())?;
+    let cfg = config::load_layered(
+        cli.config.as_deref(),
+        cli.config_seed.as_deref(),
+        cli.hardware_profile.as_deref(),
+    )?;
     tracing::info!(name = %cfg.name, "starting boompid v{}", state::VERSION);
 
     let app = state::App::new(cfg, cli.config.clone());

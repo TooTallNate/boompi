@@ -57,5 +57,9 @@ verify "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
 verify "$BOOT_IMG" "$TARGET_BOOT"
 echo "slot verified (sha256)"
 
+# The bundle's boot image is board-generic; re-materialize this box's
+# firmware config (display/rotation/wiring) before daring to boot it.
+boompi-apply-box-config "$TARGET_BOOT"
+
 echo "update staged + verified; arming trial boot"
 exec boompi-trial-boot "$TARGET_ROOT"

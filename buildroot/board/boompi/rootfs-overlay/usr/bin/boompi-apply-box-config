@@ -1,0 +1,64 @@
+#!/bin/sh
+# Re-materialize the box profile's firmware config into a boot
+# partition's config.txt.
+#
+# The OS images are board-generic (pi3/pi4); anything specific to one
+# physical build - display overlay, rotation dtparams, wiring, amp
+# GPIO lines - lives in /data/box/config.txt. Because the Pi firmware
+# cannot `include` across partitions, that fragment is copied into a
+# fenced section of config.txt whenever a boot partition is
+# (re)written: flash-time provisioning, OS updates (boompi-update-slot
+# and the on-box updater), or manually after editing the fragment.
+#
+# Idempotent: the fenced section is replaced wholesale on every apply,
+# and removed when the fragment is absent or empty.
+#
+# Usage: boompi-apply-box-config <boot-block-dev>...
+#        boompi-apply-box-config --all      # both A/B boot slots
+set -eu
+
+FRAGMENT=/data/box/config.txt
+OPEN='# >>> boompi box profile (managed; edit /data/box/config.txt) >>>'
+CLOSE='# <<< boompi box profile <<<'
+
+apply() { # <block-dev>
+    MNT=$(mktemp -d)
+    mount "$1" "$MNT"
+    if [ ! -f "$MNT/config.txt" ]; then
+        echo "no config.txt on $1; skipping" >&2
+        umount "$MNT"
+        rmdir "$MNT"
+        return 0
+    fi
+    # Strip any existing fenced section (and hold back blank runs so
+    # repeated applies do not grow trailing whitespace).
+    awk -v open="$OPEN" -v close_="$CLOSE" '
+        $0 == open  { skip = 1; next }
+        $0 == close_ { skip = 0; next }
+        skip { next }
+        /^[ \t]*$/ { blanks = blanks $0 "\n"; next }
+        { printf "%s", blanks; blanks = ""; print }
+    ' "$MNT/config.txt" > "$MNT/config.txt.new"
+    if [ -s "$FRAGMENT" ]; then
+        {
+            printf '\n%s\n' "$OPEN"
+            cat "$FRAGMENT"
+            # Guard a fragment without a trailing newline.
+            [ -z "$(tail -c 1 "$FRAGMENT")" ] || printf '\n'
+            printf '%s\n' "$CLOSE"
+        } >> "$MNT/config.txt.new"
+    fi
+    mv "$MNT/config.txt.new" "$MNT/config.txt"
+    umount "$MNT"
+    rmdir "$MNT"
+    echo "box profile applied to $1"
+}
+
+if [ "${1:-}" = "--all" ]; then
+    set -- /dev/mmcblk0p1 /dev/mmcblk0p2
+fi
+[ $# -ge 1 ] || { echo "usage: boompi-apply-box-config <boot-block-dev>... | --all" >&2; exit 1; }
+
+for dev in "$@"; do
+    apply "$dev"
+done

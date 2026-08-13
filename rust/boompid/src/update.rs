@@ -386,6 +386,24 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
     set_stage(app, UpdateStage::VerifyingBoot).await;
     verify_device(app, slot.target_boot, n, &boot_sum, P_BOOT_VERIFY).await?;
 
+    // The bundle's boot image is board-generic: re-materialize this
+    // box's firmware config (display/rotation/wiring fragment from
+    // /data/box/config.txt) into the freshly written partition. A
+    // failure aborts the update *before* the trial is armed - booting
+    // a candidate without its box profile could look healthy to the
+    // sick-check (boompid runs fine) while the panel stays dark.
+    let out = tokio::process::Command::new("boompi-apply-box-config")
+        .arg(slot.target_boot)
+        .output()
+        .await
+        .context("running boompi-apply-box-config")?;
+    if !out.status.success() {
+        bail!(
+            "boompi-apply-box-config failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+
     set_stage(app, UpdateStage::Restarting).await;
     set_progress(app, 1.0).await;
 
