@@ -84,7 +84,13 @@ export default function App() {
           />
         )}
 
-        {state?.battery && <BatterySection battery={state.battery} />}
+        {state && (
+          <BatterySection
+            battery={state.battery}
+            status={state.battery_status ?? "ok"}
+            detail={state.battery_status_detail}
+          />
+        )}
 
         <WifiSection />
         {settings && (
@@ -122,9 +128,41 @@ function SignalBars({ signal }: { signal: number }) {
   );
 }
 
-function BatterySection({ battery }: { battery: Battery }) {
+function BatterySection({
+  battery,
+  status,
+  detail,
+}: {
+  battery: Battery | null;
+  status: "unconfigured" | "error" | "ok";
+  detail?: string;
+}) {
+  if (!battery) {
+    return (
+      <Section title="Battery">
+        {status === "error" ? (
+          <>
+            <p className="text-sm text-err">Battery sensor not responding.</p>
+            <p className="mt-1 text-[13px] text-dim">
+              The configured INA260 didn't answer - check the wiring and the
+              bus/address in the box profile (
+              <code>/data/box/hardware.toml</code>).
+              {detail && <> Detail: {detail}</>}
+            </p>
+          </>
+        ) : (
+          <p className="text-[13px] text-dim">
+            Battery monitoring isn't configured. If this box has an INA260
+            power sensor, describe it in the box profile
+            (<code>/data/box/hardware.toml</code>):{" "}
+            <code>[battery] i2c_bus = 1, address = 0x40</code>
+          </p>
+        )}
+      </Section>
+    );
+  }
   const pct = Math.round(battery.percentage * 100);
-  const status = battery.full
+  const statusText = battery.full
     ? "Full"
     : battery.charging
       ? "Charging"
@@ -141,7 +179,7 @@ function BatterySection({ battery }: { battery: Battery }) {
           {pct}%{" "}
           <span className={battery.charging || battery.full ? "text-ok" : low ? "text-err" : "text-dim"}>
             {(battery.charging || battery.full) && "⚡ "}
-            {status}
+            {statusText}
           </span>
         </span>
         <span className="text-[13px] text-dim">

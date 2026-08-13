@@ -63,10 +63,16 @@ fn save_persisted(p: &Persisted) {
     }
 }
 
+fn set_status(app: &SharedApp, status: boompi_proto::BatteryStatus, detail: Option<String>) {
+    let mut s = app.shared.blocking_write();
+    s.battery_status = status;
+    s.battery_status_detail = detail;
+}
+
 pub fn spawn(app: SharedApp) {
     let Some(cfg) = app.cfg.battery.clone() else {
         tracing::info!("no [battery] config; INA260 telemetry disabled");
-        return;
+        return; // status stays Unconfigured (the default)
     };
     std::thread::Builder::new()
         .name("battery".into())
@@ -80,6 +86,11 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
         Ok(dev) => dev,
         Err(err) => {
             tracing::error!(%err, %path, "cannot open I2C bus; battery telemetry disabled");
+            set_status(
+                &app,
+                boompi_proto::BatteryStatus::Error,
+                Some(format!("cannot open {path}: {err}")),
+            );
             return;
         }
     };
@@ -93,6 +104,14 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
         ),
         Err(err) => {
             tracing::error!(%err, %path, "INA260 not responding; battery telemetry disabled");
+            set_status(
+                &app,
+                boompi_proto::BatteryStatus::Error,
+                Some(format!(
+                    "INA260 not responding on {path} @ {:#04x}: {err}",
+                    cfg.address
+                )),
+            );
             return;
         }
     }
@@ -100,6 +119,7 @@ fn run(app: SharedApp, cfg: BatteryConfig) {
         tracing::warn!(%err, "failed to write INA260 config; continuing with defaults");
     }
     tracing::info!(%path, address = format!("{:#04x}", cfg.address), "INA260 battery telemetry active");
+    set_status(&app, boompi_proto::BatteryStatus::Ok, None);
 
     let persisted = load_persisted();
     let mut estimator = SocEstimator::new(

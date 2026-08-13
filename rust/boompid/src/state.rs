@@ -124,6 +124,9 @@ pub struct Shared {
     /// display always shows what is audibly playing.
     pub sink_volume: f32,
     pub battery: Option<Battery>,
+    /// Why telemetry is (not) flowing; UIs explain instead of hiding.
+    pub battery_status: boompi_proto::BatteryStatus,
+    pub battery_status_detail: Option<String>,
     pub pairing: Pairing,
     pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
@@ -432,6 +435,8 @@ impl App {
             track: s.track.clone(),
             volume: s.volume,
             battery: s.battery.clone(),
+            battery_status: s.battery_status,
+            battery_status_detail: s.battery_status_detail.clone(),
             pairing: s.pairing.clone(),
             bt_devices: s.bt_devices.clone(),
             settings: s.settings.clone(),

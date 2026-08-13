@@ -156,6 +156,18 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             if let Some(battery) = state.battery {
                 apply_battery(ctx, history, battery);
             }
+            let battery_status = match state.battery_status {
+                boompi_proto::BatteryStatus::Unconfigured => "unconfigured",
+                boompi_proto::BatteryStatus::Error => "error",
+                boompi_proto::BatteryStatus::Ok => "ok",
+            };
+            let battery_detail = state.battery_status_detail.clone().unwrap_or_default();
+            {
+                let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+                    ui.set_battery_status(battery_status.into());
+                    ui.set_battery_status_detail(battery_detail.into());
+                });
+            }
             let pairing = pairing_str(state.pairing.state);
             let online_art = state.settings.online_art_fallback;
             let light = state.settings.theme == boompi_proto::Theme::Light;

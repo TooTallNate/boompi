@@ -126,6 +126,8 @@ export interface AppState {
   source: unknown;
   track: unknown;
   battery: Battery | null;
+  battery_status?: "unconfigured" | "error" | "ok";
+  battery_status_detail?: string;
 }
 
 /** INA260 battery telemetry; null on boxes without one. */

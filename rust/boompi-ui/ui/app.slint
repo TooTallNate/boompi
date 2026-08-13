@@ -92,6 +92,8 @@ export component AppWindow inherits Window {
 
     // --- battery ---
     in property <bool> battery-present: false;
+    in property <string> battery-status: "unconfigured";
+    in property <string> battery-status-detail: "";
     in property <float> battery-percentage: 0;
     in property <bool> battery-charging: false;
     in property <string> battery-voltage-path: "";
@@ -257,6 +259,9 @@ export component AppWindow inherits Window {
 
     // ---- overlay screens ----------------------------------------------------
     if root.screen == "battery": BatteryPanel {
+        present: root.battery-present;
+        status: root.battery-status;
+        status-detail: root.battery-status-detail;
         voltage-path: root.battery-voltage-path;
         current-path: root.battery-current-path;
         stat-volts: root.stat-volts;

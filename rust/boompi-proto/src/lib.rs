@@ -507,6 +507,21 @@ pub enum UpdateAction {
     Apply,
 }
 
+/// Why battery telemetry is (or is not) flowing, so UIs can explain
+/// an absent battery instead of silently hiding it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BatteryStatus {
+    /// No `[battery]` section configured for this box.
+    #[default]
+    Unconfigured,
+    /// Configured but the sensor is not responding (wiring, wrong
+    /// bus/address); detail in `State::battery_status_detail`.
+    Error,
+    /// Telemetry active.
+    Ok,
+}
+
 /// Full state snapshot; sent after [`Hello`] and available on demand.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct State {
@@ -514,6 +529,10 @@ pub struct State {
     pub track: Option<Track>,
     pub volume: f32,
     pub battery: Option<Battery>,
+    #[serde(default)]
+    pub battery_status: BatteryStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub battery_status_detail: Option<String>,
     pub pairing: Pairing,
     /// Paired Bluetooth devices.
     #[serde(default)]

@@ -112,6 +112,7 @@ async fn track_loop(app: SharedApp) {
 /// Simulates a slowly discharging ~6S pack with some load wobble.
 /// Polls fast (1 Hz) while any client requests it, mirroring real behavior.
 async fn battery_loop(app: SharedApp) {
+    app.shared.write().await.battery_status = boompi_proto::BatteryStatus::Ok;
     let (min_v, max_v) = match &app.cfg.battery {
         Some(b) => (b.min_voltage, b.max_voltage),
         None => (18.0, 24.98),

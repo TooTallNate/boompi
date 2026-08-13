@@ -99,8 +99,10 @@ export component Footer inherits Rectangle {
             overflow: elide;
         }
 
-        // Battery icon (tap → diagnostics panel).
-        if root.battery-present: TouchArea {
+        // Battery icon (tap → diagnostics panel). Always shown: with
+        // no telemetry it renders as an empty outline and the panel
+        // explains why (unconfigured box profile vs sensor error).
+        TouchArea {
             width: 2rem;
             clicked => {
                 root.open-battery();
@@ -112,9 +114,9 @@ export component Footer inherits Rectangle {
                 width: 1.5556rem;
                 height: 0.7778rem;
                 border-width: 0.0556rem;
-                border-color: Theme.dim;
+                border-color: root.battery-present ? Theme.dim : Theme.faint;
                 border-radius: 0.1667rem;
-                Rectangle {
+                if root.battery-present: Rectangle {
                     // fill level
                     x: 0.1111rem;
                     y: 0.1111rem;

@@ -30,6 +30,11 @@ component Stat inherits Rectangle {
 }
 
 export component BatteryPanel inherits Rectangle {
+    // Telemetry flowing (at least one sample received).
+    in property <bool> present: true;
+    // "unconfigured" | "error" | "ok" - why telemetry is absent.
+    in property <string> status: "ok";
+    in property <string> status-detail: "";
     in property <string> voltage-path;
     in property <string> current-path;
     in property <string> stat-volts;
@@ -91,8 +96,46 @@ export component BatteryPanel inherits Rectangle {
             }
         }
 
+        // No telemetry: explain why and how to fix it, instead of a
+        // dead chart.
+        if !root.present: Rectangle {
+            vertical-stretch: 1;
+            background: Theme.panel;
+            border-radius: 0.4444rem;
+            VerticalLayout {
+                alignment: center;
+                spacing: 0.5556rem;
+                padding: 1.5rem;
+                Text {
+                    text: root.status == "error"
+                        ? "Battery sensor not responding"
+                        : "Battery monitoring not configured";
+                    horizontal-alignment: center;
+                    font-size: 1.2222rem;
+                    color: Theme.fg;
+                }
+                Text {
+                    text: root.status == "error"
+                        ? "The configured INA260 didn't answer. Check the wiring and the bus/address in the box profile.\n(/data/box/hardware.toml)"
+                        : root.status == "ok"
+                        ? "Waiting for the first reading…"
+                        : "If this box has an INA260 power sensor, describe it in the box profile:\n\n/data/box/hardware.toml\n[battery]\ni2c_bus = 1\naddress = 0x40";
+                    horizontal-alignment: center;
+                    font-size: 0.8333rem;
+                    color: Theme.dim;
+                }
+                if root.status-detail != "": Text {
+                    text: root.status-detail;
+                    horizontal-alignment: center;
+                    font-size: 0.7222rem;
+                    color: Theme.dimmer;
+                    wrap: word-wrap;
+                }
+            }
+        }
+
         // Chart: voltage (magenta) + current (cyan), 3-minute window.
-        Rectangle {
+        if root.present: Rectangle {
             vertical-stretch: 1;
             background: Theme.panel;
             border-radius: 0.4444rem;
@@ -124,7 +167,7 @@ export component BatteryPanel inherits Rectangle {
             }
         }
 
-        HorizontalLayout {
+        if root.present: HorizontalLayout {
             spacing: 0.4444rem;
             Stat { value: root.stat-volts; label: "VOLTS"; }
             Stat { value: root.stat-amps; label: "AMPS"; }
