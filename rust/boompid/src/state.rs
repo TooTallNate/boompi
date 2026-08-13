@@ -785,6 +785,15 @@ fn lan_ip() -> Option<std::net::IpAddr> {
     }
 }
 
+/// Hardware model from the device tree ("Raspberry Pi 4 Model B Rev
+/// 1.2"); `None` off-device (mac dev, sim on a laptop). The DT string
+/// carries a trailing NUL.
+pub fn board_model() -> Option<String> {
+    let raw = std::fs::read_to_string("/proc/device-tree/model").ok()?;
+    let model = raw.trim_matches('\0').trim().to_string();
+    (!model.is_empty()).then_some(model)
+}
+
 /// Current unix time in milliseconds.
 pub fn now_ms() -> u64 {
     SystemTime::now()

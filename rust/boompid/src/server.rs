@@ -146,7 +146,7 @@ async fn hello(app: &SharedApp) -> Hello {
     Hello {
         proto_version: PROTO_VERSION,
         name: app.speaker_name().await,
-        model: app.cfg.model.clone(),
+        model: crate::state::board_model(),
         version: crate::state::VERSION.into(),
         uptime_secs: app.started.elapsed().as_secs(),
         settings_url: app.settings_url(),

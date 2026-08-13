@@ -415,7 +415,8 @@ pub struct Hello {
     pub proto_version: u32,
     /// Speaker name (Bluetooth alias / pretty hostname).
     pub name: String,
-    /// Hardware model hint, e.g. "pi3" / "pi4".
+    /// Hardware model, read from the device tree at runtime
+    /// (e.g. "Raspberry Pi 4 Model B Rev 1.2"); absent off-device.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     /// boompid version.

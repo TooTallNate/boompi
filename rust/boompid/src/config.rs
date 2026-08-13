@@ -13,8 +13,6 @@ use std::path::Path;
 pub struct Config {
     /// Speaker name (Bluetooth alias, shown on the Connect screen).
     pub name: String,
-    /// Hardware model hint, e.g. "pi3" / "pi4".
-    pub model: Option<String>,
     /// Battery monitor; omit entirely on boxes without an INA260.
     pub battery: Option<BatteryConfig>,
     /// Spotify Connect (librespot subprocess).
@@ -42,7 +40,6 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             name: "Boompi".into(),
-            model: None,
             battery: None,
             spotify: SpotifyConfig::default(),
             airplay: AirplayConfig::default(),
@@ -209,7 +206,7 @@ impl Default for SettingsConfig {
 /// primary file doesn't exist yet.
 ///
 /// The appliance splits config in two: `/etc/boompi/boompi.toml` (image-
-/// baked hardware facts: model, battery bus) seeds the very first boot,
+/// baked defaults) seeds the very first boot,
 /// after which everything persists to `/data/boompi.toml` - which survives
 /// OS reflashes.
 pub fn load_with_seed(path: Option<&Path>, seed: Option<&Path>) -> anyhow::Result<Config> {
@@ -369,7 +366,6 @@ mod tests {
             &base,
             r#"
             name = "Kitchen Boombox"
-            model = "pi3"
 
             [battery]
             i2c_bus = 1
@@ -446,7 +442,6 @@ mod tests {
         let cfg: Config = toml::from_str(
             r#"
             name = "Kitchen Boombox"
-            model = "pi3"
 
             [battery]
             i2c_bus = 3
@@ -502,12 +497,11 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let primary = dir.join("data.toml");
         let seed = dir.join("seed.toml");
-        std::fs::write(&seed, "name = \"Seeded\"\nmodel = \"pi3\"\n").unwrap();
+        std::fs::write(&seed, "name = \"Seeded\"\n").unwrap();
 
         // Primary missing → seed wins.
         let cfg = load_with_seed(Some(&primary), Some(&seed)).unwrap();
         assert_eq!(cfg.name, "Seeded");
-        assert_eq!(cfg.model.as_deref(), Some("pi3"));
 
         // Primary present → seed ignored.
         std::fs::write(&primary, "name = \"Configured\"\n").unwrap();

@@ -1,0 +1,4 @@
+# Boompi defaults - identical on every board (first-boot seed; runtime
+# config persists to /data/boompi.toml, box hardware to /data/box/).
+
+name = "Boompi"

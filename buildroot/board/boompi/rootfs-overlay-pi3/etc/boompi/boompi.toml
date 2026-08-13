@@ -1,5 +1,0 @@
-# Boompi board defaults - Pi 3 (first-boot seed; runtime config
-# persists to /data/boompi.toml, box hardware to /data/box/).
-
-name = "Boompi"
-model = "pi3"
