@@ -229,8 +229,17 @@ async fn run(
     apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
     refresh_devices(&ctx).await;
 
+    // Recovery heartbeat: the loop is otherwise purely event-driven,
+    // and a controller that vanishes emits exactly one event - if the
+    // recovery attempt it triggers fails, nothing would ever retry.
+    let mut health_tick = tokio::time::interval(std::time::Duration::from_secs(30));
+    health_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
     loop {
         tokio::select! {
+            _ = health_tick.tick() => {
+                ensure_powered(&ctx, &session).await;
+            }
             _ = cfg_watch.changed() => {
                 apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
             }
@@ -394,6 +403,28 @@ async fn handle_interfaces_removed(
             "org.bluez.Device1" => {
                 // Unpaired/removed device.
                 refresh_devices(ctx).await;
+            }
+            "org.bluez.Adapter1"
+                if session
+                    .adapter_path
+                    .as_ref()
+                    .is_some_and(|p| p.as_str() == path) =>
+            {
+                // The controller died outright (bench: the 6.6.78 urb
+                // wedge can remove the hci entirely, not just leave it
+                // unpowered). Clear the stale path so the health tick's
+                // ensure_powered takes the no-adapter recovery branch
+                // instead of no-oping against a dead proxy forever.
+                tracing::warn!(%path, "BT adapter removed; USB recovery will retry");
+                session.adapter_path = None;
+                crate::bt_agent::set_pairing(
+                    &ctx.app,
+                    Pairing {
+                        state: PairingState::Unavailable,
+                        ..Pairing::default()
+                    },
+                )
+                .await;
             }
             _ => {}
         }
@@ -1009,25 +1040,26 @@ async fn enumerate_devices(
 /// (sysfs `authorized` toggle) that a human would otherwise do by
 /// replugging the dongle.
 async fn ensure_powered(ctx: &Ctx, session: &Session) {
-    let Some(path) = &session.adapter_path else {
-        return;
-    };
-    let adapter = match Adapter1Proxy::builder(&ctx.conn).path(path.clone()) {
-        Ok(builder) => match builder.build().await {
-            Ok(adapter) => adapter,
-            Err(_) => return,
-        },
-        Err(_) => return,
-    };
-    if adapter.powered().await.unwrap_or(false) {
-        RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
-        return;
+    // Fast path: adapter present and healthy.
+    if let Some(path) = &session.adapter_path {
+        if let Ok(builder) = Adapter1Proxy::builder(&ctx.conn).path(path.clone()) {
+            if let Ok(adapter) = builder.build().await {
+                if adapter.powered().await.unwrap_or(false) {
+                    RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
+                    return;
+                }
+                if adapter.set_powered(true).await.is_ok() {
+                    tracing::info!("BT adapter powered on");
+                    RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
+                    return;
+                }
+            }
+        }
     }
-    if adapter.set_powered(true).await.is_ok() {
-        tracing::info!("BT adapter powered on");
-        RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
-        return;
-    }
+    // Everything else - adapter refusing power, adapter object gone
+    // (the 6.6.78 urb wedge can remove the hci outright), stale D-Bus
+    // path - falls through to USB-level recovery.
+    //
     // Exponential backoff between reset attempts: a dongle that is
     // wedged beyond software recovery (bench: dwc_otg-level FSM
     // timeouts only a power cycle clears) must not be USB-reset every
@@ -1040,14 +1072,7 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
     if now < NEXT_RESET_AT.load(std::sync::atomic::Ordering::Relaxed) {
         return;
     }
-    let failures = RESET_FAILURES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let delay = 4u64.saturating_mul(1 << failures.min(8)).min(600);
-    NEXT_RESET_AT.store(now + delay, std::sync::atomic::Ordering::Relaxed);
-    tracing::warn!(
-        attempt = failures + 1,
-        next_retry_secs = delay,
-        "BT adapter refuses to power on; USB-resetting the dongle"
-    );
+    let failures = RESET_FAILURES.load(std::sync::atomic::Ordering::Relaxed);
     // Escalation: the `authorized` toggle clears transport-level
     // wedges, but the dwc_otg-level ones (urb resubmit failures at
     // boot on 6.6.78; bench 2-of-3 boots) survive it - only cutting
@@ -1056,68 +1081,159 @@ async fn ensure_powered(ctx: &Ctx, session: &Session) {
     // not). Port power on the Pi 3 hub is ganged, so sibling devices
     // (USB audio) re-enumerate too - acceptable while BT is dead.
     let escalate = failures >= 2;
-    let reset = tokio::task::spawn_blocking(move || -> std::io::Result<()> {
-        // hciN -> .../usbX/X-Y/X-Y.Z/X-Y.Z:1.0/bluetooth/hciN; the usb
-        // DEVICE (with `authorized`) is two levels above the interface.
-        for entry in std::fs::read_dir("/sys/class/bluetooth")? {
-            let hci = entry?.path();
-            let dev = hci.join("device").join("..");
-            if escalate {
-                if let Some(port_disable) = hub_port_disable_path(&hci) {
-                    tracing::warn!(path = %port_disable.display(), "escalating: USB port power cycle");
-                    let off = std::fs::write(&port_disable, "1");
-                    std::thread::sleep(std::time::Duration::from_millis(2000));
-                    let on = std::fs::write(&port_disable, "0");
-                    off.and(on)?;
-                    continue;
-                }
-            }
-            let auth = dev.join("authorized");
-            if auth.exists() {
-                // If a previous cycle was interrupted (daemon restart
-                // between the writes), the device sits de-authorized -
-                // recover that first instead of toggling deeper down.
-                if std::fs::read_to_string(&auth)
-                    .map(|v| v.trim() == "0")
-                    .unwrap_or(false)
-                {
-                    std::fs::write(&auth, "1")?;
-                    continue;
-                }
-                // Always attempt the re-authorize even if the
-                // de-authorize failed: never strand the device off.
-                let off = std::fs::write(&auth, "0");
-                std::thread::sleep(std::time::Duration::from_millis(1000));
-                let on = std::fs::write(&auth, "1");
-                off.and(on)?;
-            }
-        }
-        Ok(())
-    })
-    .await;
-    match reset {
-        Ok(Ok(())) => {
-            // Re-enumeration takes a few seconds; bluetoothd re-adds the
-            // adapter (InterfacesAdded) and we come back through here.
-            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-            if adapter.set_powered(true).await.is_ok() {
-                tracing::info!("BT adapter recovered after USB reset");
-                RESET_FAILURES.store(0, std::sync::atomic::Ordering::Relaxed);
-                NEXT_RESET_AT.store(0, std::sync::atomic::Ordering::Relaxed);
-            }
-        }
-        other => tracing::warn!(?other, "USB reset of BT dongle failed"),
+    let acted = tokio::task::spawn_blocking(move || recover_bt_usb(escalate))
+        .await
+        .unwrap_or(0);
+    if acted == 0 {
+        // Nothing USB-shaped to recover: a box with no dongle (onboard
+        // UART controller, or genuinely no Bluetooth). Not an error and
+        // not worth burning backoff slots - stay quiet and cheap.
+        tracing::debug!("no USB Bluetooth device found to recover");
+        return;
     }
+    let delay = 4u64.saturating_mul(1 << failures.min(8)).min(600);
+    RESET_FAILURES.store(failures + 1, std::sync::atomic::Ordering::Relaxed);
+    NEXT_RESET_AT.store(now + delay, std::sync::atomic::Ordering::Relaxed);
+    tracing::warn!(
+        attempt = failures + 1,
+        next_retry_secs = delay,
+        devices = acted,
+        adapter_present = session.adapter_path.is_some(),
+        "BT unhealthy; USB-level recovery attempted"
+    );
+    // Re-enumeration takes a few seconds; bluetoothd re-adds the
+    // adapter (InterfacesAdded) and the handler / health tick brings
+    // it up, resetting the counters via the fast path above.
+    tokio::time::sleep(std::time::Duration::from_secs(4)).await;
 }
 
-/// The hub port `disable` attribute for the usb device behind an hci:
-/// /sys/class/bluetooth/hciN/device resolves to the usb INTERFACE
-/// (e.g. 1-1.2:1.0); its parent is the device (1-1.2), whose name
-/// encodes hub (1-1) and port (2). The hub's own interface dir holds
-/// the per-port controls: .../1-1:1.0/1-1-port2/disable.
-fn hub_port_disable_path(hci: &std::path::Path) -> Option<std::path::PathBuf> {
-    let iface = std::fs::canonicalize(hci.join("device")).ok()?;
-    let dev = iface.parent()?;
+/// Blocking USB-level Bluetooth recovery. Returns how many devices or
+/// stuck ports were acted on (0 = nothing found - no USB BT hardware).
+///
+/// Candidates come from two directions, because the wedge decides what
+/// survives: the /sys/class/bluetooth walk (hci still registered) and
+/// a scan of USB devices advertising the Wireless/Bluetooth class
+/// (hci gone but the device still enumerated - the state the ladder
+/// previously could not see). Errors are tolerated per candidate: a
+/// device vanishing mid-walk must not abort recovery of the others.
+fn recover_bt_usb(escalate: bool) -> usize {
+    let mut acted = 0usize;
+
+    // First, undo any hub port left disabled by an interrupted
+    // escalation: the device is invisible while the port is off, so
+    // this must precede the device scans.
+    if let Ok(entries) = std::fs::read_dir("/sys/bus/usb/devices") {
+        for entry in entries.flatten() {
+            let iface = entry.path();
+            if !iface
+                .file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.contains(':'))
+            {
+                continue;
+            }
+            if let Ok(ports) = std::fs::read_dir(&iface) {
+                for port in ports.flatten() {
+                    let name_ok = port
+                        .file_name()
+                        .to_str()
+                        .is_some_and(|n| n.contains("-port"));
+                    if !name_ok {
+                        continue;
+                    }
+                    let disable = port.path().join("disable");
+                    if std::fs::read_to_string(&disable)
+                        .map(|v| v.trim() == "1")
+                        .unwrap_or(false)
+                    {
+                        tracing::warn!(path = %disable.display(), "re-enabling stuck-disabled USB port");
+                        if std::fs::write(&disable, "0").is_ok() {
+                            acted += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Candidate USB devices.
+    let mut devices: Vec<std::path::PathBuf> = Vec::new();
+    // Via registered hcis: hciN/device resolves to the usb INTERFACE
+    // (e.g. 1-1.2:1.0); its parent is the device (1-1.2).
+    if let Ok(entries) = std::fs::read_dir("/sys/class/bluetooth") {
+        for entry in entries.flatten() {
+            if let Ok(iface) = std::fs::canonicalize(entry.path().join("device")) {
+                if let Some(dev) = iface.parent() {
+                    devices.push(dev.to_path_buf());
+                }
+            }
+        }
+    }
+    // Via USB device class: bDeviceClass e0 = Wireless Controller
+    // (the CSR dongle), or any interface with bInterfaceClass e0.
+    if let Ok(entries) = std::fs::read_dir("/sys/bus/usb/devices") {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let is_class_e0 = |p: &std::path::Path, f: &str| {
+                std::fs::read_to_string(p.join(f))
+                    .map(|v| v.trim().eq_ignore_ascii_case("e0"))
+                    .unwrap_or(false)
+            };
+            if name.contains(':') {
+                if is_class_e0(&path, "bInterfaceClass") {
+                    if let Ok(dev) = std::fs::canonicalize(path.join("..")) {
+                        devices.push(dev);
+                    }
+                }
+            } else if is_class_e0(&path, "bDeviceClass") {
+                devices.push(path);
+            }
+        }
+    }
+    devices.sort();
+    devices.dedup();
+
+    for dev in devices {
+        acted += 1;
+        if escalate {
+            if let Some(port_disable) = hub_port_disable_path(&dev) {
+                tracing::warn!(path = %port_disable.display(), "escalating: USB port power cycle");
+                let _ = std::fs::write(&port_disable, "1");
+                std::thread::sleep(std::time::Duration::from_millis(2000));
+                let _ = std::fs::write(&port_disable, "0");
+                continue;
+            }
+        }
+        let auth = dev.join("authorized");
+        if auth.exists() {
+            // If a previous cycle was interrupted (daemon restart
+            // between the writes), the device sits de-authorized -
+            // recover that first instead of toggling deeper down.
+            if std::fs::read_to_string(&auth)
+                .map(|v| v.trim() == "0")
+                .unwrap_or(false)
+            {
+                let _ = std::fs::write(&auth, "1");
+                continue;
+            }
+            // Always attempt the re-authorize even if the
+            // de-authorize failed: never strand the device off.
+            let _ = std::fs::write(&auth, "0");
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+            let _ = std::fs::write(&auth, "1");
+        }
+    }
+    acted
+}
+
+/// The hub port `disable` attribute for a usb device: the device name
+/// (e.g. 1-1.2) encodes hub (1-1) and port (2), and the hub's own
+/// interface dir holds the per-port controls:
+/// .../1-1:1.0/1-1-port2/disable.
+fn hub_port_disable_path(dev: &std::path::Path) -> Option<std::path::PathBuf> {
     let devname = dev.file_name()?.to_str()?;
     let (hub, port) = devname.rsplit_once('.')?;
     let path = dev
