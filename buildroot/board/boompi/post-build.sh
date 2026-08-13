@@ -72,7 +72,7 @@ grep -q "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus" \
 # flips (Pi 4); kexec is retired. Assert the pieces the mechanism (and
 # the box-profile re-materialization it performs) actually execs.
 for tool in boompi-update-slot boompi-trial-boot boompi-boot-commit \
-            boompi-apply-box-config; do
+            boompi-apply-box-config boompi-ingest-provision; do
     [ -x "${TARGET_DIR}/usr/bin/$tool" ] \
         || fail "$tool missing (A/B updater)"
 done

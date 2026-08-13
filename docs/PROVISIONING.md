@@ -47,6 +47,18 @@ the old merged config.
 
 ## Provisioning a box
 
+Fresh SD card, from any OS (no root, no ext4 tooling): flash the
+generic image, let the OS mount the boot partition, then
+
+    scripts/provision-sd.sh georges /Volumes/bootfs
+
+(or just copy a `boompi-box/` directory with the profile files onto
+the FAT by hand - the script is a convenience). On first boot the
+appliance ingests the bundle into `/data/box/`, merges the firmware
+config into both boot slots, renames the bundle `*.applied`, and
+reboots once if the active boot config changed. Drop a fresh bundle
+any time to re-provision.
+
 Running appliance, over ssh:
 
     scripts/provision.sh georges root@192.168.1.118
@@ -67,9 +79,5 @@ its wiring.
 
 ## Not yet built (roadmap)
 
-- First-boot ingest of a profile dropped onto the boot FAT partition
-  (flash the generic image, drag `boompi-box/` onto the SD from any
-  OS, boot).
-- `scripts/provision-sd.sh` for flash-time provisioning of a card.
 - A static configurator website that generates a profile from a
-  hardware questionnaire.
+  hardware questionnaire (the drag-drop bundle is its output format).

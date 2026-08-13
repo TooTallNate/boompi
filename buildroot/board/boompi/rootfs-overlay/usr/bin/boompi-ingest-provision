@@ -1,0 +1,60 @@
+#!/bin/sh
+# First-boot (or any-boot) box profile ingest.
+#
+# Flash the generic image from any OS, then drop a `boompi-box/`
+# directory (config.txt, cmdline.txt, hardware.toml, env - see
+# docs/PROVISIONING.md and boxes/ for examples) into the boot
+# partition your OS mounts - Windows/macOS typically expose only the
+# first FAT partition, so both slots are checked. On the next boot
+# this ingests the bundle into /data/box/, re-materializes the
+# firmware config on both boot slots, renames the bundle *.applied
+# (ingest-once; drop a fresh bundle to re-provision), and reboots one
+# time if the active boot config actually changed.
+set -eu
+
+FOUND=0
+for dev in /dev/mmcblk0p1 /dev/mmcblk0p2; do
+    M=$(mktemp -d)
+    if ! mount "$dev" "$M" 2>/dev/null; then
+        rmdir "$M"
+        continue
+    fi
+    if [ -d "$M/boompi-box" ]; then
+        echo "ingesting box profile bundle from $dev"
+        mkdir -p /data/box
+        for f in config.txt cmdline.txt hardware.toml env; do
+            [ -f "$M/boompi-box/$f" ] && cp "$M/boompi-box/$f" "/data/box/$f"
+        done
+        rm -rf "$M/boompi-box.applied"
+        mv "$M/boompi-box" "$M/boompi-box.applied"
+        FOUND=1
+    fi
+    umount "$M"
+    rmdir "$M"
+done
+[ "$FOUND" = 1 ] || exit 0
+sync
+
+# Active boot slot: config changes there need a reboot to take effect.
+case "$(cat /proc/cmdline)" in
+    *root=/dev/mmcblk0p5*) ACTIVE_BOOT=/dev/mmcblk0p2 ;;
+    *) ACTIVE_BOOT=/dev/mmcblk0p1 ;;
+esac
+boot_hash() {
+    M=$(mktemp -d)
+    mount "$ACTIVE_BOOT" "$M"
+    cat "$M/config.txt" "$M/cmdline.txt" 2>/dev/null | sha256sum | cut -d' ' -f1
+    umount "$M"
+    rmdir "$M"
+}
+
+BEFORE=$(boot_hash)
+boompi-apply-box-config --all
+AFTER=$(boot_hash)
+
+if [ "$BEFORE" != "$AFTER" ]; then
+    echo "active boot config changed; rebooting to apply the profile"
+    systemctl reboot
+else
+    echo "box profile ingested (no firmware config change; no reboot)"
+fi

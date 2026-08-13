@@ -1,0 +1,16 @@
+[Unit]
+Description=Boompi box profile ingest (bundle dropped on a boot partition)
+# Needs /data writable (profile home) and the rootfs remounted rw
+# (mount points). Must finish before boompid/boompi-ui start so a
+# freshly ingested hardware.toml/env applies on their first launch.
+After=systemd-remount-fs.service data.mount
+RequiresMountsFor=/data
+Before=boompid.service boompi-ui.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-ingest-provision
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
