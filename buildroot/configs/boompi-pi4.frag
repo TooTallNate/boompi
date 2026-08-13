@@ -5,7 +5,7 @@
 
 BR2_cortex_a72=y
 
-BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-pi4 $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
+BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/rootfs-overlay-ci"
 BR2_ROOTFS_POST_IMAGE_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/pi4/post-image.sh"
 
 BR2_LINUX_KERNEL_DEFCONFIG="bcm2711"
@@ -23,4 +23,3 @@ BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31=y
 # Onboard Bluetooth (BCM43455): UART BT firmware (BCM4345C0.hcd). The
 # Pi 4 box has no USB dongle - v1 used the onboard radio. (The Pi 3 box
 # disables its onboard radio and uses a USB dongle instead.)
-BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y

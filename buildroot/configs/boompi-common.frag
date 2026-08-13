@@ -121,6 +121,11 @@ BR2_PACKAGE_DNSMASQ=y
 BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
+# Onboard Bluetooth UART firmware for every board (BCM43430A1.hcd for
+# the Pi 3's BCM43438, BCM4345C0.hcd for the Pi 4's BCM43455): the
+# generic images leave onboard BT enabled, so hci0 must come up on an
+# unprovisioned box. Profiles that use a USB dongle disable-bt anyway.
+BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
 # UI runtime deps (Slint linuxkms + Skia GPU renderer on both boards:
 # EGL/GLES on KMS/GBM via mesa - V3D binds on the Pi 4, VC4 on the

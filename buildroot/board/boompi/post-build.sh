@@ -68,23 +68,26 @@ grep -q "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus" \
     || fail "boompid.service lacks the obex bus environment"
 
 # --- A/B update mechanism (both boards). -------------------------------------
-# The trial boot is kexec-based (firmware tryboot is unusable: Pi 4B
-# pre-1.4 reboots power-cycle and wipe the flag). An A/B image without
-# kexec cannot take updates safely.
+# Trial boots are PM_RSTS one-shots (Pi 3, via devmem) or autoboot.txt
+# flips (Pi 4); kexec is retired. Assert the pieces the mechanism (and
+# the box-profile re-materialization it performs) actually execs.
+for tool in boompi-update-slot boompi-trial-boot boompi-boot-commit \
+            boompi-apply-box-config; do
+    [ -x "${TARGET_DIR}/usr/bin/$tool" ] \
+        || fail "$tool missing (A/B updater)"
+done
 find "${TARGET_DIR}/usr/bin" "${TARGET_DIR}/usr/sbin" \
      "${TARGET_DIR}/bin" "${TARGET_DIR}/sbin" \
-     -maxdepth 1 -name kexec 2>/dev/null | grep -q . \
-    || fail "kexec missing (A/B trial boot needs it)"
+     -maxdepth 1 -name devmem 2>/dev/null | grep -q . \
+    || fail "devmem missing (Pi 3 PM_RSTS trial boot needs it)"
 
-[ -x "${TARGET_DIR}/usr/bin/boompi-update-slot" ] \
-    || fail "boompi-update-slot missing (A/B updater)"
-
-# --- Pi 4 only: onboard Bluetooth (BCM43455). --------------------------------
-# The UART BT firmware must ship or hci0 never appears (and pairing
-# shows "unavailable"). The Pi 3 box uses a USB dongle instead.
-if grep -q 'model = "pi4"' "${TARGET_DIR}/etc/boompi/boompi.toml" 2>/dev/null; then
-    find "${TARGET_DIR}/lib/firmware" -name "BCM4345C0*.hcd" 2>/dev/null | grep -q . \
-        || fail "BCM4345C0.hcd missing (onboard Bluetooth firmware)"
-fi
+# --- Onboard Bluetooth UART firmware (both boards). --------------------------
+# The generic images leave onboard BT enabled; without the .hcd
+# firmware hci0 never appears (pairing shows "unavailable"). Both
+# families ship in every image so the images stay identical.
+for hcd in BCM4345C0 BCM43430A1; do
+    find "${TARGET_DIR}/lib/firmware" -name "${hcd}*.hcd" 2>/dev/null | grep -q . \
+        || fail "${hcd}.hcd missing (onboard Bluetooth firmware)"
+done
 
 echo "post-build assertions OK"
