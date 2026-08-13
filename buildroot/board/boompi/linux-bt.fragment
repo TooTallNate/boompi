@@ -1,6 +1,6 @@
-# Realtek Bluetooth USB dongles (RTL8761B/BU: TP-Link UB500 et al).
-# The rpi defconfigs normally have this on (it defaults y under
-# BT_HCIBTUSB and selects BT_RTL for the firmware loader), but the
-# recommended dongle must not silently stop working over a kernel
-# bump: force it.
+# USB Bluetooth dongle support pins. The rpi defconfigs normally have
+# these on (they default y under BT_HCIBTUSB and select the vendor
+# firmware loaders), but the recommended dongles must not silently
+# stop working over a kernel bump: force them.
 CONFIG_BT_HCIBTUSB_RTL=y
+CONFIG_BT_HCIBTUSB_MTK=y

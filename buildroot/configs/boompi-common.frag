@@ -127,12 +127,23 @@ BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y
 # unprovisioned box. Profiles that use a USB dongle disable-bt anyway.
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT=y
 
-# USB Bluetooth dongle firmware: Realtek RTL8761B/BU (TP-Link UB500,
-# ASUS USB-BT500, newer UB400 revisions - the recommended dongles).
-# Without rtl_bt/*.bin the dongle enumerates but hci0 never appears,
-# which inside a sealed enclosure is a miserable failure mode.
+# USB Bluetooth dongle firmware. Boompi OS aims to be a generic
+# image, so the common dongle chipset families work out of the box -
+# without their firmware a dongle enumerates but hci0 never appears
+# (or stays in ROM-only mode and scans find nothing), a miserable
+# failure mode inside a sealed enclosure.
+# - RTL_87XX_BT: RTL8761B/BU - TP-Link UB400v2/UB500/UB600, ASUS
+#   USB-BT500, Edimax BT-8500 (the recommended family). NB the UB600
+#   also needs the quirks-table backport in patches/linux/.
+# - RTL_88XX_BT: RTL8821/8822/8852 WiFi+BT combo USB adapters.
+# - MT7921/MT7922 BT: MediaTek combo USB adapters (MT7921AU et al).
+# CSR8510 dongles (UB400v1) need no firmware; old Broadcom BCM20702
+# dongles need vendor blobs linux-firmware may not ship - not covered.
 BR2_PACKAGE_LINUX_FIRMWARE=y
 BR2_PACKAGE_LINUX_FIRMWARE_RTL_87XX_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_RTL_88XX_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7921_BT=y
+BR2_PACKAGE_LINUX_FIRMWARE_MEDIATEK_MT7922_BT=y
 
 # UI runtime deps (Slint linuxkms + Skia GPU renderer on both boards:
 # EGL/GLES on KMS/GBM via mesa - V3D binds on the Pi 4, VC4 on the
