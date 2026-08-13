@@ -1,7 +1,6 @@
-# Boompi Pi 4 box boot configuration.
-# Hardware facts recovered from the v1 SD card dump (Aug 2026):
-# Raspiaudio Audio+ DAC HAT, 1024×600 HDMI touch panel (USB HID touch),
-# INA260 on the standard i2c-1 bus.
+# Boompi Pi 4 boot configuration (board-generic).
+# Box-specific hardware lives in the box profile - see
+# docs/PROVISIONING.md and boxes/ for the bench boxes.
 
 start_file=start4.elf
 fixup_file=fixup4.dat
@@ -25,20 +24,13 @@ boot_delay=0
 dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
-# Raspiaudio Audio+ DAC HAT (PCM51xx-family I2S - vendor-documented
-# overlay). Onboard audio off so the DAC is the only ALSA card.
-dtoverlay=hifiberry-dac
-dtparam=audio=off
+# Onboard Bluetooth (BCM43455, UART-attached) stays enabled. Needs
+# BCM4345C0.hcd from BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT; the
+# kernel attaches hci0 via serdev automatically.
 
-# INA260 battery monitor on the standard I2C bus.
-dtparam=i2c_arm=on
-
-# Onboard Bluetooth (BCM43455, UART-attached). Unlike the Pi 3 box -
-# which uses a USB dongle and disables the onboard radio - the Pi 4 box
-# has no dongle and v1 shipped with onboard BT active (verified from the
-# v1 SD dump: no disable-bt). Needs BCM4345C0.hcd from
-# BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_BT; the kernel attaches hci0
-# via serdev automatically.
+# Generic posture: HDMI + onboard audio. A provisioned box overrides
+# from its profile (e.g. Nate's: hifiberry-dac for the Raspiaudio
+# HAT, i2c_arm=on for the INA260, video= mode via cmdline fragment).
 
 # Box-specific firmware config (display overlay, rotation, wiring,
 # amp GPIO) belongs in /data/box/config.txt, not here: it is merged

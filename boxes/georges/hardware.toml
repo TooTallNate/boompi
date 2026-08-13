@@ -1,0 +1,11 @@
+# George's box - hardware profile, merged over the boompid config.
+# Hardware tables always win; [settings] only seeds the first boot.
+
+[battery]
+# INA260 on the HyperPixel overlay's bit-banged i2c-gpio bus.
+i2c_bus = 11
+
+[settings]
+# First-boot seed: HyperPixel 4.0 is high-DPI (800x480 at 4 inches);
+# the design-size UI is unreadably small there.
+ui_scale = 1.5

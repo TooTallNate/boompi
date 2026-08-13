@@ -13,11 +13,19 @@
 # Idempotent: the fenced section is replaced wholesale on every apply,
 # and removed when the fragment is absent or empty.
 #
+# The profile may also carry kernel arguments (/data/box/cmdline.txt,
+# a single line - e.g. video= for an EDID-less panel). cmdline.txt
+# allows no comments, so the fragment is appended after a `boompi.box`
+# marker: the dot makes the kernel file it as a module parameter and
+# stay silent, and everything after the marker is ours to replace.
+# The slot's own prefix (root=/dev/mmcblk0pN ...) is preserved.
+#
 # Usage: boompi-apply-box-config <boot-block-dev>...
 #        boompi-apply-box-config --all      # both A/B boot slots
 set -eu
 
 FRAGMENT=/data/box/config.txt
+CMDFRAG=/data/box/cmdline.txt
 OPEN='# >>> boompi box profile (managed; edit /data/box/config.txt) >>>'
 CLOSE='# <<< boompi box profile <<<'
 
@@ -49,6 +57,15 @@ apply() { # <block-dev>
         } >> "$MNT/config.txt.new"
     fi
     mv "$MNT/config.txt.new" "$MNT/config.txt"
+    if [ -f "$MNT/cmdline.txt" ]; then
+        base=$(head -n1 "$MNT/cmdline.txt" | sed 's/[[:space:]]*boompi\.box.*$//')
+        if [ -s "$CMDFRAG" ]; then
+            printf '%s boompi.box %s\n' "$base" "$(head -n1 "$CMDFRAG")" > "$MNT/cmdline.txt.new"
+        else
+            printf '%s\n' "$base" > "$MNT/cmdline.txt.new"
+        fi
+        mv "$MNT/cmdline.txt.new" "$MNT/cmdline.txt"
+    fi
     umount "$MNT"
     rmdir "$MNT"
     echo "box profile applied to $1"

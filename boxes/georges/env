@@ -1,0 +1,4 @@
+# George's box - panel service environment (systemd EnvironmentFile).
+# The HyperPixel is portrait-native, mounted landscape; the DRM
+# panel-orientation hint is not auto-applied by Slint (Phase 0).
+SLINT_KMS_ROTATION=270

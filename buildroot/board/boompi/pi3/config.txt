@@ -1,6 +1,6 @@
-# Boompi Pi 3 box boot configuration.
-# Hardware facts recovered from the v1 SD card + Phase 0 spikes
-# (docs/PHASE0-PI3.md).
+# Boompi Pi 3 boot configuration (board-generic).
+# Box-specific hardware lives in the box profile - see
+# docs/PROVISIONING.md and boxes/ for the bench boxes.
 
 kernel=Image
 arm_64bit=1
@@ -27,15 +27,10 @@ boot_delay=0
 dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
-# HyperPixel 4.0 panel + GT911 touch, rotated (matches v1; Slint adds
-# SLINT_KMS_ROTATION=270 on top - see boompi-ui.service)
-dtoverlay=vc4-kms-dpi-hyperpixel4
-dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
-
-# USB Bluetooth dongle only; onboard radio disabled (stutters, shares
-# antenna/UART). Audio out is the USB adapter, not onboard analog.
-dtoverlay=disable-bt
-dtparam=audio=off
+# Generic posture: HDMI console via vc4-kms-v3d, onboard Bluetooth
+# and audio left enabled. A provisioned box overrides all of this
+# from its profile (e.g. George's: HyperPixel DPI panel, disable-bt
+# for the USB dongle, audio=off for USB out).
 
 # Box-specific firmware config (display overlay, rotation, wiring,
 # amp GPIO) belongs in /data/box/config.txt, not here: it is merged

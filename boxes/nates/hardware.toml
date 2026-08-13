@@ -1,0 +1,5 @@
+# Nate's box - hardware profile, merged over the boompid config.
+
+[battery]
+# INA260 on the standard I2C bus (dtparam=i2c_arm=on in config.txt).
+i2c_bus = 1

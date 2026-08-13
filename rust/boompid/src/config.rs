@@ -267,8 +267,17 @@ pub fn load_layered(
         .unwrap_or_default();
 
     let mut merged: toml::Value = toml::from_str(&base_raw).context("parsing base config")?;
-    let overlay: toml::Value = toml::from_str(&hw_raw)
+    let mut overlay: toml::Value = toml::from_str(&hw_raw)
         .with_context(|| format!("parsing hardware profile {}", hw_path.display()))?;
+    // The profile's [settings] table is a first-boot *seed* (e.g.
+    // ui_scale for a high-DPI panel), not an override: once the
+    // runtime config exists, the user's choices win. Hardware tables
+    // ([battery], ...) always win - wiring is not a preference.
+    if path.map(|p| p.exists()).unwrap_or(false) {
+        if let toml::Value::Table(t) = &mut overlay {
+            t.remove("settings");
+        }
+    }
     merge_toml(&mut merged, overlay);
     let raw = toml::to_string(&merged).context("serializing merged config")?;
     let (cfg, unknown) = parse(&raw).context("parsing merged config")?;
@@ -374,9 +383,6 @@ mod tests {
             [battery]
             i2c_bus = 11
             shutdown_voltage = 18.5
-
-            [settings]
-            ui_scale = 1.5
             "#,
         )
         .unwrap();
@@ -385,11 +391,31 @@ mod tests {
         let b = cfg.battery.as_ref().unwrap();
         assert_eq!(b.i2c_bus, 11);
         assert_eq!(b.shutdown_voltage, 18.5);
-        assert_eq!(cfg.settings.ui_scale, 1.5);
         // ...tables merge instead of replacing...
         assert_eq!(b.min_voltage, 18.0);
         // ...and untouched base keys survive.
         assert_eq!(cfg.name, "Kitchen Boombox");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn hardware_profile_settings_seed_only() {
+        let dir = std::env::temp_dir().join(format!("boompi-hw-seed-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let primary = dir.join("boompi.toml");
+        let hw = dir.join("hardware.toml");
+        std::fs::write(&hw, "[battery]\ni2c_bus = 11\n\n[settings]\nui_scale = 1.5").unwrap();
+
+        // First boot (no runtime config yet): settings seed applies.
+        let cfg = load_layered(Some(&primary), None, Some(&hw)).unwrap();
+        assert_eq!(cfg.settings.ui_scale, 1.5);
+
+        // The user changed the scale; the profile must not clobber it,
+        // while its hardware facts still win.
+        std::fs::write(&primary, "[settings]\nui_scale = 2.0").unwrap();
+        let cfg = load_layered(Some(&primary), None, Some(&hw)).unwrap();
+        assert_eq!(cfg.settings.ui_scale, 2.0);
+        assert_eq!(cfg.battery.as_ref().unwrap().i2c_bus, 11);
         std::fs::remove_dir_all(&dir).ok();
     }
 

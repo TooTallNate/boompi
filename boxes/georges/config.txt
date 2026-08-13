@@ -1,0 +1,14 @@
+# George's box - Pi 3 + HyperPixel 4.0 + USB Bluetooth dongle + USB audio.
+# Firmware config fragment; merged into the boot partitions' config.txt
+# by boompi-apply-box-config (see docs/PROVISIONING.md).
+
+# HyperPixel 4.0 panel + GT911 touch, rotated (Slint adds
+# SLINT_KMS_ROTATION=270 on top - see the env file). The overlay also
+# provides the bit-banged i2c-gpio bus (i2c-11) the INA260 hangs off.
+dtoverlay=vc4-kms-dpi-hyperpixel4
+dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x
+
+# USB Bluetooth dongle only; onboard radio disabled (stutters, shares
+# antenna/UART). Audio out is the USB adapter, not onboard analog.
+dtoverlay=disable-bt
+dtparam=audio=off

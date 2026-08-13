@@ -1,0 +1,1 @@
+video=HDMI-A-1:1024x600M@60D

@@ -1,0 +1,75 @@
+# Box provisioning
+
+The OS images are **board-generic** (one per SoC: pi3, pi4). Anything
+specific to one physical build - display overlay, rotation, wiring,
+battery bus, amp GPIO - is a **box profile** that lives on the `/data`
+partition and survives OS updates and factory resets.
+
+An unprovisioned image boots to a useful recovery posture: HDMI
+console, onboard Bluetooth/audio, ssh, and the web settings page.
+Profile-dependent features explain what is missing instead of hiding
+(e.g. the battery screen shows the exact `hardware.toml` snippet to
+add).
+
+## The profile: `/data/box/`
+
+| File | Consumed by | Contents |
+|---|---|---|
+| `config.txt` | firmware (via re-materialization) | dtoverlays, dtparams, gpio lines |
+| `cmdline.txt` | kernel (single line, appended) | e.g. `video=` for an EDID-less panel |
+| `hardware.toml` | boompid (`--hardware-profile`) | `[battery]` wiring/thresholds; `[settings]` seeds first boot only |
+| `env` | boompi-ui (`EnvironmentFile`) | e.g. `SLINT_KMS_ROTATION=270` |
+
+All files are optional. The bench boxes' profiles live in `boxes/` in
+this repo and double as worked examples.
+
+## How the firmware config survives updates
+
+The Pi firmware cannot `include` across partitions, so
+`boompi-apply-box-config` copies the fragment into a fenced section of
+a boot partition's `config.txt` (and appends `cmdline.txt` after a
+`boompi.box` marker - the dot makes the kernel treat it as a module
+parameter and stay silent). The fence is replaced wholesale on every
+apply, so the operation is idempotent.
+
+Everything that writes a boot partition re-applies the profile:
+
+- the on-box updater (before arming the A/B trial; a failure aborts
+  the update, because a candidate booting without its display overlay
+  would pass the sick-check with a dark panel),
+- `boompi-update-slot` (ssh-driven updates),
+- `boompi-apply-box-config --all` (manual, after editing the fragment;
+  reboot to take effect).
+
+The A/B trial protects profile changes the same way it protects OS
+updates: a new slot that fails to boot rolls back to the old slot with
+the old merged config.
+
+## Provisioning a box
+
+Running appliance, over ssh:
+
+    scripts/provision.sh georges root@192.168.1.118
+
+This writes `/data/box/` and restarts boompid. The firmware fragment
+lands on the boot partitions at the next OS update - or immediately
+with `--apply` (only on boxes already running a board-generic image;
+on the old tailored images the fragment would duplicate the baked-in
+config).
+
+`[settings]` in `hardware.toml` is a *seed*: it applies only until the
+runtime config (`/data/boompi.toml`) exists. The user's later choices
+win. Hardware tables (`[battery]`, ...) always win - wiring is not a
+preference.
+
+Factory reset keeps `/data/box/` - resetting a speaker does not change
+its wiring.
+
+## Not yet built (roadmap)
+
+- First-boot ingest of a profile dropped onto the boot FAT partition
+  (flash the generic image, drag `boompi-box/` onto the SD from any
+  OS, boot).
+- `scripts/provision-sd.sh` for flash-time provisioning of a card.
+- A static configurator website that generates a profile from a
+  hardware questionnaire.

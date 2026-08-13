@@ -1,0 +1,11 @@
+# Nate's box - Pi 4 + Raspiaudio Audio+ DAC HAT + 1024x600 HDMI touch
+# panel (USB HID touch). Firmware config fragment; merged into the boot
+# partitions' config.txt by boompi-apply-box-config.
+
+# Raspiaudio Audio+ DAC HAT (PCM51xx-family I2S - vendor-documented
+# overlay). Onboard audio off so the DAC is the only ALSA card.
+dtoverlay=hifiberry-dac
+dtparam=audio=off
+
+# INA260 battery monitor on the standard I2C bus.
+dtparam=i2c_arm=on
