@@ -35,9 +35,13 @@ mod sim;
 // consumed by the Linux-only battery thread.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod soc;
+// Streaming tar parsing is platform-independent (unit-tested
+// everywhere) but only consumed by the Linux-only updater.
 #[cfg(target_os = "linux")]
 mod spotify;
 mod state;
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod tarstream;
 mod update;
 #[cfg(target_os = "linux")]
 mod visualizer;

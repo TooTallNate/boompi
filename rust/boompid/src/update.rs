@@ -2,21 +2,29 @@
 //!
 //! Stable channel: the latest tagged release (vX.Y.Z). Edge channel:
 //! the rolling "edge" prerelease that CI replaces on every green build
-//! of the dev branch. Asset names and formats are a contract with the
-//! release workflows (see .github/workflows/release.yml):
+//! of the dev branch. The update is one self-contained asset, a
+//! contract with the release workflows (see .github/workflows/):
 //!
-//!   boompi-<board>-rootfs.ext4.zst
-//!   boompi-<board>-boot-{a,b}.vfat.zst
-//!   SHA256SUMS.txt      (uncompressed payload hashes)
-//!   boompi-version.txt  (the /etc/boompi-version stamp)
+//!   boompi-update.tar
+//!     SHA256SUMS.txt      (uncompressed payload hashes; first)
+//!     boompi-version.txt  (the /etc/boompi-version stamp)
+//!     rootfs.ext4.zst
+//!     boot-a.vfat.zst
+//!     boot-b.vfat.zst
 //!
-//! Applying streams each asset straight into the inactive slot's
-//! partitions - /data (512MB) cannot stage a ~640MB bundle and tmpfs
-//! is half of 1GB on the Pi 3 - hashing the decompressed stream on the
-//! way through, then re-reads the partition to verify the media, and
-//! finally arms the A/B trial boot (boompi-trial-boot: one-shot
-//! PM_RSTS partition request on the Pi 3, autoboot flip with
-//! sick-rollback on the Pi 4 - see that script for the rationale).
+//! The image is board-generic, so there is exactly one bundle; the
+//! box streams the tar and routes the entries it needs (rootfs + its
+//! inactive slot's boot image) straight onto the partitions - /data
+//! (512MB) cannot stage a ~640MB bundle and tmpfs is half of 1GB on
+//! the Pi 3 - hashing the decompressed stream on the way through,
+//! skipping the other slot's boot image, then re-reading the
+//! partitions to verify the media, and finally arming the A/B trial
+//! boot (boompi-trial-boot: one-shot PM_RSTS partition request on the
+//! Pi 3, autoboot flip with sick-rollback on the Pi 4).
+//!
+//! The edge release's version stamp lives in the release notes
+//! ("stamp: vX.Y.Z-sha") so the release carries exactly two kinds of
+//! assets: sdcard images for flashing and the update bundle.
 #![cfg(target_os = "linux")]
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -40,6 +48,8 @@ const MARKER: &str = "/data/boompi-trial";
 #[derive(Debug, Clone, serde::Deserialize)]
 struct Release {
     tag_name: String,
+    #[serde(default)]
+    body: String,
     assets: Vec<Asset>,
 }
 
@@ -79,21 +89,19 @@ fn asset<'a>(rel: &'a Release, name: &str) -> Result<&'a Asset> {
 }
 
 /// The candidate's version: the tag for stable releases, the
-/// boompi-version.txt stamp for the moving "edge" tag.
+/// "stamp: ..." line in the release notes for the moving "edge" tag
+/// (the bundle carries the same stamp in boompi-version.txt, checked
+/// again while applying).
 async fn release_version(rel: &Release, channel: UpdateChannel) -> Result<String> {
     match channel {
         UpdateChannel::Stable => Ok(rel.tag_name.clone()),
-        UpdateChannel::Edge => {
-            let a = asset(rel, "boompi-version.txt")?;
-            let text = client()?
-                .get(&a.browser_download_url)
-                .send()
-                .await?
-                .error_for_status()?
-                .text()
-                .await?;
-            Ok(text.trim().to_string())
-        }
+        UpdateChannel::Edge => rel
+            .body
+            .lines()
+            .find_map(|l| l.trim_start().strip_prefix("stamp:"))
+            .map(|v| v.trim().to_string())
+            .filter(|v| !v.is_empty())
+            .ok_or_else(|| anyhow!("edge release notes carry no stamp line")),
     }
 }
 
@@ -316,11 +324,11 @@ pub async fn periodic(app: SharedApp) {
 // Apply: stream assets into the inactive slot
 // ---------------------------------------------------------------------------
 
-/// Progress layout across the whole apply: rootfs is ~90% of the bytes.
-const P_ROOTFS_DL: (f32, f32) = (0.0, 0.68);
-const P_ROOTFS_VERIFY: (f32, f32) = (0.68, 0.82);
-const P_BOOT_DL: (f32, f32) = (0.82, 0.90);
-const P_BOOT_VERIFY: (f32, f32) = (0.90, 0.98);
+/// Progress layout across the whole apply: one streamed tarball, then
+/// two partition re-read verifies.
+const P_STREAM: (f32, f32) = (0.0, 0.80);
+const P_ROOTFS_VERIFY: (f32, f32) = (0.80, 0.94);
+const P_BOOT_VERIFY: (f32, f32) = (0.94, 0.98);
 
 async fn apply(app: &SharedApp, version: &str) -> Result<()> {
     let channel = app.shared.read().await.settings.update_channel;
@@ -336,18 +344,38 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
         bail!("release changed since the check (was {version}, now {now}); check again");
     }
 
-    // SHA256SUMS.txt: "<sha256>  boompi-<board>-<file>" lines,
-    // uncompressed payload hashes.
-    let sums_url = &asset(&rel, "SHA256SUMS.txt")?.browser_download_url;
-    let sums = client()?
-        .get(sums_url)
+    let bundle = asset(&rel, "boompi-update.tar")?;
+    tracing::info!(
+        %version, board, target_root = slot.target_root, target_boot = slot.target_boot,
+        "applying update (streaming {})", bundle.name
+    );
+
+    // One pass over the tar stream: manifest + stamp first (the
+    // archive is written in that order), then payloads routed to their
+    // partitions or skipped.
+    let resp = client()?
+        .get(&bundle.browser_download_url)
         .send()
         .await?
-        .error_for_status()?
-        .text()
-        .await?;
-    let sum_for = |name: &str| -> Result<String> {
-        sums.lines()
+        .error_for_status()?;
+    let fetched = Arc::new(AtomicU64::new(0));
+    let counter = fetched.clone();
+    let stream = resp
+        .bytes_stream()
+        .inspect_ok(move |chunk| {
+            counter.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+        })
+        .map_err(std::io::Error::other);
+    let mut tar = crate::tarstream::TarReader::new(tokio_util::io::StreamReader::new(stream));
+
+    let boot_entry = format!("{}.zst", slot.boot_file);
+    let mut sums: Option<String> = None;
+    let mut rootfs: Option<(u64, String)> = None; // (bytes written, sha)
+    let mut boot: Option<(u64, String)> = None;
+    let sum_for = |sums: &Option<String>, name: &str| -> Result<String> {
+        sums.as_deref()
+            .context("bundle payloads precede SHA256SUMS.txt")?
+            .lines()
             .filter_map(|l| {
                 let mut it = l.split_whitespace();
                 Some((it.next()?.to_string(), it.next()?.to_string()))
@@ -357,34 +385,67 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
             .ok_or_else(|| anyhow!("SHA256SUMS.txt has no entry for {name}"))
     };
 
-    let rootfs_name = format!("boompi-{board}-rootfs.ext4");
-    let boot_name = format!("boompi-{board}-{}", slot.boot_file);
-
-    let rootfs_asset = asset(&rel, &format!("{rootfs_name}.zst"))?;
-    let boot_asset = asset(&rel, &format!("{boot_name}.zst"))?;
-    let rootfs_sum = sum_for(&rootfs_name)?;
-    let boot_sum = sum_for(&boot_name)?;
-
-    tracing::info!(
-        %version, board, target_root = slot.target_root, target_boot = slot.target_boot,
-        "applying update"
-    );
-
     set_stage(app, UpdateStage::DownloadingSystem).await;
-    let n = stream_to_device(
+    while let Some(entry) = tar.next_entry().await? {
+        match entry.name.as_str() {
+            "SHA256SUMS.txt" => {
+                let raw = tar.read_entry(&entry, 1 << 20).await?;
+                sums = Some(String::from_utf8_lossy(&raw).into_owned());
+            }
+            "boompi-version.txt" => {
+                let raw = tar.read_entry(&entry, 4096).await?;
+                let stamp = String::from_utf8_lossy(&raw).trim().to_string();
+                if stamp != version {
+                    bail!("bundle stamp {stamp} does not match the offered {version}");
+                }
+            }
+            "rootfs.ext4.zst" => {
+                let sha = sum_for(&sums, "rootfs.ext4")?;
+                let n = write_tar_entry_to_device(
+                    app,
+                    &mut tar,
+                    entry.size,
+                    slot.target_root,
+                    &sha,
+                    &fetched,
+                    bundle.size,
+                )
+                .await?;
+                rootfs = Some((n, sha));
+                set_stage(app, UpdateStage::DownloadingBoot).await;
+            }
+            name if name == boot_entry => {
+                let plain = name.trim_end_matches(".zst");
+                let sha = sum_for(&sums, plain)?;
+                let n = write_tar_entry_to_device(
+                    app,
+                    &mut tar,
+                    entry.size,
+                    slot.target_boot,
+                    &sha,
+                    &fetched,
+                    bundle.size,
+                )
+                .await?;
+                boot = Some((n, sha));
+            }
+            _ => tar.skip_entry(entry.size).await?, // the other slot's boot image
+        }
+    }
+    let (rootfs_len, rootfs_sum) = rootfs.context("bundle carried no rootfs.ext4.zst")?;
+    let (boot_len, boot_sum) = boot.with_context(|| format!("bundle carried no {boot_entry}"))?;
+
+    set_stage(app, UpdateStage::VerifyingSystem).await;
+    verify_device(
         app,
-        rootfs_asset,
         slot.target_root,
+        rootfs_len,
         &rootfs_sum,
-        P_ROOTFS_DL,
+        P_ROOTFS_VERIFY,
     )
     .await?;
-    set_stage(app, UpdateStage::VerifyingSystem).await;
-    verify_device(app, slot.target_root, n, &rootfs_sum, P_ROOTFS_VERIFY).await?;
-    set_stage(app, UpdateStage::DownloadingBoot).await;
-    let n = stream_to_device(app, boot_asset, slot.target_boot, &boot_sum, P_BOOT_DL).await?;
     set_stage(app, UpdateStage::VerifyingBoot).await;
-    verify_device(app, slot.target_boot, n, &boot_sum, P_BOOT_VERIFY).await?;
+    verify_device(app, slot.target_boot, boot_len, &boot_sum, P_BOOT_VERIFY).await?;
 
     // The bundle's boot image is board-generic: re-materialize this
     // box's firmware config (display/rotation/wiring fragment from
@@ -445,34 +506,28 @@ async fn set_progress(app: &SharedApp, p: f32) {
     }
 }
 
-/// Download `asset`, decompress the zstd stream, and write it straight
-/// to `dev`, hashing the decompressed bytes on the way through.
-/// Returns the number of decompressed bytes written.
-async fn stream_to_device(
+/// Decompress one zstd tar entry and write it straight to `dev`,
+/// hashing the decompressed bytes on the way through. Returns the
+/// number of decompressed bytes written.
+///
+/// Progress tracks COMPRESSED bytes off the wire (that's the slow
+/// part and the denominator we know: the whole bundle's size), mapped
+/// across [`P_STREAM`].
+async fn write_tar_entry_to_device<R>(
     app: &SharedApp,
-    asset: &Asset,
+    tar: &mut crate::tarstream::TarReader<R>,
+    entry_size: u64,
     dev: &str,
     expected_sha: &str,
-    range: (f32, f32),
-) -> Result<u64> {
-    let resp = client()?
-        .get(&asset.browser_download_url)
-        .send()
-        .await?
-        .error_for_status()?;
-
-    // Progress tracks COMPRESSED bytes off the wire (that's the slow
-    // part and the denominator we know: the asset size).
-    let fetched = Arc::new(AtomicU64::new(0));
-    let counter = fetched.clone();
-    let stream = resp
-        .bytes_stream()
-        .inspect_ok(move |chunk| {
-            counter.fetch_add(chunk.len() as u64, Ordering::Relaxed);
-        })
-        .map_err(std::io::Error::other);
-    let reader = tokio_util::io::StreamReader::new(stream);
-    let mut decoder = async_compression::tokio::bufread::ZstdDecoder::new(reader);
+    fetched: &Arc<AtomicU64>,
+    bundle_size: u64,
+) -> Result<u64>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let body = tokio::io::AsyncReadExt::take(tar.body(), entry_size);
+    let mut decoder =
+        async_compression::tokio::bufread::ZstdDecoder::new(tokio::io::BufReader::new(body));
 
     let mut file = tokio::fs::OpenOptions::new()
         .write(true)
@@ -484,7 +539,7 @@ async fn stream_to_device(
     let mut written: u64 = 0;
     let mut buf = vec![0u8; 1 << 20];
     loop {
-        let n = decoder.read(&mut buf).await.context("download stream")?;
+        let n = decoder.read(&mut buf).await.context("update stream")?;
         if n == 0 {
             break;
         }
@@ -493,14 +548,27 @@ async fn stream_to_device(
             .await
             .with_context(|| format!("writing {dev}"))?;
         written += n as u64;
-        let frac = fetched.load(Ordering::Relaxed) as f32 / asset.size.max(1) as f32;
-        set_progress(app, range.0 + (range.1 - range.0) * frac.min(1.0)).await;
+        let frac = fetched.load(Ordering::Relaxed) as f32 / bundle_size.max(1) as f32;
+        set_progress(app, P_STREAM.0 + (P_STREAM.1 - P_STREAM.0) * frac.min(1.0)).await;
     }
     file.sync_all().await?;
 
+    // Drain whatever the decoder left unread (a well-formed entry is
+    // consumed exactly; guard against trailing bytes), then the tar
+    // padding.
+    let mut inner = decoder.into_inner().into_inner();
+    let mut sink = [0u8; 8192];
+    loop {
+        let n = inner.read(&mut sink).await?;
+        if n == 0 {
+            break;
+        }
+    }
+    tar.finish_entry(entry_size).await?;
+
     let got = format!("{:x}", hasher.finalize());
     if got != expected_sha {
-        bail!("download of {} corrupt (sha256 mismatch)", asset.name);
+        bail!("bundle entry for {dev} corrupt (sha256 mismatch)");
     }
     Ok(written)
 }

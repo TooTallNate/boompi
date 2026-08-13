@@ -43,7 +43,7 @@ if [ -z "$BUNDLE" ]; then
     BUNDLE="$(mktemp -d)/bundle"
     RUN=$(gh run list --repo "$REPO" --workflow image --status success --limit 1 --json databaseId --jq '.[0].databaseId')
     echo "downloading $BOARD update bundle from run $RUN"
-    gh run download "$RUN" --repo "$REPO" -n "boompi-$BOARD-update" -D "$BUNDLE"
+    gh run download "$RUN" --repo "$REPO" -n "boompi-update" -D "$BUNDLE"
     # Artifact files may arrive xz-compressed.
     for f in "$BUNDLE"/*.xz; do [ -e "$f" ] && xz -d "$f"; done
 fi

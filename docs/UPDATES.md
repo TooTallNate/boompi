@@ -71,18 +71,24 @@ carries asterisks the bench had to discover.
 ## Delivery
 
 - **Releases** (changesets flow): merging the Version Packages PR
-  publishes `vX.Y.Z` with sdcard images + per-board OTA assets
-  (zstd-compressed rootfs/boot images + SHA256SUMS.txt).
+  publishes `vX.Y.Z` with exactly two assets: the board-generic
+  sdcard image (`boompi-sdcard-vX.Y.Z.img.xz`) and the self-contained
+  update bundle (`boompi-update.tar`: SHA256SUMS.txt + version stamp
+  first, then the zstd-compressed rootfs/boot images).
 - **Edge**: every green build of `main` replaces the rolling `edge`
-  prerelease with the same asset contract. GitHub release assets are
+  prerelease with the same bundle (OTA-only; the version stamp rides
+  in the release notes as a `stamp:` line). GitHub release assets are
   used (not CI artifacts) because artifacts cannot be downloaded
   anonymously.
 - **On-box updater** (`boompid update.rs`, Settings → Software):
-  checks the selected channel on demand and every 6 h, streams the
-  zstd assets straight into the inactive slot's partitions (nothing
-  on a 1 GB box can stage a 640 MB bundle), hashes the decompressed
-  stream, re-reads the partition against SHA256SUMS, then arms the
-  trial via `boompi-trial-boot`.
+  checks the selected channel on demand and every 6 h, then consumes
+  the bundle as a single stream (nothing on a 1 GB box can stage a
+  640 MB bundle): manifest first, then each payload the box needs is
+  zstd-decoded straight onto the inactive slot's partition while
+  hashing, the other slot's boot image is skipped, the partitions are
+  re-read against the manifest, the box profile is re-materialized
+  onto the fresh boot partition, and the trial is armed via
+  `boompi-trial-boot`.
 - **Workstation** (`scripts/update-appliance.sh`): same flow driven
   over SSH from CI artifacts; `TRIAL=0` skips the trial for
   commit-without-trial.

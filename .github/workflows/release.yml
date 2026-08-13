@@ -8,14 +8,14 @@
 # while).
 #
 # The appliance is versioned as a single package: `boompi` in web/
-# (see .changeset/README.md). The on-box updater (boompid) consumes the
-# release assets directly, so their names and formats are a contract:
-#   boompi-<board>-sdcard-vX.Y.Z.img.xz    (flashing)
-#   boompi-<board>-rootfs.ext4.zst          (OTA, streamed to the slot)
-#   boompi-<board>-boot-a.vfat.zst          (OTA)
-#   boompi-<board>-boot-b.vfat.zst          (OTA)
-#   SHA256SUMS.txt      (uncompressed payload hashes, verified post-dd)
-#   boompi-version.txt  (the /etc/boompi-version stamp of these images)
+# (see .changeset/README.md). The image is board-generic (one image
+# boots every supported board), and the on-box updater (boompid)
+# consumes the release assets directly, so their names and formats
+# are a contract - exactly two assets:
+#   boompi-sdcard-vX.Y.Z.img.xz   (flashing)
+#   boompi-update.tar             (OTA, streamed to the inactive slot:
+#                                  SHA256SUMS.txt + boompi-version.txt
+#                                  first, then the zstd payloads)
 #
 # If the image run for the release commit failed, fix it, re-run it,
 # then re-run this workflow (workflow_dispatch).
@@ -110,12 +110,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p assets
-          for board in pi3 pi4; do
-            gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
-              -n "boompi-$board-sdcard" -D "dl/$board-sdcard"
-            gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
-              -n "boompi-$board-update" -D "dl/$board-update"
-          done
+          gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
+            -n "boompi-sdcard" -D "dl/sdcard"
+          gh run download "${{ steps.image_run.outputs.run }}" --repo "$GITHUB_REPOSITORY" \
+            -n "boompi-update" -D "dl/update"
 
       - name: Prepare release assets
         if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'
@@ -123,18 +121,21 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           sudo apt-get install -y --no-install-recommends zstd
-          cd assets
+          mkdir -p work && cd work
           : > SHA256SUMS.txt
-          for board in pi3 pi4; do
-            mv "../dl/$board-sdcard/sdcard.img.xz" "boompi-$board-sdcard-$TAG.img.xz"
-            for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
-              src="../dl/$board-update/$f"
-              sha256sum "$src" | sed "s|../dl/$board-update/$f|boompi-$board-$f|" >> SHA256SUMS.txt
-              zstd -T0 -15 --no-progress -o "boompi-$board-$f.zst" "$src"
-            done
+          for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
+            sha256sum "../dl/update/$f" | sed "s|../dl/update/$f|$f|" >> SHA256SUMS.txt
+            zstd -T0 -15 --no-progress -o "$f.zst" "../dl/update/$f"
           done
           echo -n "$TAG" > boompi-version.txt
-          ls -la
+          # ustar, manifest + stamp first: the on-box updater consumes
+          # this as a stream (see boompid's tarstream module).
+          tar --format=ustar -cf ../assets/boompi-update.tar \
+            SHA256SUMS.txt boompi-version.txt \
+            rootfs.ext4.zst boot-a.vfat.zst boot-b.vfat.zst
+          cd ..
+          mv dl/sdcard/sdcard.img.xz "assets/boompi-sdcard-$TAG.img.xz"
+          ls -la assets
 
       - name: Extract release notes
         if: steps.changesets.outputs.hasChangesets == 'false' && steps.exists.outputs.exists == 'false'

@@ -1,0 +1,36 @@
+# Boompi unified boot configuration - one image for every supported
+# board. The firmware picks its own GPU loader (start.elf on Pi 3 via
+# bootcode.bin, start4.elf on Pi 4 via EEPROM) and DTB automatically;
+# the [pi3]/[pi4] filters scope per-SoC settings. Box-specific hardware
+# lives in the box profile - see docs/PROVISIONING.md.
+
+[all]
+kernel=Image
+arm_64bit=1
+
+disable_overscan=1
+disable_splash=1
+boot_delay=0
+
+# KMS graphics
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+
+[pi4]
+# TF-A BL31 as the armstub. Historical: PSCI for the retired kexec
+# trial mechanism; removing it is its own trial (the pi4's rollback
+# path is harsher, so it goes last). The pi3 dropped its armstub with
+# kexec and boots the stock chain.
+armstub=bl31.bin
+enable_gic=1
+
+# Back to unconditional: everything below - including the box profile
+# fence boompi-apply-box-config appends at the end of this file - must
+# apply on every board.
+[all]
+
+# Generic posture: HDMI console, onboard Bluetooth and audio enabled.
+# A provisioned box overrides all of this from its profile
+# (/data/box/config.txt), merged into a fenced section below by
+# boompi-apply-box-config whenever a boot partition is written, and
+# surviving OS updates.

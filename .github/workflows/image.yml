@@ -155,17 +155,12 @@ jobs:
 
   image:
     needs: [web, skia]
-    strategy:
-      fail-fast: false
-      matrix:
-        board: [pi3, pi4]
-    name: ${{ matrix.board }}
+    name: image
     runs-on: ubuntu-24.04
     timeout-minutes: 340
     env:
       BR2_DL_DIR: /home/runner/br-dl
       OUTPUT: /home/runner/br-output
-      BOARD: ${{ matrix.board }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -205,18 +200,17 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board), 'buildroot/buildroot-patches/*.patch') }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/*.frag', 'buildroot/buildroot-patches/*.patch') }}
           restore-keys: |
-            br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-
             br-dl-${{ env.BR_VERSION }}-
 
       - name: Restore ccache
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/.buildroot-ccache
-          key: br-ccache-${{ matrix.board }}-${{ github.sha }}
+          key: br-ccache-${{ github.sha }}
           restore-keys: |
-            br-ccache-${{ matrix.board }}-
+            br-ccache-
 
       - name: Restore cargo cache
         id: restore-cargo
@@ -241,10 +235,10 @@ jobs:
           done
 
       - name: Configure
-        # The defconfig is generated: shared fragment + board hardware
-        # deltas (buildroot/configs/*.frag) so the boxes cannot drift.
+        # The defconfig is generated from the fragments
+        # (buildroot/configs/*.frag) so nothing can drift.
         run: |
-          scripts/gen-defconfig.sh "$BOARD" > "$HOME/boompi_defconfig"
+          scripts/gen-defconfig.sh > "$HOME/boompi_defconfig"
           make -C "$HOME/buildroot" O="$OUTPUT" \
             BR2_EXTERNAL="$GITHUB_WORKSPACE/buildroot" \
             BR2_DEFCONFIG="$HOME/boompi_defconfig" defconfig
@@ -339,7 +333,7 @@ jobs:
       - name: Upload image artifact
         uses: actions/upload-artifact@v7
         with:
-          name: boompi-${{ matrix.board }}-sdcard
+          name: boompi-sdcard
           path: /home/runner/br-output/images/sdcard.img.xz
           if-no-files-found: error
           retention-days: 14
@@ -350,7 +344,7 @@ jobs:
       - name: Upload update bundle
         uses: actions/upload-artifact@v7
         with:
-          name: boompi-${{ matrix.board }}-update
+          name: boompi-update
           path: |
             /home/runner/br-output/images/rootfs.ext4
             /home/runner/br-output/images/boot-a.vfat
@@ -366,14 +360,14 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: /home/runner/br-dl
-          key: br-dl-${{ env.BR_VERSION }}-${{ matrix.board }}-${{ hashFiles('buildroot/configs/boompi-common.frag', format('buildroot/configs/boompi-{0}.frag', matrix.board), 'buildroot/buildroot-patches/*.patch') }}
+          key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/*.frag', 'buildroot/buildroot-patches/*.patch') }}
 
       - name: Save ccache
         if: always()
         uses: actions/cache/save@v6
         with:
           path: /home/runner/.buildroot-ccache
-          key: br-ccache-${{ matrix.board }}-${{ github.sha }}
+          key: br-ccache-${{ github.sha }}
 
       - name: Save cargo cache
         if: always() && steps.restore-cargo.outputs.cache-hit != 'true'
@@ -386,9 +380,11 @@ jobs:
 
   # Rolling "edge" prerelease: every green build of the dev branch
   # replaces it. Boxes with the bleeding-edge update channel enabled
-  # follow this instead of the tagged releases. Same asset names and
-  # formats as a real release (a contract with boompid's updater),
-  # minus the sdcard images (edge is OTA-only).
+  # follow this instead of the tagged releases. Same asset name and
+  # format as a real release (a contract with boompid's updater),
+  # minus the sdcard image (edge is OTA-only). The version stamp rides
+  # in the release notes ("stamp: ..."), keeping the asset list to
+  # exactly the self-contained update bundle.
   edge:
     needs: image
     # Pushes and manual re-runs both refresh edge (dispatch exists for
@@ -418,10 +414,10 @@ jobs:
           fi
           echo "version=$STAMP" >> "$GITHUB_OUTPUT"
 
-      - name: Download update bundles
+      - name: Download update bundle
         uses: actions/download-artifact@v7
         with:
-          pattern: boompi-*-update
+          name: boompi-update
           path: dl
 
       - name: Prepare edge assets
@@ -429,17 +425,21 @@ jobs:
           STAMP: ${{ steps.stamp.outputs.version }}
         run: |
           sudo apt-get install -y --no-install-recommends zstd
-          mkdir -p assets && cd assets
+          mkdir -p work assets && cd work
           : > SHA256SUMS.txt
-          for board in pi3 pi4; do
-            for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
-              src="../dl/boompi-$board-update/$f"
-              sha256sum "$src" | sed "s|../dl/boompi-$board-update/$f|boompi-$board-$f|" >> SHA256SUMS.txt
-              zstd -T0 -15 --no-progress -o "boompi-$board-$f.zst" "$src"
-            done
+          for f in rootfs.ext4 boot-a.vfat boot-b.vfat; do
+            sha256sum "../dl/$f" | sed "s|../dl/$f|$f|" >> SHA256SUMS.txt
+            zstd -T0 -15 --no-progress -o "$f.zst" "../dl/$f"
           done
           echo -n "$STAMP" > boompi-version.txt
-          ls -la
+          # One self-contained bundle. ustar, and manifest + stamp
+          # FIRST: the on-box updater consumes this as a stream and
+          # must see the sums before the payloads (a contract with
+          # boompid's tarstream flow).
+          tar --format=ustar -cf ../assets/boompi-update.tar \
+            SHA256SUMS.txt boompi-version.txt \
+            rootfs.ext4.zst boot-a.vfat.zst boot-b.vfat.zst
+          ls -la ../assets
 
       - name: Update edge prerelease
         env:
@@ -452,5 +452,5 @@ jobs:
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "edge ($STAMP)" \
-            --notes "Rolling prerelease: latest green build of the dev branch. OTA assets only." \
+            --notes "$(printf 'Rolling prerelease: latest green build of the dev branch. OTA-only.\n\nstamp: %s' "$STAMP")" \
             assets/*

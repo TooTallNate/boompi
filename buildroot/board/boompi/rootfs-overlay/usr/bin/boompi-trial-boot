@@ -68,12 +68,22 @@ case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
     # PM_RSTS bits 0,2,4,6,8,10 with the 0x5a password in the top
     # byte; bootcode.bin consumes and clears the request, so the boot
     # after this one follows autoboot.txt again.
-    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
+    #
+    # Arming depends on the kernel era (bench-proven both ways on the
+    # TF-A removal trial):
+    # - TF-A kernels (PSCI): the restart handler never runs; BL31's
+    #   reset preserves a pre-written PM_RSTS -> devmem arms it.
+    # - Stock kernels (spin-table): the bcm2835 restart handler
+    #   REWRITES PM_RSTS on reboot (clobbering devmem) but parses the
+    #   reboot syscall argument into the partition bits -> the
+    #   --reboot-argument arms it.
+    # Do both; each era honors one and ignores the other.
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then PART=1; RSTS=0x5a000001; else PART=2; RSTS=0x5a000004; fi
     echo "$TARGET_ROOT" > "$MARKER"
     sync
     echo "one-shot firmware boot of candidate ($TARGET_ROOT)"
     devmem 0x3f100020 32 "$RSTS"
-    reboot
+    systemctl reboot --reboot-argument="$PART" || reboot
     ;;
 *)
     # Commit-with-rollback: the candidate becomes the default now;
