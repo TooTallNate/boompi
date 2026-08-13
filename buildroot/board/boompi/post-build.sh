@@ -91,11 +91,18 @@ for hcd in BCM4345C0 BCM43430A1; do
 done
 
 # --- USB Bluetooth dongle firmware (both boards). -----------------------------
-# The recommended dongles are Realtek RTL8761B/BU (TP-Link UB500 et
-# al); without rtl_bt firmware they enumerate but hci0 never appears.
-for fw in rtl8761bu_fw.bin rtl8761bu_config.bin rtl8761b_fw.bin; do
-    [ -f "${TARGET_DIR}/lib/firmware/rtl_bt/$fw" ] \
-        || fail "rtl_bt/$fw missing (USB Bluetooth dongle firmware)"
+# Generic-image promise: the common dongle chipset families work out
+# of the box. One representative file per family. (The UB600
+# additionally relies on the btusb quirks backport in patches/linux/,
+# which buildroot hard-fails on if it stops applying.)
+for fw in rtl_bt/rtl8761bu_fw.bin rtl_bt/rtl8761bu_config.bin \
+          rtl_bt/rtl8761b_fw.bin \
+          mediatek/BT_RAM_CODE_MT7961_1_2_hdr.bin \
+          mediatek/BT_RAM_CODE_MT7922_1_1_hdr.bin; do
+    [ -f "${TARGET_DIR}/lib/firmware/$fw" ] \
+        || fail "$fw missing (USB Bluetooth dongle firmware)"
 done
+find "${TARGET_DIR}/lib/firmware/rtl_bt" -name "rtl88*.bin" 2>/dev/null | grep -q . \
+    || fail "rtl_bt/rtl88*.bin missing (Realtek combo BT firmware)"
 
 echo "post-build assertions OK"

@@ -1,0 +1,24 @@
+Bluetooth: btusb: Add USB ID 37ad:0600 (TP-Link UB600, RTL8761BU)
+
+Backport of upstream commit bc597f0cc44f0b173c50ee986a047219cd559ee9
+(landed v7.2-rc1) onto the rpi-6.6.y pin. The UB600 is the same
+RTL8761BU as the UB500, but ships under TP-Link's own vendor ID
+instead of Realtek's. Without a quirks_table entry BTUSB_REALTEK is
+never set, btrtl never uploads rtl_bt/rtl8761bu_fw.bin, and the chip
+stays in ROM-only mode: hci0 appears, scanning finds nothing.
+
+The stock linux-firmware blob runs the chip as Bluetooth 5.1 rather
+than the advertised 6.0; irrelevant for A2DP (Classic), which is all
+this appliance uses.
+
+--- a/drivers/bluetooth/btusb.c
++++ b/drivers/bluetooth/btusb.c
+@@ -715,6 +715,8 @@
+ 
+ 	/* Additional Realtek 8761BUV Bluetooth devices */
+ 	{ USB_DEVICE(0x2357, 0x0604), .driver_info = BTUSB_REALTEK |
++						     BTUSB_WIDEBAND_SPEECH },
++	{ USB_DEVICE(0x37ad, 0x0600), .driver_info = BTUSB_REALTEK |
+ 						     BTUSB_WIDEBAND_SPEECH },
+ 	{ USB_DEVICE(0x0b05, 0x190e), .driver_info = BTUSB_REALTEK |
+ 	  					     BTUSB_WIDEBAND_SPEECH },
