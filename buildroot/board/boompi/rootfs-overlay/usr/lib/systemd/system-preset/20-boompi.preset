@@ -1,0 +1,19 @@
+# Samba installs and self-enables its entire AD/cluster suite; only
+# the guest games share (our custom smbd.service) is wanted.
+# samba.service is a domain controller, smb.service duplicates our
+# unit without the /data ordering, and winbind hangs in "activating"
+# forever without a domain - which keeps multi-user.target's start job
+# waiting and with it anything ordered after boot completion.
+#
+# This must be a preset, not an rm in post-build: buildroot runs
+# `systemctl preset-all` as a rootfs-pre-cmd hook AFTER post-build,
+# and systemd's default policy enables every unit with an [Install]
+# section - so deleted symlinks simply come back. preset-all applies
+# these disable lines by removing the enablement symlinks, whoever
+# created them.
+disable samba.service
+disable smb.service
+disable nmb.service
+disable winbind.service
+disable ctdb.service
+disable samba-bgqd.service

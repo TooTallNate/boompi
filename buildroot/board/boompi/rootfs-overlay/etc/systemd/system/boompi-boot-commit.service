@@ -1,8 +1,15 @@
 # Commits (or rolls back) an A/B update trial - see
 # /usr/bin/boompi-boot-commit. No-op on normal boots.
+#
+# Deliberately NOT After=multi-user.target: any unit stuck in
+# "activating" (samba's winbind did exactly this) keeps the target's
+# start job waiting forever, and an uncommitted trial reverts on the
+# next power cycle - a healthy update silently undone. Health is
+# defined by boompid answering /healthz (the script polls for up to
+# two minutes), so ordering after boompid is all that is needed.
 [Unit]
 Description=Commit or roll back A/B update trial boot
-After=multi-user.target boompid.service data.mount
+After=boompid.service data.mount
 RequiresMountsFor=/data
 
 [Service]

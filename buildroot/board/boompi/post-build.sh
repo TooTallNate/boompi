@@ -149,16 +149,31 @@ grep -qE "path = /data\s*$" "${TARGET_DIR}/etc/samba/smb.conf" \
     && fail "smb.conf must never share /data itself (ssh keys live there)"
 
 # Samba's install enables its entire AD/cluster suite; only the guest
-# games share (our custom smbd.service) is wanted. samba.service is a
-# domain controller, smb.service duplicates our unit without the /data
-# ordering, and nmb/winbind/ctdb/samba-bgqd hung the first games-image
-# boot for minutes before timing out. Symlinks removed rather than
-# units masked so they stay available for manual debugging.
+# games share (our custom smbd.service) is wanted. Deleting the
+# symlinks here does NOT work: buildroot runs `systemctl preset-all`
+# as a rootfs-pre-cmd hook AFTER this script, and systemd's default
+# preset enables everything - the first games image shipped with the
+# suite re-enabled and winbind hung multi-user.target's start job
+# forever (blocking the A/B trial commit). The overlay preset file is
+# the mechanism that survives preset-all; assert it landed and covers
+# every unit samba enables.
+BOOMPI_PRESET="${TARGET_DIR}/usr/lib/systemd/system-preset/20-boompi.preset"
+[ -f "$BOOMPI_PRESET" ] || fail "20-boompi.preset missing (samba suite would boot-block multi-user.target)"
 for unit in samba smb nmb winbind ctdb samba-bgqd; do
-    rm -f "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/${unit}.service"
+    grep -q "^disable ${unit}.service$" "$BOOMPI_PRESET" \
+        || fail "20-boompi.preset does not disable ${unit}.service"
 done
+grep -q "^disable smbd.service$" "$BOOMPI_PRESET" \
+    && fail "20-boompi.preset must not disable smbd.service (the games share itself)"
 [ -L "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/smbd.service" ] \
     || fail "smbd.service not enabled (games SMB share)"
+
+# The A/B commit must not wait for boot completion: a single stuck
+# unit would hold multi-user.target open and leave the trial
+# uncommitted (= silent revert on the next power cycle).
+grep -qE "^After=.*multi-user.target" \
+    "${TARGET_DIR}/etc/systemd/system/boompi-boot-commit.service" \
+    && fail "boompi-boot-commit is After=multi-user.target again (a hung unit blocks the A/B commit forever)"
 
 # The bluetooth state bind mount must hang off bluetooth.service, NOT
 # local-fs.target: as a local-fs mount ordered After=tmpfiles-setup it
