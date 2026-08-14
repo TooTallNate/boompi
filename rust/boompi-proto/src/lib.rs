@@ -621,10 +621,6 @@ pub enum ClientMessage {
     /// Orderly reboot (settings UIs; also how a box-profile change
     /// takes effect).
     Reboot,
-    /// Wipe all persistent state (config, Wi-Fi, Bluetooth pairings,
-    /// caches) and reboot into first-boot setup. The OS slots are
-    /// untouched - this is a data reset, not a reflash.
-    FactoryReset,
 }
 
 // ---------------------------------------------------------------------------

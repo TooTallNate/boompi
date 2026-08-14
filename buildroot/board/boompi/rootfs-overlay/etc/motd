@@ -1,0 +1,8 @@
+
+  boompi - https://github.com/TooTallNate/boompi
+
+  Box administration:   boompi-box            (profile, lock, keys, export)
+  Software updates:     web settings page, or boompi-update-slot
+  Factory reset:        boompi-factory-reset  (ssh/console only)
+  Docs: docs/PROVISIONING.md + docs/SECURITY.md in the repo.
+

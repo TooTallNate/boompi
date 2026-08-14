@@ -21,6 +21,9 @@ export interface BoxProfile {
   cmdline_txt: string | null;
   hardware_toml: string | null;
   env: string | null;
+  /** Written to /data/ssh (never deleted via the API); required
+   *  before the hardware lock will engage. */
+  authorized_keys: string | null;
 }
 
 export interface BoxWriteOutcome {
@@ -28,10 +31,18 @@ export interface BoxWriteOutcome {
   applied: boolean;
 }
 
-export async function fetchBoxProfile(): Promise<BoxProfile> {
+/** null = the hardware API is locked (configure via ssh). */
+export async function fetchBoxProfile(): Promise<BoxProfile | "locked"> {
   const r = await fetch("/api/box");
+  if (r.status === 403) return "locked";
   if (!r.ok) throw new Error(`box profile fetch failed: HTTP ${r.status}`);
   return r.json();
+}
+
+export async function lockBoxProfile(): Promise<void> {
+  const r = await fetch("/api/box/lock", { method: "POST" });
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
 }
 
 export async function putBoxProfile(p: BoxProfile): Promise<BoxWriteOutcome> {

@@ -19,6 +19,7 @@ add).
 | `cmdline.txt` | kernel (single line, appended) | e.g. `video=` for an EDID-less panel |
 | `hardware.toml` | boompid (`--hardware-profile`) | `[battery]` wiring/thresholds; `[settings]` seeds first boot only |
 | `env` | boompi-ui (`EnvironmentFile`) | e.g. `SLINT_KMS_ROTATION=270` |
+| `authorized_keys` | sshd (installed to `/data/ssh/`) | ssh public keys; see docs/SECURITY.md |
 
 All files are optional. The bench boxes' profiles live in `boxes/` in
 this repo and double as worked examples.
@@ -48,12 +49,15 @@ the old merged config.
 ## Provisioning a box
 
 From the box itself (the primary path): the web settings page has a
-"Box hardware" section - the configurator ships in the same image as
-the code that consumes the profile, so the two cannot drift. Pick a
-preset or edit the fragments, Apply (written to `/data/box/` and
-fenced onto both boot slots; one reboot when the boot config
-changed), and "Download bundle" produces the `boompi-box.tar` for
-provisioning the next card.
+"Box hardware" page (`#/hardware`) - the configurator ships in the
+same image as the code that consumes the profile, so the two cannot
+drift. Pick a preset or edit the fragments, add your ssh public key,
+Apply (written to `/data/box/` and fenced onto both boot slots; one
+reboot when the boot config changed), and "Download bundle" produces
+the `boompi-box.tar` for provisioning the next card. When the box is
+set up, **Lock** the page: hardware config becomes ssh-only
+(`boompi-box`; export included for locked boxes) - see
+docs/SECURITY.md.
 
 
 Fresh SD card, from any OS (no root, no ext4 tooling): flash the

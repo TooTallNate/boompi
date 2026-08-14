@@ -169,5 +169,4 @@ export type ClientMessage =
   | { type: "preview_screensaver" }
   | { type: "reboot" }
   | { type: "pairing"; action: PairingAction }
-  | { type: "bt_device"; address: string; action: BtDeviceAction }
-  | { type: "factory_reset" };
+  | { type: "bt_device"; address: string; action: BtDeviceAction };

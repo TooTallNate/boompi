@@ -721,30 +721,6 @@ impl App {
                         .spawn();
                 }
             }
-            ClientMessage::FactoryReset => {
-                tracing::warn!("factory reset requested - wiping /data and rebooting");
-                #[cfg(target_os = "linux")]
-                tokio::spawn(async {
-                    // Stop the state owners first so they can't flush their
-                    // in-memory view back over the wipe during shutdown.
-                    // Contents only: /data/bluetooth is a live bind-mount
-                    // source and the dirs are recreated by tmpfiles.d on
-                    // the next boot anyway.
-                    let _ = tokio::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(concat!(
-                            "systemctl stop bluetooth NetworkManager ",
-                            "var-lib-bluetooth.mount; ",
-                            "rm -rf /data/boompi.toml /data/cache ",
-                            "/data/bluetooth/* /data/nm-connections/*; ",
-                            "sync; systemctl reboot",
-                        ))
-                        .status()
-                        .await;
-                });
-                #[cfg(not(target_os = "linux"))]
-                tracing::warn!("factory reset is a no-op off-appliance (--sim)");
-            }
         }
     }
 

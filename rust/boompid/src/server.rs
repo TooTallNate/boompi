@@ -30,6 +30,7 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/settings", post(api_settings))
         .route("/api/command", post(api_command))
         .route("/api/box", get(api_box).put(api_box_set))
+        .route("/api/box/lock", post(api_box_lock))
         .route("/api/clock", get(api_clock).post(api_clock_set))
         .route("/api/wifi", get(api_wifi).post(api_wifi_action))
         .route(
@@ -430,19 +431,48 @@ async fn api_settings(
     Json(app.snapshot().await.settings)
 }
 
-/// The box profile (/data/box/), as edited by the configurator
-/// section of the settings UI.
-async fn api_box() -> impl IntoResponse {
-    Json(crate::boxprofile::read())
+/// The box profile (/data/box/), as edited by the configurator page.
+/// Once locked, hardware config is ssh-only (`boompi-box`): the whole
+/// API answers 403 so an unattended LAN curl cannot touch the boot
+/// configuration.
+async fn api_box() -> axum::response::Response {
+    if crate::boxprofile::locked() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "locked": true })),
+        )
+            .into_response();
+    }
+    Json(crate::boxprofile::read()).into_response()
 }
 
-async fn api_box_set(Json(profile): Json<crate::boxprofile::Profile>) -> impl IntoResponse {
+async fn api_box_set(Json(profile): Json<crate::boxprofile::Profile>) -> axum::response::Response {
+    if crate::boxprofile::locked() {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "locked": true })),
+        )
+            .into_response();
+    }
     match crate::boxprofile::write(&profile).await {
-        Ok(outcome) => (StatusCode::OK, Json(serde_json::json!(outcome))),
+        Ok(outcome) => (StatusCode::OK, Json(serde_json::json!(outcome))).into_response(),
         Err(err) => (
             StatusCode::BAD_REQUEST,
             Json(serde_json::json!({ "error": err.to_string() })),
-        ),
+        )
+            .into_response(),
+    }
+}
+
+/// One-way from the web: unlocking requires ssh (`boompi-box unlock`).
+async fn api_box_lock() -> axum::response::Response {
+    match crate::boxprofile::lock() {
+        Ok(()) => (StatusCode::OK, Json(serde_json::json!({ "locked": true }))).into_response(),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err.to_string() })),
+        )
+            .into_response(),
     }
 }
 

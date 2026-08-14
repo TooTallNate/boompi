@@ -11,7 +11,12 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// The four profile files, as editable text. `None`/empty = absent.
+/// The profile files, as editable text. `None`/empty = absent.
+///
+/// `authorized_keys` is special: it lives at /data/ssh (not /data/box),
+/// is only ever *written* through the API (absent means "leave alone",
+/// never delete - removing remote access is an ssh-side decision), and
+/// is what the lock endpoint requires before it will engage.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Profile {
     #[serde(default)]
@@ -22,6 +27,8 @@ pub struct Profile {
     pub hardware_toml: Option<String>,
     #[serde(default)]
     pub env: Option<String>,
+    #[serde(default)]
+    pub authorized_keys: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,6 +45,45 @@ pub fn dir() -> PathBuf {
     std::env::var_os("BOOMPI_BOX_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/data/box"))
+}
+
+fn keys_path() -> PathBuf {
+    std::env::var_os("BOOMPI_SSH_KEYS_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/data/ssh/authorized_keys"))
+}
+
+fn lock_path() -> PathBuf {
+    std::env::var_os("BOOMPI_LOCK_FILE")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/data/boompi-hardware.lock"))
+}
+
+/// The hardware page/API lock: engaged from the web (one-way; ssh's
+/// `boompi-box unlock` is the way back) or by `boompi-box lock`.
+pub fn locked() -> bool {
+    lock_path().exists()
+}
+
+fn keys_present() -> bool {
+    std::fs::read_to_string(keys_path())
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// Engage the lock. Refuses without an ssh key: the lock removes the
+/// web path to hardware config, and a box with neither is one dead
+/// panel away from console-or-surgery recovery.
+pub fn lock() -> Result<()> {
+    if !keys_present() {
+        bail!(
+            "no ssh key authorized yet - add one (web hardware page or \
+             `boompi-box add-key`) before locking, or remote hardware \
+             access would be lost entirely"
+        );
+    }
+    std::fs::write(lock_path(), b"").context("writing lock file")?;
+    Ok(())
 }
 
 const FILES: [(&str, fn(&Profile) -> &Option<String>); 4] = [
@@ -59,6 +105,9 @@ pub fn read() -> Profile {
         cmdline_txt: read("cmdline.txt"),
         hardware_toml: read("hardware.toml"),
         env: read("env"),
+        authorized_keys: std::fs::read_to_string(keys_path())
+            .ok()
+            .filter(|s| !s.trim().is_empty()),
     }
 }
 
@@ -82,6 +131,18 @@ fn validate(p: &Profile) -> Result<()> {
         }
         if cmd.contains("root=") {
             bail!("cmdline.txt must not set root= (the slot's own prefix is preserved)");
+        }
+    }
+    if let Some(keys) = &p.authorized_keys {
+        for line in keys.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            if !(line.starts_with("ssh-") || line.starts_with("ecdsa-") || line.starts_with("sk-"))
+            {
+                bail!("authorized_keys line does not look like an ssh public key: {line:.40}");
+            }
         }
     }
     if let Some(hw) = &p.hardware_toml {
@@ -115,6 +176,27 @@ pub async fn write(p: &Profile) -> Result<WriteOutcome> {
             }
             _ => {
                 let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+
+    if let Some(keys) = p.authorized_keys.as_deref().map(str::trim) {
+        if !keys.is_empty() {
+            let kp = keys_path();
+            if let Some(parent) = kp.parent() {
+                std::fs::create_dir_all(parent).context("creating ssh dir")?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ =
+                        std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+                }
+            }
+            std::fs::write(&kp, format!("{keys}\n")).context("writing authorized_keys")?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&kp, std::fs::Permissions::from_mode(0o600));
             }
         }
     }
@@ -153,6 +235,10 @@ pub async fn write(p: &Profile) -> Result<WriteOutcome> {
 mod tests {
     use super::*;
 
+    /// Env vars are process-global; these tests set BOOMPI_* paths and
+    /// must not interleave.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn in_temp_dir<T>(f: impl FnOnce() -> T) -> T {
         let dir = std::env::temp_dir().join(format!("boompi-boxprofile-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
@@ -165,6 +251,7 @@ mod tests {
 
     #[tokio::test]
     async fn roundtrip_and_firmware_change_detection() {
+        let _guard = ENV_LOCK.lock().unwrap();
         in_temp_dir(|| ()) // establish + clean dir path
         ;
         let dir = std::env::temp_dir().join(format!("boompi-boxprofile-{}", std::process::id()));
@@ -176,6 +263,7 @@ mod tests {
             cmdline_txt: None,
             hardware_toml: Some("[battery]\ni2c_bus = 11".into()),
             env: Some("SLINT_KMS_ROTATION=270".into()),
+            authorized_keys: None,
         };
         let out = write(&p).await.unwrap();
         assert!(out.firmware_changed);
@@ -210,7 +298,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn lock_requires_a_key() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("boompi-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("BOOMPI_LOCK_FILE", dir.join("hw.lock"));
+        std::env::set_var("BOOMPI_SSH_KEYS_FILE", dir.join("authorized_keys"));
+
+        assert!(!locked());
+        // No key: refuse.
+        assert!(lock().is_err());
+        assert!(!locked());
+        // Key installed via the profile write path: lock engages.
+        std::env::set_var("BOOMPI_BOX_DIR", dir.join("box"));
+        let p = Profile {
+            authorized_keys: Some("ssh-ed25519 AAAATESTKEY user@host".into()),
+            ..Default::default()
+        };
+        write(&p).await.unwrap();
+        assert!(lock().is_ok());
+        assert!(locked());
+        // The key survives a later profile write that omits it
+        // (absent means leave alone, never delete).
+        let p2 = Profile::default();
+        write(&p2).await.unwrap();
+        assert!(std::fs::read_to_string(dir.join("authorized_keys"))
+            .unwrap()
+            .contains("ssh-ed25519"));
+
+        std::env::remove_var("BOOMPI_LOCK_FILE");
+        std::env::remove_var("BOOMPI_SSH_KEYS_FILE");
+        std::env::remove_var("BOOMPI_BOX_DIR");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
     async fn validation_rejects_bad_input() {
+        let _guard = ENV_LOCK.lock().unwrap();
         let bad_toml = Profile {
             hardware_toml: Some("[battery]\ni2c_bus = \"eleven\"".into()),
             ..Default::default()
@@ -234,5 +358,11 @@ mod tests {
             ..Default::default()
         };
         assert!(write(&fence).await.is_err());
+
+        let junk_key = Profile {
+            authorized_keys: Some("rm -rf / # definitely a key".into()),
+            ..Default::default()
+        };
+        assert!(write(&junk_key).await.is_err());
     }
 }

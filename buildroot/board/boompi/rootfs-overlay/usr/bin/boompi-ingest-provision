@@ -25,6 +25,14 @@ for dev in /dev/mmcblk0p1 /dev/mmcblk0p2; do
         for f in config.txt cmdline.txt hardware.toml env; do
             [ -f "$M/boompi-box/$f" ] && cp "$M/boompi-box/$f" "/data/box/$f"
         done
+        # ssh keys: per-box state at /data/ssh (the image ships with
+        # key-only sshd and no keys - this is the flash-time way in).
+        if [ -f "$M/boompi-box/authorized_keys" ]; then
+            mkdir -p /data/ssh && chmod 700 /data/ssh
+            cp "$M/boompi-box/authorized_keys" /data/ssh/authorized_keys
+            chmod 600 /data/ssh/authorized_keys
+            echo "authorized_keys installed"
+        fi
         rm -rf "$M/boompi-box.applied"
         mv "$M/boompi-box" "$M/boompi-box.applied"
         FOUND=1

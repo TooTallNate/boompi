@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
   fetchBoxProfile,
+  lockBoxProfile,
   fetchClock,
   fetchWifi,
   patchClock,
@@ -125,12 +126,13 @@ export default function App() {
             onSaved={applySettings}
           />
         )}
-        <DangerSection />
         <p className="mt-6 text-center text-[12px] text-dim">
           <a className="underline hover:text-fg" href="#/hardware">
             Box hardware configuration
           </a>{" "}
-          - display, wiring, provisioning (advanced)
+          - display, wiring, provisioning (advanced).
+          <br />
+          Factory reset moved to ssh: <code>boompi-factory-reset</code>
         </p>
       </main>
     </div>
@@ -1310,7 +1312,7 @@ function HomeAssistantSection({ settings, onSaved }: SectionProps) {
   );
 }
 
-const BOX_PRESETS: Record<string, BoxProfile> = {
+const BOX_PRESETS: Record<string, Omit<BoxProfile, "authorized_keys">> = {
   "Generic (HDMI, onboard audio + Bluetooth)": {
     config_txt: null,
     cmdline_txt: null,
@@ -1371,7 +1373,7 @@ function HardwarePage() {
 }
 
 function BoxHardwareSection() {
-  const [profile, setProfile] = useState<BoxProfile | null>(null);
+  const [profile, setProfile] = useState<BoxProfile | "locked" | null>(null);
   const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
   const [rebootNeeded, setRebootNeeded] = useState(false);
 
@@ -1379,9 +1381,23 @@ function BoxHardwareSection() {
     fetchBoxProfile().then(setProfile).catch(() => setProfile(null));
   }, []);
 
+  if (profile === "locked") {
+    return (
+      <Section title="Box hardware">
+        <p className="text-sm text-dim">
+          Hardware configuration is <span className="text-fg">locked</span> on
+          this box: the page and its API are disabled so nothing on the
+          network can change the boot configuration. Administer it over ssh
+          instead - <code>boompi-box</code> covers editing, applying,
+          exporting a provisioning bundle, and <code>boompi-box unlock</code>{" "}
+          to re-enable this page.
+        </p>
+      </Section>
+    );
+  }
   if (!profile) return null;
   const set = (patch: Partial<BoxProfile>) =>
-    setProfile((p) => p && { ...p, ...patch });
+    setProfile((p) => (p && p !== "locked" ? { ...p, ...patch } : p));
 
   const apply = async () => {
     if (
@@ -1402,6 +1418,24 @@ function BoxHardwareSection() {
     }
   };
 
+  const lock = async () => {
+    if (
+      !window.confirm(
+        "Lock hardware configuration? This page and its API turn off; " +
+          "further changes require ssh (boompi-box). Unlock with " +
+          "'boompi-box unlock'.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await lockBoxProfile();
+      setProfile("locked");
+    } catch (e) {
+      setStatus({ kind: "err", message: (e as Error).message });
+    }
+  };
+
   const download = () => {
     const files = (
       [
@@ -1409,6 +1443,7 @@ function BoxHardwareSection() {
         ["cmdline.txt", profile.cmdline_txt],
         ["hardware.toml", profile.hardware_toml],
         ["env", profile.env],
+        ["authorized_keys", profile.authorized_keys],
       ] as const
     )
       .filter(([, v]) => v && v.trim())
@@ -1443,7 +1478,7 @@ function BoxHardwareSection() {
           onChange={(e) => {
             const p = BOX_PRESETS[e.target.value];
             if (p) {
-              setProfile({ ...p });
+              setProfile({ ...p, authorized_keys: profile.authorized_keys });
               setRebootNeeded(false);
             }
           }}
@@ -1480,12 +1515,22 @@ function BoxHardwareSection() {
           onChange={(e) => set({ hardware_toml: e.target.value || null })}
         />
       </label>
-      <label className="mb-3 block text-[13px] text-dim">
+      <label className="mb-2 block text-[13px] text-dim">
         Panel environment (e.g. SLINT_KMS_ROTATION=270)
         <textarea
           className={`${area} mt-1 h-12`}
           value={profile.env ?? ""}
           onChange={(e) => set({ env: e.target.value || null })}
+        />
+      </label>
+      <label className="mb-3 block text-[13px] text-dim">
+        SSH authorized keys (public keys, one per line - required before
+        locking; ssh is key-only)
+        <textarea
+          className={`${area} mt-1 h-16`}
+          placeholder="ssh-ed25519 AAAA... you@laptop"
+          value={profile.authorized_keys ?? ""}
+          onChange={(e) => set({ authorized_keys: e.target.value || null })}
         />
       </label>
       <div className="flex items-center gap-3">
@@ -1502,6 +1547,13 @@ function BoxHardwareSection() {
         >
           Download bundle
         </button>
+        <button
+          className="rounded-lg border border-err/40 px-4 py-2 text-sm text-err hover:bg-err/10"
+          onClick={lock}
+          title="Requires an ssh key; unlock via ssh"
+        >
+          Lock
+        </button>
         <StatusText status={status} />
       </div>
       {rebootNeeded && (
@@ -1515,57 +1567,6 @@ function BoxHardwareSection() {
           >
             Reboot now
           </button>
-        </div>
-      )}
-    </Section>
-  );
-}
-
-function DangerSection() {
-  const [arm, setArm] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  async function reset() {
-    setBusy(true);
-    try {
-      await sendCommand({ type: "factory_reset" });
-    } catch {
-      /* the box reboots out from under the request */
-    }
-  }
-
-  return (
-    <Section title="Danger zone">
-      {!arm ? (
-        <button
-          className="rounded-lg border border-err/50 px-4 py-2 text-sm text-err hover:bg-err/10"
-          onClick={() => setArm(true)}
-        >
-          Factory reset…
-        </button>
-      ) : (
-        <div className="rounded-lg border border-err/40 bg-err/10 p-3">
-          <p className="text-sm">
-            This erases the speaker name, Wi-Fi networks, Bluetooth pairings,
-            caches and settings, then reboots into first-boot setup. The OS
-            itself is untouched.
-          </p>
-          <div className="mt-3 flex gap-3">
-            <button
-              className="rounded-lg bg-err px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-40"
-              disabled={busy}
-              onClick={reset}
-            >
-              {busy ? "Resetting…" : "Erase everything & reboot"}
-            </button>
-            <button
-              className="rounded-lg border border-line px-4 py-2 text-sm text-dim hover:text-fg"
-              disabled={busy}
-              onClick={() => setArm(false)}
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
     </Section>

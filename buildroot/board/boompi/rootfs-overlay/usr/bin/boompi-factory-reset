@@ -1,0 +1,28 @@
+#!/bin/sh
+# Factory reset: wipe user state and reboot into first-boot setup.
+#
+# ssh/console only - deliberately not reachable from the network APIs.
+# The OS slots are untouched (A/B updates own those); so are the box
+# profile (/data/box - wiring does not change on a reset), the ssh
+# host keys and authorized_keys (/data/ssh - the owner keeps access),
+# and the hardware lock.
+set -eu
+
+if [ "${1:-}" != "--yes" ]; then
+    echo "This wipes settings, Wi-Fi networks, and Bluetooth pairings,"
+    echo "then reboots into first-boot setup. The box profile, ssh keys,"
+    echo "and OS slots are kept."
+    printf "Type 'reset' to continue: "
+    read -r answer
+    [ "$answer" = "reset" ] || { echo "aborted"; exit 1; }
+fi
+
+echo "factory reset: wiping user state and rebooting"
+# Stop the state owners first so they can't flush their in-memory view
+# back over the wipe during shutdown. Contents only: /data/bluetooth is
+# a live bind-mount source and the dirs are recreated by tmpfiles.d on
+# the next boot anyway.
+systemctl stop bluetooth NetworkManager var-lib-bluetooth.mount || true
+rm -rf /data/boompi.toml /data/cache /data/bluetooth/* /data/nm-connections/*
+sync
+systemctl reboot

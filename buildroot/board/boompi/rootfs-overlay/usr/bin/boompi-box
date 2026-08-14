@@ -1,0 +1,83 @@
+#!/bin/sh
+# Box administration from ssh/console. See docs/PROVISIONING.md and
+# docs/SECURITY.md in the repo for the full story.
+#
+#   boompi-box show               print the box profile + lock state
+#   boompi-box edit <file>        edit a profile file ($EDITOR), then apply
+#   boompi-box apply              re-materialize the profile onto both boot slots
+#   boompi-box lock               disable the web hardware page/API
+#   boompi-box unlock             re-enable them
+#   boompi-box add-key [file]     append an ssh public key (stdin or file)
+#   boompi-box export [out.tar]   bundle the profile for provisioning another card
+#   boompi-box factory-reset      wipe user state (see boompi-factory-reset)
+set -eu
+
+BOX=/data/box
+KEYS=/data/ssh/authorized_keys
+LOCK=/data/boompi-hardware.lock
+
+cmd="${1:-show}"
+case "$cmd" in
+show)
+    echo "hardware lock: $([ -f "$LOCK" ] && echo LOCKED || echo unlocked)"
+    echo "ssh keys:      $([ -s "$KEYS" ] && wc -l < "$KEYS" || echo 0) authorized"
+    for f in config.txt cmdline.txt hardware.toml env; do
+        if [ -s "$BOX/$f" ]; then
+            echo; echo "--- $BOX/$f:"
+            cat "$BOX/$f"
+        fi
+    done
+    ;;
+edit)
+    f="${2:?usage: boompi-box edit <config.txt|cmdline.txt|hardware.toml|env>}"
+    case "$f" in
+    config.txt | cmdline.txt | hardware.toml | env) ;;
+    *) echo "unknown profile file: $f" >&2; exit 1 ;;
+    esac
+    mkdir -p "$BOX"
+    "${EDITOR:-vi}" "$BOX/$f"
+    boompi-apply-box-config --all
+    echo "applied; reboot for firmware config changes to take effect"
+    ;;
+apply)
+    boompi-apply-box-config --all
+    ;;
+lock)
+    [ -s "$KEYS" ] || {
+        echo "refusing to lock: no ssh key in $KEYS (you would lose" >&2
+        echo "remote hardware access; add one with 'boompi-box add-key')" >&2
+        exit 1
+    }
+    touch "$LOCK"
+    echo "hardware page/API locked; unlock with 'boompi-box unlock'"
+    ;;
+unlock)
+    rm -f "$LOCK"
+    echo "hardware page/API unlocked"
+    ;;
+add-key)
+    mkdir -p /data/ssh && chmod 700 /data/ssh
+    if [ -n "${2:-}" ]; then cat "$2" >> "$KEYS"; else cat >> "$KEYS"; fi
+    chmod 600 "$KEYS"
+    echo "$(wc -l < "$KEYS") key(s) authorized"
+    ;;
+export)
+    out="${2:-boompi-box.tar}"
+    stage=$(mktemp -d)
+    mkdir "$stage/boompi-box"
+    for f in config.txt cmdline.txt hardware.toml env; do
+        [ -s "$BOX/$f" ] && cp "$BOX/$f" "$stage/boompi-box/$f"
+    done
+    [ -s "$KEYS" ] && cp "$KEYS" "$stage/boompi-box/authorized_keys"
+    (cd "$stage" && tar -cf - boompi-box) > "$out"
+    rm -rf "$stage"
+    echo "wrote $out (drop the extracted boompi-box/ onto a fresh card's boot partition)"
+    ;;
+factory-reset)
+    exec boompi-factory-reset
+    ;;
+*)
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

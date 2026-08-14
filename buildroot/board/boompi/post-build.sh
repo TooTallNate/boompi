@@ -11,12 +11,23 @@ fail() {
     exit 1
 }
 
-# --- SSH access: never ship an image we cannot get into. -------------------
-[ -s "${TARGET_DIR}/root/.ssh/authorized_keys" ] \
-    || fail "missing /root/.ssh/authorized_keys (key-based root SSH)"
+# --- SSH access posture. -----------------------------------------------------
+# The generic image ships trusting NOBODY over the network: no baked
+# authorized_keys (per-box keys live at /data/ssh/authorized_keys),
+# key-only auth. The recovery matrix is docs/SECURITY.md; "never ship
+# an image we cannot get into" is now satisfied by the web settings
+# page, the console password, and the key provisioning paths.
+[ -e "${TARGET_DIR}/root/.ssh/authorized_keys" ] \
+    && fail "a baked authorized_keys snuck into the image (keys are per-box state)"
 
 [ -f "${TARGET_DIR}/etc/ssh/sshd_config.d/boompi.conf" ] \
-    || fail "missing sshd_config.d/boompi.conf (PermitRootLogin)"
+    || fail "missing sshd_config.d/boompi.conf"
+for directive in "AuthorizedKeysFile /data/ssh/authorized_keys" \
+                 "PasswordAuthentication no" \
+                 "KbdInteractiveAuthentication no"; do
+    grep -q "^$directive" "${TARGET_DIR}/etc/ssh/sshd_config.d/boompi.conf" \
+        || fail "sshd drop-in lacks '$directive'"
+done
 
 # Buildroot's OpenSSH installs a sshd_config *without* upstream's Include
 # line, which silently ignores the drop-in and would ship a locked-out
@@ -32,10 +43,6 @@ grep -q "^Include /etc/ssh/sshd_config.d" "${TARGET_DIR}/etc/ssh/sshd_config" \
 [ -e "${TARGET_DIR}/usr/sbin/sshd" ] || [ -e "${TARGET_DIR}/usr/bin/sshd" ] \
     || fail "sshd binary missing"
 
-# Overlay files land root-owned in the image regardless of build-host
-# ownership, but permissions are preserved - sshd rejects sloppy ones.
-chmod 700 "${TARGET_DIR}/root/.ssh"
-chmod 600 "${TARGET_DIR}/root/.ssh/authorized_keys"
 
 # --- State/persistence invariants. ------------------------------------------
 [ -f "${TARGET_DIR}/etc/systemd/system/data.mount" ] \
@@ -72,7 +79,8 @@ grep -q "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/obex-bus" \
 # flips (Pi 4); kexec is retired. Assert the pieces the mechanism (and
 # the box-profile re-materialization it performs) actually execs.
 for tool in boompi-update-slot boompi-trial-boot boompi-boot-commit \
-            boompi-apply-box-config boompi-ingest-provision; do
+            boompi-apply-box-config boompi-ingest-provision boompi-box \
+            boompi-factory-reset; do
     [ -x "${TARGET_DIR}/usr/bin/$tool" ] \
         || fail "$tool missing (A/B updater)"
 done

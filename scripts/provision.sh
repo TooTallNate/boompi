@@ -26,7 +26,17 @@ DIR="$(dirname "$0")/../boxes/$BOX"
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
 # shellcheck disable=SC2086
-ssh $SSH_OPTS "$HOST" "mkdir -p /data/box"
+ssh $SSH_OPTS "$HOST" "mkdir -p /data/box /data/ssh && chmod 700 /data/ssh"
+for k in "$HOME"/.ssh/id_ed25519.pub "$HOME"/.ssh/id_rsa.pub; do
+    if [ -f "$k" ]; then
+        # shellcheck disable=SC2086
+        scp -q -O $SSH_OPTS "$k" "$HOST:/data/ssh/authorized_keys"
+        # shellcheck disable=SC2086
+        ssh $SSH_OPTS "$HOST" "chmod 600 /data/ssh/authorized_keys"
+        echo "  /data/ssh/authorized_keys ($k)"
+        break
+    fi
+done
 for f in config.txt cmdline.txt hardware.toml env; do
     if [ -f "$DIR/$f" ]; then
         # shellcheck disable=SC2086
