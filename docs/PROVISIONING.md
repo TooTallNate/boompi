@@ -90,6 +90,16 @@ preference.
 Factory reset keeps `/data/box/` - resetting a speaker does not change
 its wiring.
 
+## Per-box binaries: /data/bin
+
+`/data/bin` is first in `$PATH` everywhere (interactive shells, ssh
+commands, systemd services) and survives OS updates like the rest of
+/data - the home for box-local tools (a Node.js runtime, scripts)
+that do not belong in the base image. Being first also means a box
+can shadow an image binary for local experiments; services started
+by absolute path (boompid, boompi-ui) are unaffected. Root-only, not
+exported over SMB, untouched by factory reset.
+
 ## Not yet built (roadmap)
 
 - Trialing box-profile changes through the A/B machinery (fence the
