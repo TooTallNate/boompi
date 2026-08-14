@@ -16,14 +16,17 @@ RETROARCH_DEPENDENCIES = \
 # flags buildroot's autotools infra passes, so drive it manually.
 # Target: KMS/GBM + GLES2 (matches the panel UI's stack), udev
 # joypads, PipeWire audio with ALSA fallback, nothing X11/Wayland.
-# Explicit staging paths + pkg-config env: qb's header checks compile
-# with $CC $CFLAGS only, and the configure runs outside buildroot's
-# autotools infra (which normally exports the pkg-config sysroot
-# vars). config.log is dumped on failure - qb's error messages name
-# the header, not the reason.
+# CROSS_COMPILE must be set: qb treats an empty value as a native
+# build and adds host library dirs (/usr/lib64) to every probe, which
+# buildroot's paranoid toolchain wrapper rejects - killing all header
+# checks (EGL was just the first fatal one). Explicit staging paths +
+# pkg-config env because qb runs outside buildroot's autotools infra;
+# config.log is dumped on failure since qb's die message names the
+# header, never the reason.
 define RETROARCH_CONFIGURE_CMDS
 	cd $(@D) && \
 	$(TARGET_CONFIGURE_OPTS) \
+	CROSS_COMPILE="$(TARGET_CROSS)" \
 	CFLAGS="$(TARGET_CFLAGS) -I$(STAGING_DIR)/usr/include" \
 	CXXFLAGS="$(TARGET_CXXFLAGS) -I$(STAGING_DIR)/usr/include" \
 	LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
