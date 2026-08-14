@@ -16,10 +16,21 @@ RETROARCH_DEPENDENCIES = \
 # flags buildroot's autotools infra passes, so drive it manually.
 # Target: KMS/GBM + GLES2 (matches the panel UI's stack), udev
 # joypads, PipeWire audio with ALSA fallback, nothing X11/Wayland.
+# Explicit staging paths + pkg-config env: qb's header checks compile
+# with $CC $CFLAGS only, and the configure runs outside buildroot's
+# autotools infra (which normally exports the pkg-config sysroot
+# vars). config.log is dumped on failure - qb's error messages name
+# the header, not the reason.
 define RETROARCH_CONFIGURE_CMDS
 	cd $(@D) && \
 	$(TARGET_CONFIGURE_OPTS) \
+	CFLAGS="$(TARGET_CFLAGS) -I$(STAGING_DIR)/usr/include" \
+	CXXFLAGS="$(TARGET_CXXFLAGS) -I$(STAGING_DIR)/usr/include" \
+	LDFLAGS="$(TARGET_LDFLAGS) -L$(STAGING_DIR)/usr/lib" \
 	PKG_CONF_PATH=$(HOST_DIR)/bin/pkg-config \
+	PKG_CONFIG=$(HOST_DIR)/bin/pkg-config \
+	PKG_CONFIG_SYSROOT_DIR=$(STAGING_DIR) \
+	PKG_CONFIG_LIBDIR=$(STAGING_DIR)/usr/lib/pkgconfig:$(STAGING_DIR)/usr/share/pkgconfig \
 	./configure \
 		--prefix=/usr \
 		--disable-x11 \
@@ -47,7 +58,8 @@ define RETROARCH_CONFIGURE_CMDS
 		--disable-cheevos \
 		--disable-ffmpeg \
 		--disable-vg \
-		--disable-cg
+		--disable-cg \
+	|| { echo "=== qb config.log ==="; cat config.log; exit 1; }
 endef
 
 define RETROARCH_BUILD_CMDS
