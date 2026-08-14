@@ -286,6 +286,10 @@ pub struct Settings {
     /// false.
     #[serde(default)]
     pub clock_24h: bool,
+    /// RetroArch stream volume (0.0-1.0) while an external audio
+    /// source is active: music ducks the game, not vice versa.
+    #[serde(default = "default_game_volume")]
+    pub game_volume: f32,
     /// MQTT broker for Home Assistant integration ("host" or
     /// "host:port"; empty = disabled). Entities appear in HA via MQTT
     /// discovery.
@@ -315,6 +319,7 @@ impl Default for Settings {
             update_channel: UpdateChannel::default(),
             airplay_classic: false,
             clock_24h: false,
+            game_volume: default_game_volume(),
             mqtt_broker: String::new(),
             mqtt_username: String::new(),
             mqtt_password: String::new(),
@@ -344,6 +349,8 @@ pub struct SettingsPatch {
     pub airplay_classic: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock_24h: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub game_volume: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mqtt_broker: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -531,6 +538,8 @@ pub struct State {
     pub volume: f32,
     pub battery: Option<Battery>,
     #[serde(default)]
+    pub games: GamesState,
+    #[serde(default)]
     pub battery_status: BatteryStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery_status_detail: Option<String>,
@@ -546,6 +555,46 @@ pub struct State {
     pub updates: UpdateState,
 }
 
+fn default_game_volume() -> f32 {
+    0.5
+}
+
+/// A playable ROM in the on-box library (/data/games/roms/<system>/).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Game {
+    pub system: String,
+    /// File name within the system directory.
+    pub file: String,
+    /// Display name (file name without extension).
+    pub name: String,
+    pub size: u64,
+}
+
+/// Games library + runtime state.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct GamesState {
+    pub games: Vec<Game>,
+    /// "system/file" of the running game, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub running: Option<String>,
+    /// A gamepad is connected; launching requires one (the panel's
+    /// touch input dies while RetroArch owns the display).
+    pub gamepad: bool,
+    /// /data free/total bytes (the ROM library lives there).
+    pub storage_free: u64,
+    pub storage_total: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "action")]
+pub enum GameAction {
+    /// Launch a game: the panel UI stops (one DRM master at a time),
+    /// RetroArch runs, the panel returns on exit.
+    Launch { system: String, file: String },
+    /// Stop the running game (the no-gamepad escape hatch).
+    Stop,
+}
+
 /// Server → client messages (JSON text frames).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -558,6 +607,7 @@ pub enum ServerMessage {
         level: f32,
     },
     Battery(Battery),
+    Games(GamesState),
     Pairing(Pairing),
     // NB: struct form - internally-tagged serde can't represent a newtype
     // variant wrapping a sequence.
@@ -621,6 +671,8 @@ pub enum ClientMessage {
     /// Orderly reboot (settings UIs; also how a box-profile change
     /// takes effect).
     Reboot,
+    /// Games (launch/stop).
+    Game(GameAction),
 }
 
 // ---------------------------------------------------------------------------

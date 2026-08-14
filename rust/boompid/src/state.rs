@@ -124,6 +124,10 @@ pub struct Shared {
     /// display always shows what is audibly playing.
     pub sink_volume: f32,
     pub battery: Option<Battery>,
+    /// Games library snapshot (maintained by the games module).
+    pub games: boompi_proto::GamesState,
+    /// "system/file" of the running game.
+    pub game_running: Option<String>,
     /// Why telemetry is (not) flowing; UIs explain instead of hiding.
     pub battery_status: boompi_proto::BatteryStatus,
     pub battery_status_detail: Option<String>,
@@ -164,6 +168,7 @@ impl App {
             update_channel: cfg.settings.update_channel,
             airplay_classic: cfg.settings.airplay_classic,
             clock_24h: cfg.settings.clock_24h,
+            game_volume: cfg.settings.game_volume,
             mqtt_broker: cfg.settings.mqtt_broker.clone(),
             mqtt_username: cfg.settings.mqtt_username.clone(),
             mqtt_password: cfg.settings.mqtt_password.clone(),
@@ -306,6 +311,7 @@ impl App {
             cfg.settings.update_channel = s.settings.update_channel;
             cfg.settings.airplay_classic = s.settings.airplay_classic;
             cfg.settings.clock_24h = s.settings.clock_24h;
+            cfg.settings.game_volume = s.settings.game_volume;
             cfg.settings.mqtt_broker = s.settings.mqtt_broker.clone();
             cfg.settings.mqtt_username = s.settings.mqtt_username.clone();
             cfg.settings.mqtt_password = s.settings.mqtt_password.clone();
@@ -435,6 +441,7 @@ impl App {
             track: s.track.clone(),
             volume: s.volume,
             battery: s.battery.clone(),
+            games: s.games.clone(),
             battery_status: s.battery_status,
             battery_status_detail: s.battery_status_detail.clone(),
             pairing: s.pairing.clone(),
@@ -625,6 +632,9 @@ impl App {
                     if let Some(scale) = patch.ui_scale {
                         s.settings.ui_scale = scale.clamp(1.0, 2.5);
                     }
+                    if let Some(v) = patch.game_volume {
+                        s.settings.game_volume = v.clamp(0.0, 1.0);
+                    }
                     if let Some(classic) = patch.airplay_classic {
                         if classic != s.settings.airplay_classic {
                             s.settings.airplay_classic = classic;
@@ -711,6 +721,17 @@ impl App {
             }
             ClientMessage::PreviewScreensaver => {
                 self.broadcast(ServerMessage::ScreensaverPreview);
+            }
+            ClientMessage::Game(action) => {
+                let result = match action {
+                    boompi_proto::GameAction::Launch { system, file } => {
+                        crate::games::launch(self, &system, &file).await
+                    }
+                    boompi_proto::GameAction::Stop => crate::games::stop().await,
+                };
+                if let Err(err) = result {
+                    tracing::warn!(%err, "game action failed");
+                }
             }
             ClientMessage::Reboot => {
                 tracing::warn!("reboot requested from a settings UI");

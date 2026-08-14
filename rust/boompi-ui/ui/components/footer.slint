@@ -18,7 +18,9 @@ export component Footer inherits Rectangle {
     in property <float> battery-percentage;
     in property <bool> battery-charging;
 
+    in property <bool> games-available: false;
     callback open-battery();
+    callback open-games();
     callback open-settings();
 
     height: Theme.footer-height-rem * 1rem;
@@ -97,6 +99,22 @@ export component Footer inherits Rectangle {
             color: Theme.dimmer;
             vertical-alignment: center;
             overflow: elide;
+        }
+
+        // Games (shown once a library exists).
+        if root.games-available: TouchArea {
+            width: 2rem;
+            clicked => {
+                root.open-games();
+            }
+            Text {
+                text: "🎮";
+                font-size: 1.1rem;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+            }
         }
 
         // Battery icon (tap → diagnostics panel). Always shown: with

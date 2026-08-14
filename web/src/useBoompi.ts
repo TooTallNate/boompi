@@ -55,6 +55,9 @@ export function useBoompi() {
           case "battery":
             setState((s) => s && { ...s, battery: msg as never });
             break;
+          case "games":
+            setState((s) => s && { ...s, games: msg as never });
+            break;
           case "emoji_fonts": {
             const { type: _t, ...emoji } = msg as never as Record<string, unknown>;
             setState((s) => s && { ...s, emoji_fonts: emoji as never });

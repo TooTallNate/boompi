@@ -19,6 +19,7 @@ import { Footer } from "components/footer.slint";
 import { NowPlaying } from "components/now_playing.slint";
 import { ConnectScreen } from "components/connect.slint";
 import { BatteryPanel } from "components/battery_panel.slint";
+import { GamesPanel, GameEntry } from "components/games_panel.slint";
 import { SettingsPanel, EmojiFontRow } from "components/settings.slint";
 import { Screensaver } from "components/screensaver.slint";
 
@@ -89,6 +90,12 @@ export component AppWindow inherits Window {
     in property <[float]> peak-fades: [];
     in property <image> artwork;
     in property <bool> has-artwork: false;
+
+    // --- games ---
+    in property <[GameEntry]> games: [];
+    in property <bool> games-gamepad: false;
+    in property <string> game-running: "";
+    callback game-launch(string, string);
 
     // --- battery ---
     in property <bool> battery-present: false;
@@ -258,6 +265,19 @@ export component AppWindow inherits Window {
     }
 
     // ---- overlay screens ----------------------------------------------------
+    if root.screen == "games": GamesPanel {
+        games: root.games;
+        gamepad: root.games-gamepad;
+        running: root.game-running;
+        launch(system, file) => {
+            root.game-launch(system, file);
+        }
+        close => {
+            root.screen = "main";
+            root.screen-changed();
+        }
+    }
+
     if root.screen == "battery": BatteryPanel {
         present: root.battery-present;
         status: root.battery-status;
@@ -422,10 +442,15 @@ export component AppWindow inherits Window {
         device-name: root.device-name;
         source-kind: root.source-kind;
         battery-present: root.battery-present;
+        games-available: root.games.length > 0;
         battery-percentage: root.battery-percentage;
         battery-charging: root.battery-charging;
         open-battery => {
             root.screen = root.screen == "battery" ? "main" : "battery";
+            root.screen-changed();
+        }
+        open-games => {
+            root.screen = root.screen == "games" ? "main" : "games";
             root.screen-changed();
         }
         open-settings => {

@@ -10,7 +10,7 @@ repository.workspace = true
 boompi-proto = { path = "../boompi-proto" }
 
 anyhow = { workspace = true }
-axum = { version = "0.8", features = ["ws"] }
+axum = { version = "0.8", features = ["ws", "multipart"] }
 bytes = "1"
 # AirPlay cover art arrives as a raw buffer dump (valid image + garbage
 # tail, sometimes mid-write); decode-validate before publishing.

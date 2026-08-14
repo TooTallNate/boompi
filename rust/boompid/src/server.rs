@@ -14,6 +14,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 use boompi_proto::{ClientMessage, Hello, ServerMessage, SettingsPatch, PROTO_VERSION};
 use std::net::SocketAddr;
+use tokio::io::AsyncWriteExt;
 
 /// The Vite/React settings SPA (`web/dist`, a build artifact: run
 /// `make web` before building boompid; CI's shared `web` job provides it).
@@ -30,6 +31,13 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/settings", post(api_settings))
         .route("/api/command", post(api_command))
         .route("/api/box", get(api_box).put(api_box_set))
+        .route(
+            "/api/games/upload",
+            post(api_games_upload).layer(axum::extract::DefaultBodyLimit::max(
+                1 << 30, // per-system caps enforced inside
+            )),
+        )
+        .route("/api/games/delete", post(api_games_delete))
         .route("/api/box/lock", post(api_box_lock))
         .route("/api/clock", get(api_clock).post(api_clock_set))
         .route("/api/wifi", get(api_wifi).post(api_wifi_action))
@@ -429,6 +437,138 @@ async fn api_settings(
     app.handle_client_message(ClientMessage::SetSettings(patch))
         .await;
     Json(app.snapshot().await.settings)
+}
+
+#[derive(serde::Deserialize)]
+struct GamesUploadQuery {
+    system: String,
+}
+
+/// Upload a ROM (multipart, single file field). Streamed to a temp
+/// file in the target directory, renamed into place on success -
+/// /data has the space (grown to fill the card), tmpfs does not.
+async fn api_games_upload(
+    State(app): State<SharedApp>,
+    axum::extract::Query(q): axum::extract::Query<GamesUploadQuery>,
+    mut multipart: axum::extract::Multipart,
+) -> axum::response::Response {
+    let err = |code: StatusCode, msg: String| {
+        (code, Json(serde_json::json!({ "error": msg }))).into_response()
+    };
+    let system = q.system;
+    let is_bios = system == "bios";
+    if !is_bios && !crate::games::SYSTEMS.iter().any(|(id, _, _)| *id == system) {
+        return err(StatusCode::BAD_REQUEST, format!("unknown system {system}"));
+    }
+    let cap = crate::games::upload_cap(&system);
+    let dir = if is_bios {
+        crate::games::games_dir().join("bios")
+    } else {
+        crate::games::roms_dir().join(&system)
+    };
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+    }
+
+    while let Ok(Some(mut field)) = multipart.next_field().await {
+        let Some(raw_name) = field.file_name().map(str::to_string) else {
+            continue;
+        };
+        let Some(name) = crate::games::sanitize_file_name(&raw_name) else {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("bad file name {raw_name:?}"),
+            );
+        };
+        if !crate::games::upload_extension_ok(&system, &name) {
+            return err(
+                StatusCode::BAD_REQUEST,
+                format!("{name}: extension not accepted for {system}"),
+            );
+        }
+        let tmp = dir.join(format!(".upload-{name}"));
+        let final_path = dir.join(&name);
+        let mut file = match tokio::fs::File::create(&tmp).await {
+            Ok(f) => f,
+            Err(e) => return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()),
+        };
+        let mut written: u64 = 0;
+        loop {
+            match field.chunk().await {
+                Ok(Some(chunk)) => {
+                    written += chunk.len() as u64;
+                    if written > cap {
+                        drop(file);
+                        let _ = tokio::fs::remove_file(&tmp).await;
+                        return err(
+                            StatusCode::PAYLOAD_TOO_LARGE,
+                            format!("{name} exceeds the {}MB cap for {system}", cap >> 20),
+                        );
+                    }
+                    if let Err(e) = file.write_all(&chunk).await {
+                        let _ = tokio::fs::remove_file(&tmp).await;
+                        return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+                    }
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    let _ = tokio::fs::remove_file(&tmp).await;
+                    return err(StatusCode::BAD_REQUEST, e.to_string());
+                }
+            }
+        }
+        if let Err(e) = file.sync_all().await {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        }
+        drop(file);
+        if let Err(e) = tokio::fs::rename(&tmp, &final_path).await {
+            let _ = tokio::fs::remove_file(&tmp).await;
+            return err(StatusCode::INTERNAL_SERVER_ERROR, e.to_string());
+        }
+        tracing::info!(system, name, written, "game asset uploaded");
+    }
+    crate::games::refresh(&app).await;
+    Json(app.snapshot().await.games).into_response()
+}
+
+#[derive(serde::Deserialize)]
+struct GamesDeleteBody {
+    system: String,
+    file: String,
+}
+
+async fn api_games_delete(
+    State(app): State<SharedApp>,
+    Json(body): Json<GamesDeleteBody>,
+) -> axum::response::Response {
+    let ok = crate::games::sanitize_file_name(&body.file).is_some()
+        && crate::games::SYSTEMS
+            .iter()
+            .any(|(id, _, _)| *id == body.system);
+    if !ok {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": "bad system or file" })),
+        )
+            .into_response();
+    }
+    let path = crate::games::roms_dir().join(&body.system).join(&body.file);
+    // Companion cleanup: deleting a .cue takes its .bin tracks along.
+    let _ = tokio::fs::remove_file(&path).await;
+    if body.file.to_ascii_lowercase().ends_with(".cue") {
+        let stem = &body.file[..body.file.len() - 4];
+        for ext in ["bin", "img", "ccd", "sub"] {
+            let _ = tokio::fs::remove_file(
+                crate::games::roms_dir()
+                    .join(&body.system)
+                    .join(format!("{stem}.{ext}")),
+            )
+            .await;
+        }
+    }
+    crate::games::refresh(&app).await;
+    Json(app.snapshot().await.games).into_response()
 }
 
 /// The box profile (/data/box/), as edited by the configurator page.

@@ -1,0 +1,114 @@
+// Games library: pick a title, hand the display to RetroArch.
+// Launching stops this whole UI process (one DRM master at a time);
+// it comes back when the game exits (Start+Select menu, web Stop).
+
+import { Theme } from "theme.slint";
+import { IconBack } from "icons.slint";
+
+export struct GameEntry {
+    system: string,
+    file: string,
+    name: string,
+    size-label: string,
+}
+
+export component GamesPanel inherits Rectangle {
+    in property <[GameEntry]> games;
+    in property <bool> gamepad;
+    in property <string> running;
+
+    callback close();
+    callback launch(string, string); // system, file
+
+    background: Theme.bg;
+
+    VerticalLayout {
+        padding: 0.7778rem;
+        padding-bottom: Theme.footer-height-rem * 1rem + 0.4444rem;
+        spacing: 0.5556rem;
+
+        HorizontalLayout {
+            spacing: 0.4444rem;
+            TouchArea {
+                width: 2.4444rem;
+                clicked => {
+                    root.close();
+                }
+                IconBack {
+                    x: (parent.width - self.width) / 2;
+                    y: (parent.height - self.height) / 2;
+                    width: 1.1111rem;
+                    height: 1.2222rem;
+                    icon-color: Theme.dim;
+                }
+            }
+            Text {
+                text: "Games";
+                font-size: 1.2222rem;
+                color: Theme.fg;
+                vertical-alignment: center;
+            }
+            Rectangle { }
+            if !root.gamepad: Text {
+                text: "connect a controller to play";
+                color: Theme.bad;
+                font-size: 0.7778rem;
+                vertical-alignment: center;
+            }
+        }
+
+        if root.games.length == 0: Text {
+            text: "No games yet - upload ROMs from the web settings page.";
+            color: Theme.dim;
+            font-size: 0.8889rem;
+        }
+
+        Flickable {
+            vertical-stretch: 1;
+            viewport-height: games-list.preferred-height;
+            games-list := VerticalLayout {
+                y: 0;
+                alignment: start;
+                spacing: 0.3333rem;
+                for game in root.games: TouchArea {
+                    height: 2.6667rem;
+                    enabled: root.gamepad && root.running == "";
+                    clicked => {
+                        root.launch(game.system, game.file);
+                    }
+                    Rectangle {
+                        background: parent.has-hover ? Theme.panel : transparent;
+                        border-radius: 0.4444rem;
+                        opacity: (root.gamepad && root.running == "") ? 1.0 : 0.45;
+                        HorizontalLayout {
+                            padding-left: 0.6667rem;
+                            padding-right: 0.6667rem;
+                            spacing: 0.6667rem;
+                            Text {
+                                text: game.system;
+                                color: Theme.accent;
+                                font-size: 0.7778rem;
+                                width: 2.6667rem;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: game.name;
+                                color: Theme.fg;
+                                font-size: 0.9444rem;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                horizontal-stretch: 1;
+                            }
+                            Text {
+                                text: game.size-label;
+                                color: Theme.dimmer;
+                                font-size: 0.7222rem;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

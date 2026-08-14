@@ -18,6 +18,7 @@ export interface Settings {
   update_channel: UpdateChannel;
   airplay_classic: boolean;
   clock_24h: boolean;
+  game_volume: number;
   mqtt_broker: string;
   mqtt_username: string;
   mqtt_password: string;
@@ -34,6 +35,7 @@ export interface SettingsPatch {
   update_channel?: UpdateChannel;
   airplay_classic?: boolean;
   clock_24h?: boolean;
+  game_volume?: number;
   mqtt_broker?: string;
   mqtt_username?: string;
   mqtt_password?: string;
@@ -126,8 +128,24 @@ export interface AppState {
   source: unknown;
   track: unknown;
   battery: Battery | null;
+  games: GamesState;
   battery_status?: "unconfigured" | "error" | "ok";
   battery_status_detail?: string;
+}
+
+export interface Game {
+  system: string;
+  file: string;
+  name: string;
+  size: number;
+}
+
+export interface GamesState {
+  games: Game[];
+  running?: string;
+  gamepad: boolean;
+  storage_free: number;
+  storage_total: number;
 }
 
 /** INA260 battery telemetry; null on boxes without one. */
@@ -160,6 +178,7 @@ export type ServerMessage =
   | { type: "bt_devices"; devices: BtDevice[] }
   | { type: "volume"; level: number }
   | ({ type: "battery" } & Battery)
+  | ({ type: "games" } & GamesState)
   | { type: string; [k: string]: unknown };
 
 /** Client → server WebSocket messages used by the settings UI. */
@@ -168,5 +187,7 @@ export type ClientMessage =
   | { type: "update"; action: UpdateAction }
   | { type: "preview_screensaver" }
   | { type: "reboot" }
+  | { type: "game"; action: "launch"; system: string; file: string }
+  | { type: "game"; action: "stop" }
   | { type: "pairing"; action: PairingAction }
   | { type: "bt_device"; address: string; action: BtDeviceAction };

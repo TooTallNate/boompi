@@ -17,6 +17,7 @@ import { useBoompi } from "./useBoompi";
 import type {
   Battery,
   BtDevice,
+  GamesState,
   BtVolumeMode,
   ClientMessage,
   EmojiFontsState,
@@ -103,6 +104,14 @@ export default function App() {
           />
         )}
 
+        {state?.games && settings && (
+          <GamesSection
+            games={state.games}
+            settings={settings}
+            onSaved={applySettings}
+            send={send}
+          />
+        )}
         {state && (
           <BatterySection
             battery={state.battery}
@@ -149,6 +158,153 @@ function SignalBars({ signal }: { signal: number }) {
         />
       ))}
     </span>
+  );
+}
+
+const GAME_SYSTEMS = [
+  ["nes", "NES"],
+  ["snes", "SNES"],
+  ["gb", "Game Boy"],
+  ["gbc", "Game Boy Color"],
+  ["gba", "Game Boy Advance"],
+  ["n64", "Nintendo 64"],
+  ["psx", "PlayStation"],
+  ["bios", "BIOS files (PSX etc.)"],
+] as const;
+
+function GamesSection({
+  games,
+  settings,
+  onSaved,
+  send,
+}: {
+  games: GamesState;
+  send: (msg: ClientMessage) => void;
+} & SectionProps) {
+  const [system, setSystem] = useState<string>("nes");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { save, status } = useSave(onSaved);
+
+  const upload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      for (const f of Array.from(files)) form.append("file", f);
+      const r = await fetch(`/api/games/upload?system=${system}`, {
+        method: "POST",
+        body: form,
+      });
+      if (!r.ok) {
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body.error ?? `HTTP ${r.status}`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const del = async (system: string, file: string) => {
+    if (!window.confirm(`Delete ${file}? Save files are kept.`)) return;
+    await fetch("/api/games/delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ system, file }),
+    });
+  };
+
+  const freeGB = (games.storage_free / 1e9).toFixed(1);
+  return (
+    <Section title="Games">
+      <p className="mb-3 text-[13px] text-dim">
+        RetroArch is aboard. Upload your ROMs, pair a controller (same
+        pairing button as speakers), launch from the panel. Music and
+        gameplay mix; music ducks the game volume.
+      </p>
+      {games.running && (
+        <div className="mb-3 flex items-center gap-3 rounded-lg border border-line bg-bg p-3">
+          <span className="text-[13px]">
+            Playing: <code>{games.running}</code>
+          </span>
+          <button
+            className="rounded-lg border border-err/40 px-3 py-1 text-[13px] text-err hover:bg-err/10"
+            onClick={() => send({ type: "game", action: "stop" })}
+          >
+            Stop game
+          </button>
+        </div>
+      )}
+      <div className="mb-3 flex items-center gap-2">
+        <select
+          className="rounded-lg border border-line bg-bg px-2 py-2 text-sm"
+          value={system}
+          onChange={(e) => setSystem(e.target.value)}
+        >
+          {GAME_SYSTEMS.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <label className="cursor-pointer rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink">
+          {busy ? "Uploading…" : "Upload"}
+          <input
+            type="file"
+            multiple
+            className="hidden"
+            disabled={busy}
+            onChange={(e) => {
+              void upload(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </label>
+        <span className="text-[12px] text-dim">{freeGB}GB free</span>
+      </div>
+      {error && <p className="mb-2 text-[13px] text-err">{error}</p>}
+      {games.games.length > 0 && (
+        <ul className="mb-3">
+          {games.games.map((g) => (
+            <li
+              key={`${g.system}/${g.file}`}
+              className="flex items-center gap-3 border-t border-line py-1.5 first:border-t-0"
+            >
+              <span className="w-10 text-[11px] text-accent">{g.system}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{g.name}</span>
+              <span className="text-[11px] text-dim">
+                {(g.size / 1e6).toFixed(1)}MB
+              </span>
+              <button
+                className="text-[12px] text-dim underline hover:text-err"
+                onClick={() => void del(g.system, g.file)}
+              >
+                delete
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <label className="block text-[13px] text-dim">
+        Game volume while music plays: {Math.round(settings.game_volume * 100)}%
+        <input
+          type="range"
+          min={0}
+          max={100}
+          className="mt-1 block w-full"
+          value={Math.round(settings.game_volume * 100)}
+          onChange={(e) =>
+            save({ game_volume: Number(e.target.value) / 100 })
+          }
+        />
+      </label>
+      <div className="mt-1">
+        <StatusText status={status} />
+      </div>
+    </Section>
   );
 }
 

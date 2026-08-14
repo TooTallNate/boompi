@@ -156,6 +156,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             if let Some(battery) = state.battery {
                 apply_battery(ctx, history, battery);
             }
+            apply_games(ctx, state.games.clone());
             let battery_status = match state.battery_status {
                 boompi_proto::BatteryStatus::Unconfigured => "unconfigured",
                 boompi_proto::BatteryStatus::Error => "error",
@@ -208,6 +209,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 .upgrade_in_event_loop(move |ui| ui.set_volume(level));
         }
         ServerMessage::Battery(battery) => apply_battery(ctx, history, battery),
+        ServerMessage::Games(games) => apply_games(ctx, games),
         ServerMessage::PowerOff { reason, in_secs: _ } => {
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 ui.set_saver_active(false);
@@ -390,6 +392,30 @@ fn apply_source(ctx: &NetCtx, source: &SourceInfo) {
         ui.set_controls_enabled(controllable);
         ui.set_device_name(device.into());
         ui.set_source_kind(kind.into());
+    });
+}
+
+fn apply_games(ctx: &NetCtx, games: boompi_proto::GamesState) {
+    let entries: Vec<crate::GameEntry> = games
+        .games
+        .iter()
+        .map(|g| crate::GameEntry {
+            system: g.system.as_str().into(),
+            file: g.file.as_str().into(),
+            name: g.name.as_str().into(),
+            size_label: if g.size >= 1 << 20 {
+                format!("{}MB", g.size >> 20).into()
+            } else {
+                format!("{}KB", g.size >> 10).into()
+            },
+        })
+        .collect();
+    let gamepad = games.gamepad;
+    let running = games.running.unwrap_or_default();
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_games(std::rc::Rc::new(slint::VecModel::from(entries)).into());
+        ui.set_games_gamepad(gamepad);
+        ui.set_game_running(running.into());
     });
 }
 

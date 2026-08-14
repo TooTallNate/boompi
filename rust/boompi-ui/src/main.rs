@@ -264,6 +264,15 @@ fn main() -> anyhow::Result<()> {
         ));
         let flush_timer = std::rc::Rc::new(slint::Timer::default());
         const GAP: std::time::Duration = std::time::Duration::from_millis(100);
+        {
+            let tx = tx.clone();
+            ui.on_game_launch(move |system, file| {
+                let _ = tx.send(ClientMessage::Game(boompi_proto::GameAction::Launch {
+                    system: system.into(),
+                    file: file.into(),
+                }));
+            });
+        }
         ui.on_volume_edited(move |level| {
             let elapsed = last_sent.get().elapsed();
             if elapsed >= GAP {

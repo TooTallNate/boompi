@@ -25,6 +25,7 @@ mod bt_agent;
 mod clock;
 mod config;
 mod fonts;
+mod games;
 // DSP is platform-independent (unit-tested everywhere) but only consumed by
 // the Linux-only visualizer.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -100,6 +101,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(name = %cfg.name, "starting boompid v{}", state::VERSION);
 
     let app = state::App::new(cfg, cli.config.clone());
+
+    games::spawn_recovery(app.clone());
 
     if cli.sim {
         tracing::info!("simulation mode: fake sources, battery, and visualizer");
