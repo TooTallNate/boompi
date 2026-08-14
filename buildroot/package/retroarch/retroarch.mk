@@ -4,8 +4,18 @@
 #
 ################################################################################
 
-RETROARCH_VERSION = 1.22.2
-RETROARCH_SITE = $(call github,libretro,RetroArch,v$(RETROARCH_VERSION))
+# Master pin, not v1.22.2: the 1.22.2 autoconfig scan corrupts the
+# heap on this build (gcc 14 aarch64) the moment ANY joypad profile
+# exists to match - glibc aborts with 'corrupted double-linked list' /
+# 'malloc(): unaligned tcache chunk' about a second into every game
+# launch, bisected on-box down to a single innocent 306-byte .cfg.
+# Upstream rebuilt the whole config_file/autoconfig subsystem after
+# 1.22.2 (PR 19305: pooled zero-copy parsing, ASan/UBSan/MSan sweeps,
+# differential fuzzing, and an autoconfig regression suite run against
+# the same 437-profile corpus this image ships); no tagged release
+# carries it yet. Pinned by commit like the libretro cores.
+RETROARCH_VERSION = 1d858e1cd5ae79fd6964fb79be1298667eafc197
+RETROARCH_SITE = $(call github,libretro,RetroArch,$(RETROARCH_VERSION))
 RETROARCH_LICENSE = GPL-3.0
 RETROARCH_LICENSE_FILES = COPYING
 RETROARCH_DEPENDENCIES = \
