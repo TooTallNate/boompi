@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import {
+  fetchBoxProfile,
   fetchClock,
   fetchWifi,
   patchClock,
   patchSettings,
+  putBoxProfile,
   sendCommand,
   wifiAction,
 } from "./api";
-import type { ClockStatus, WifiNetwork, WifiStatus } from "./api";
+import type { BoxProfile, ClockStatus, WifiNetwork, WifiStatus } from "./api";
+import { tarBundle } from "./tar";
 import { useBoompi } from "./useBoompi";
 import type {
   Battery,
@@ -107,6 +110,7 @@ export default function App() {
             onSaved={applySettings}
           />
         )}
+        <BoxHardwareSection />
         <DangerSection />
       </main>
     </div>
@@ -1282,6 +1286,186 @@ function HomeAssistantSection({ settings, onSaved }: SectionProps) {
           </button>
         </div>
       </div>
+    </Section>
+  );
+}
+
+const BOX_PRESETS: Record<string, BoxProfile> = {
+  "Generic (HDMI, onboard audio + Bluetooth)": {
+    config_txt: null,
+    cmdline_txt: null,
+    hardware_toml: null,
+    env: null,
+  },
+  "Pi 3 + HyperPixel 4.0 + USB dongle/audio": {
+    config_txt: [
+      "# HyperPixel 4.0 panel + GT911 touch, rotated; the overlay also",
+      "# provides the bit-banged i2c bus (i2c-11) for an INA260.",
+      "dtoverlay=vc4-kms-dpi-hyperpixel4",
+      "dtparam=rotate=270,touchscreen-swapped-x-y,touchscreen-inverted-x",
+      "",
+      "# USB Bluetooth dongle + USB audio; onboard radio/audio off.",
+      "dtoverlay=disable-bt",
+      "dtparam=audio=off",
+    ].join("\n"),
+    cmdline_txt: null,
+    hardware_toml: "[battery]\ni2c_bus = 11\n\n[settings]\nui_scale = 1.5",
+    env: "SLINT_KMS_ROTATION=270",
+  },
+  "Pi 4 + I2S DAC HAT + 1024x600 HDMI panel": {
+    config_txt: [
+      "# PCM51xx-family I2S DAC HAT; onboard audio off.",
+      "dtoverlay=hifiberry-dac",
+      "dtparam=audio=off",
+      "",
+      "# INA260 battery monitor on the standard I2C bus.",
+      "dtparam=i2c_arm=on",
+    ].join("\n"),
+    cmdline_txt: "video=HDMI-A-1:1024x600M@60D",
+    hardware_toml: "[battery]\ni2c_bus = 1",
+    env: null,
+  },
+};
+
+function BoxHardwareSection() {
+  const [profile, setProfile] = useState<BoxProfile | null>(null);
+  const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
+  const [rebootNeeded, setRebootNeeded] = useState(false);
+
+  useEffect(() => {
+    fetchBoxProfile().then(setProfile).catch(() => setProfile(null));
+  }, []);
+
+  if (!profile) return null;
+  const set = (patch: Partial<BoxProfile>) =>
+    setProfile((p) => p && { ...p, ...patch });
+
+  const apply = async () => {
+    setStatus({ kind: "saving" });
+    try {
+      const outcome = await putBoxProfile(profile);
+      setStatus({ kind: "ok" });
+      setRebootNeeded(outcome.firmware_changed);
+    } catch (e) {
+      setStatus({ kind: "err", message: (e as Error).message });
+    }
+  };
+
+  const download = () => {
+    const files = (
+      [
+        ["config.txt", profile.config_txt],
+        ["cmdline.txt", profile.cmdline_txt],
+        ["hardware.toml", profile.hardware_toml],
+        ["env", profile.env],
+      ] as const
+    )
+      .filter(([, v]) => v && v.trim())
+      .map(([name, v]) => ({
+        name: `boompi-box/${name}`,
+        content: v!.trim() + "\n",
+      }));
+    const url = URL.createObjectURL(tarBundle(files));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "boompi-box.tar";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const area =
+    "w-full rounded-lg border border-line bg-bg px-3 py-2 font-mono text-[12px] focus:border-accent focus:outline-none";
+  return (
+    <Section title="Box hardware">
+      <p className="mb-3 text-[13px] text-dim">
+        This box&apos;s hardware profile (display, wiring, battery). Applied
+        live to <code>/data/box/</code> and merged into the boot config; it
+        survives OS updates. Download it as a bundle to provision another
+        SD card (drop the extracted <code>boompi-box/</code> folder onto a
+        freshly flashed card&apos;s boot partition).
+      </p>
+      <label className="mb-2 block text-[13px] text-dim">
+        Preset
+        <select
+          className="mt-1 block w-full rounded-lg border border-line bg-bg px-2 py-2 text-sm"
+          value=""
+          onChange={(e) => {
+            const p = BOX_PRESETS[e.target.value];
+            if (p) {
+              setProfile({ ...p });
+              setRebootNeeded(false);
+            }
+          }}
+        >
+          <option value="">Load a preset…</option>
+          {Object.keys(BOX_PRESETS).map((k) => (
+            <option key={k} value={k}>
+              {k}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="mb-2 block text-[13px] text-dim">
+        config.txt fragment (dtoverlays, dtparams, GPIO)
+        <textarea
+          className={`${area} mt-1 h-28`}
+          value={profile.config_txt ?? ""}
+          onChange={(e) => set({ config_txt: e.target.value || null })}
+        />
+      </label>
+      <label className="mb-2 block text-[13px] text-dim">
+        Kernel arguments (single line; e.g. video= for an EDID-less panel)
+        <input
+          className={`${area} mt-1`}
+          value={profile.cmdline_txt ?? ""}
+          onChange={(e) => set({ cmdline_txt: e.target.value || null })}
+        />
+      </label>
+      <label className="mb-2 block text-[13px] text-dim">
+        hardware.toml (battery wiring/thresholds; [settings] seeds first boot)
+        <textarea
+          className={`${area} mt-1 h-20`}
+          value={profile.hardware_toml ?? ""}
+          onChange={(e) => set({ hardware_toml: e.target.value || null })}
+        />
+      </label>
+      <label className="mb-3 block text-[13px] text-dim">
+        Panel environment (e.g. SLINT_KMS_ROTATION=270)
+        <textarea
+          className={`${area} mt-1 h-12`}
+          value={profile.env ?? ""}
+          onChange={(e) => set({ env: e.target.value || null })}
+        />
+      </label>
+      <div className="flex items-center gap-3">
+        <button
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-accent-ink disabled:opacity-40"
+          disabled={status.kind === "saving"}
+          onClick={apply}
+        >
+          Apply to this box
+        </button>
+        <button
+          className="rounded-lg border border-line px-4 py-2 text-sm text-dim"
+          onClick={download}
+        >
+          Download bundle
+        </button>
+        <StatusText status={status} />
+      </div>
+      {rebootNeeded && (
+        <div className="mt-3 flex items-center gap-3 rounded-lg border border-line bg-bg p-3">
+          <span className="text-[13px] text-dim">
+            Boot config changed - reboot to apply.
+          </span>
+          <button
+            className="rounded-lg border border-err/40 px-3 py-1 text-[13px] text-err hover:bg-err/10"
+            onClick={() => sendCommand({ type: "reboot" })}
+          >
+            Reboot now
+          </button>
+        </div>
+      )}
     </Section>
   );
 }

@@ -29,6 +29,7 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/api/state", get(api_state))
         .route("/api/settings", post(api_settings))
         .route("/api/command", post(api_command))
+        .route("/api/box", get(api_box).put(api_box_set))
         .route("/api/clock", get(api_clock).post(api_clock_set))
         .route("/api/wifi", get(api_wifi).post(api_wifi_action))
         .route(
@@ -427,6 +428,22 @@ async fn api_settings(
     app.handle_client_message(ClientMessage::SetSettings(patch))
         .await;
     Json(app.snapshot().await.settings)
+}
+
+/// The box profile (/data/box/), as edited by the configurator
+/// section of the settings UI.
+async fn api_box() -> impl IntoResponse {
+    Json(crate::boxprofile::read())
+}
+
+async fn api_box_set(Json(profile): Json<crate::boxprofile::Profile>) -> impl IntoResponse {
+    match crate::boxprofile::write(&profile).await {
+        Ok(outcome) => (StatusCode::OK, Json(serde_json::json!(outcome))),
+        Err(err) => (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": err.to_string() })),
+        ),
+    }
 }
 
 async fn ws_upgrade(State(app): State<SharedApp>, ws: WebSocketUpgrade) -> impl IntoResponse {

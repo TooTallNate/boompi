@@ -16,6 +16,35 @@ export async function sendCommand(msg: object): Promise<void> {
   if (!r.ok) throw new Error(`command failed: HTTP ${r.status}`);
 }
 
+export interface BoxProfile {
+  config_txt: string | null;
+  cmdline_txt: string | null;
+  hardware_toml: string | null;
+  env: string | null;
+}
+
+export interface BoxWriteOutcome {
+  firmware_changed: boolean;
+  applied: boolean;
+}
+
+export async function fetchBoxProfile(): Promise<BoxProfile> {
+  const r = await fetch("/api/box");
+  if (!r.ok) throw new Error(`box profile fetch failed: HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function putBoxProfile(p: BoxProfile): Promise<BoxWriteOutcome> {
+  const r = await fetch("/api/box", {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(p),
+  });
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+  return body;
+}
+
 export interface WifiNetwork {
   ssid: string;
   signal: number;

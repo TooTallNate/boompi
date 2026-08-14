@@ -47,6 +47,15 @@ the old merged config.
 
 ## Provisioning a box
 
+From the box itself (the primary path): the web settings page has a
+"Box hardware" section - the configurator ships in the same image as
+the code that consumes the profile, so the two cannot drift. Pick a
+preset or edit the fragments, Apply (written to `/data/box/` and
+fenced onto both boot slots; one reboot when the boot config
+changed), and "Download bundle" produces the `boompi-box.tar` for
+provisioning the next card.
+
+
 Fresh SD card, from any OS (no root, no ext4 tooling): flash the
 generic image, let the OS mount the boot partition, then
 
@@ -79,5 +88,9 @@ its wiring.
 
 ## Not yet built (roadmap)
 
-- A static configurator website that generates a profile from a
-  hardware questionnaire (the drag-drop bundle is its output format).
+- Trialing box-profile changes through the A/B machinery (fence the
+  inactive slot, one-shot boot it, commit) so even a boot-breaking
+  dtoverlay cannot strand a box.
+- A hosted flavor of the configurator (the web UI is a static bundle;
+  a "no live box" build could go on GitHub Pages) for people flashing
+  their very first card.

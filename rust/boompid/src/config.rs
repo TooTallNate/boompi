@@ -335,7 +335,7 @@ pub fn load(path: Option<&Path>) -> anyhow::Result<Config> {
 
 /// Parse a config, collecting the paths of unknown keys instead of
 /// rejecting them (the caller logs them).
-fn parse(raw: &str) -> Result<(Config, Vec<String>), toml::de::Error> {
+pub(crate) fn parse(raw: &str) -> Result<(Config, Vec<String>), toml::de::Error> {
     let de = toml::de::Deserializer::new(raw);
     let mut unknown = Vec::new();
     let cfg = serde_ignored::deserialize(de, |path| unknown.push(path.to_string()))?;

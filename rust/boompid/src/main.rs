@@ -18,6 +18,7 @@ mod audio;
 mod battery;
 #[cfg(target_os = "linux")]
 mod bluetooth;
+mod boxprofile;
 #[cfg(target_os = "linux")]
 mod bt_agent;
 #[cfg(target_os = "linux")]

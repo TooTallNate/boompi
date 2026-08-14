@@ -712,6 +712,15 @@ impl App {
             ClientMessage::PreviewScreensaver => {
                 self.broadcast(ServerMessage::ScreensaverPreview);
             }
+            ClientMessage::Reboot => {
+                tracing::warn!("reboot requested from a settings UI");
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = tokio::process::Command::new("systemctl")
+                        .arg("reboot")
+                        .spawn();
+                }
+            }
             ClientMessage::FactoryReset => {
                 tracing::warn!("factory reset requested - wiping /data and rebooting");
                 #[cfg(target_os = "linux")]
