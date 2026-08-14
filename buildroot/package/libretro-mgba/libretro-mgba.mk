@@ -7,19 +7,34 @@
 LIBRETRO_MGBA_VERSION = e31759b24e7a4e3899285ff720d7b573ac328ae7
 LIBRETRO_MGBA_SITE = $(call github,libretro,mgba,$(LIBRETRO_MGBA_VERSION))
 LIBRETRO_MGBA_LICENSE = MPL-2.0
+LIBRETRO_MGBA_DEPENDENCIES = zlib
 
-# Toolchain only - never $(TARGET_CONFIGURE_OPTS): command-line make
-# variables override the core Makefile's own CFLAGS accumulation
-# (-D__LIBRETRO__, version defines, ...) and the build breaks in
-# undeclared-identifier ways.
-define LIBRETRO_MGBA_BUILD_CMDS
-	$(TARGET_MAKE_ENV) $(MAKE) CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" AR="$(TARGET_AR)" -C $(@D) \
-		-f Makefile.libretro platform=unix GIT_VERSION=boompi
-endef
+# mgba dropped its Makefile.libretro long ago: the libretro core is a
+# CMake target. Everything optional is off - the core needs none of
+# the frontends, and every USE_* left auto drags in a dependency.
+LIBRETRO_MGBA_CONF_OPTS = \
+	-DBUILD_LIBRETRO=ON \
+	-DBUILD_QT=OFF \
+	-DBUILD_SDL=OFF \
+	-DBUILD_SUITE=OFF \
+	-DUSE_DEBUGGERS=OFF \
+	-DUSE_DISCORD_RPC=OFF \
+	-DUSE_EDITLINE=OFF \
+	-DUSE_ELF=OFF \
+	-DUSE_EPOXY=OFF \
+	-DUSE_FFMPEG=OFF \
+	-DUSE_GDB_STUB=OFF \
+	-DUSE_LIBZIP=OFF \
+	-DUSE_LZMA=OFF \
+	-DUSE_MINIZIP=OFF \
+	-DUSE_PNG=OFF \
+	-DUSE_SQLITE3=OFF \
+	-DUSE_ZLIB=ON
 
+# The libretro target has no install rule worth having; take the .so.
 define LIBRETRO_MGBA_INSTALL_TARGET_CMDS
 	$(INSTALL) -D -m 0644 $(@D)/mgba_libretro.so \
 		$(TARGET_DIR)/usr/lib/libretro/mgba_libretro.so
 endef
 
-$(eval $(generic-package))
+$(eval $(cmake-package))
