@@ -1,0 +1,209 @@
+From 3514086682e8c4acad6aa46c6729d53e47a64359 Mon Sep 17 00:00:00 2001
+From: Nathan Rajlich <n@n8.io>
+Date: Fri, 14 Aug 2026 16:18:51 -0700
+Subject: [PATCH] menu: menu_rotation option - rotate menu rendering for
+ rotated displays
+
+New uint setting menu_rotation (0-3, 90-degree steps, default 0 =
+current behaviour), listed beside video_rotation. Unlike
+video_rotation it is never combined with core-requested rotation: a
+vertical shmup must not flip the menu on its side. Motivation: kiosk
+and handheld builds drive portrait-native panels mounted rotated;
+video_rotation fixes the content but the menu draws with the
+unrotated mvp, and screen_orientation is a stub on the KMS display
+server, so the menu is structurally sideways on such devices.
+
+- gl2: mvp_menu computed alongside mvp/mvp_no_rot (clip-space
+  rotation; the unit quad still fills the viewport), used by the
+  fullscreen menu texture draw. Scope: framebuffer menu drivers
+  (RGUI) on the gl2 driver; gfx_display-based drivers (XMB/Ozone)
+  and other video drivers are unaffected by the setting.
+- menu input: touchscreen pointer coordinates are mapped back into
+  menu framebuffer space with the inverse rotation.
+- settings: single-source row in the rotation group generates the
+  config entry, menu item, enums, and strings.
+---
+ configuration.h                        |  1 +
+ gfx/common/gl2_common.h                |  4 +++
+ gfx/drivers/gl2.c                      | 23 +++++++++++++-
+ menu/menu_displaylist.c                |  5 +++
+ menu/menu_driver.c                     | 43 ++++++++++++++++++++++----
+ settings/settings_def_video_rotation.h |  5 +++
+ 6 files changed, 74 insertions(+), 7 deletions(-)
+
+diff --git a/configuration.h b/configuration.h
+index e4d0be7b26..3c3c57679a 100644
+--- a/configuration.h
++++ b/configuration.h
+@@ -239,6 +239,7 @@ typedef struct settings
+       unsigned video_viwidth;
+       unsigned video_aspect_ratio_idx;
+       unsigned video_rotation;
++      unsigned menu_rotation;
+       unsigned screen_orientation;
+       unsigned video_msg_bgcolor_red;
+       unsigned video_msg_bgcolor_green;
+diff --git a/gfx/common/gl2_common.h b/gfx/common/gl2_common.h
+index 6bd1e1317f..faf62924c5 100644
+--- a/gfx/common/gl2_common.h
++++ b/gfx/common/gl2_common.h
+@@ -123,6 +123,10 @@ struct gl2
+    struct scaler_ctx pbo_readback_scaler;
+    struct video_viewport vp;                          /* int alignment */
+    math_matrix_4x4 mvp, mvp_no_rot;
++   /* Menu-only rotation (settings->uints.menu_rotation): never
++    * combined with core-requested rotation. Equals mvp_no_rot when
++    * menu_rotation is 0. */
++   math_matrix_4x4 mvp_menu;
+    struct video_coords coords;                        /* ptr alignment */
+    struct scaler_ctx scaler;
+    video_info_t video_info;
+diff --git a/gfx/drivers/gl2.c b/gfx/drivers/gl2.c
+index b84825a819..649638c2f8 100644
+--- a/gfx/drivers/gl2.c
++++ b/gfx/drivers/gl2.c
+@@ -1475,10 +1475,31 @@ static void gl2_set_projection(gl2_t *gl,
+    };
+    float radians, cosine, sine;
+ 
++   unsigned menu_rotation;
++
+    /* Calculate projection. */
+    matrix_4x4_ortho(gl->mvp_no_rot, ortho->left, ortho->right,
+          ortho->bottom, ortho->top, ortho->znear, ortho->zfar);
+ 
++   /* The menu rotates with menu_rotation alone - never with the
++    * rotation a core requests (a vertical shmup must not turn the
++    * menu on its side). Clip-space rotation about the NDC origin:
++    * the unit quad still fills the viewport exactly. */
++   menu_rotation = config_get_ptr()->uints.menu_rotation;
++   if (menu_rotation)
++   {
++      radians                 = M_PI * (menu_rotation * 90) / 180.0f;
++      cosine                  = cosf(radians);
++      sine                    = sinf(radians);
++      MAT_ELEM_4X4(rot, 0, 0) = cosine;
++      MAT_ELEM_4X4(rot, 0, 1) = -sine;
++      MAT_ELEM_4X4(rot, 1, 0) = sine;
++      MAT_ELEM_4X4(rot, 1, 1) = cosine;
++      matrix_4x4_multiply(gl->mvp_menu, rot, gl->mvp_no_rot);
++   }
++   else
++      gl->mvp_menu            = gl->mvp_no_rot;
++
+    if (!allow_rotate)
+    {
+       gl->mvp = gl->mvp_no_rot;
+@@ -3469,7 +3490,7 @@ static INLINE void gl2_draw_texture(gl2_t *gl)
+    gl->coords.vertices    = 4;
+ 
+    gl->shader->set_coords(gl->shader_data, &gl->coords);
+-   gl->shader->set_mvp(gl->shader_data, &gl->mvp_no_rot);
++   gl->shader->set_mvp(gl->shader_data, &gl->mvp_menu);
+ 
+    glEnable(GL_BLEND);
+ 
+diff --git a/menu/menu_displaylist.c b/menu/menu_displaylist.c
+index 155a253965..7719a94d51 100644
+--- a/menu/menu_displaylist.c
++++ b/menu/menu_displaylist.c
+@@ -10364,6 +10364,11 @@ unsigned menu_displaylist_build_list(
+                      PARSE_ONLY_UINT, false) == 0)
+                count++;
+ 
++            if (MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
++                     MENU_ENUM_LABEL_MENU_ROTATION,
++                     PARSE_ONLY_UINT, false) == 0)
++               count++;
++
+             if (video_display_server_can_set_screen_orientation())
+                if (MENU_DISPLAYLIST_PARSE_SETTINGS_ENUM(list,
+                         MENU_ENUM_LABEL_SCREEN_ORIENTATION,
+diff --git a/menu/menu_driver.c b/menu/menu_driver.c
+index e772ce8c24..a0edad64b9 100644
+--- a/menu/menu_driver.c
++++ b/menu/menu_driver.c
+@@ -2257,8 +2257,8 @@ MENU_NOINLINE static void menu_input_get_touchscreen_hw_state(
+             keyboard_mapping_blocked,
+             0, pointer_device,
+             0, RETRO_DEVICE_ID_POINTER_X);
+-   hw_state->x  = ((pointer_x + 0x7fff) * (int)fb_width) / 0xFFFF;
+-   hw_state->x *= input_touch_scale;
++   /* (hw_state->x is computed after the Y read - menu rotation
++    * needs both axes; see below.) */
+ 
+    /* > An annoyance - we get different starting positions
+     *   depending upon whether pointer_device is
+@@ -2267,9 +2267,11 @@ MENU_NOINLINE static void menu_input_get_touchscreen_hw_state(
+     *   false positives on first run */
+    if (pointer_device == RARCH_DEVICE_POINTER_SCREEN)
+    {
+-      if (hw_state->x != last_x)
++      /* Raw-space comparison (hw_state->x is not computed yet at
++       * this point; activity detection is orientation-agnostic). */
++      if (pointer_x != last_x)
+          hw_state->flags |= MENU_INP_PTR_FLG_ACTIVE;
+-      last_x = hw_state->x;
++      last_x = pointer_x;
+    }
+    else
+    {
+@@ -2288,8 +2290,37 @@ MENU_NOINLINE static void menu_input_get_touchscreen_hw_state(
+             keyboard_mapping_blocked,
+             0, pointer_device,
+             0, RETRO_DEVICE_ID_POINTER_Y);
+-   hw_state->y  = ((pointer_y + 0x7fff) * (int)fb_height) / 0xFFFF;
+-   hw_state->y *= input_touch_scale;
++   /* Menu rotation: the menu is drawn rotated by 90 * menu_rotation
++    * degrees (never following core-requested rotation - see
++    * gl2_draw_texture); touches arrive in screen space, so map them
++    * back into menu framebuffer space with the inverse rotation
++    * before scaling to fb dimensions. */
++   {
++      unsigned menu_rotation = config_get_ptr()->uints.menu_rotation;
++      int rot_x              = pointer_x;
++      int rot_y              = pointer_y;
++      switch (menu_rotation)
++      {
++         case 1:
++            rot_x = -pointer_y;
++            rot_y =  pointer_x;
++            break;
++         case 2:
++            rot_x = -pointer_x;
++            rot_y = -pointer_y;
++            break;
++         case 3:
++            rot_x =  pointer_y;
++            rot_y = -pointer_x;
++            break;
++         default:
++            break;
++      }
++      hw_state->x  = ((rot_x + 0x7fff) * (int)fb_width)  / 0xFFFF;
++      hw_state->x *= input_touch_scale;
++      hw_state->y  = ((rot_y + 0x7fff) * (int)fb_height) / 0xFFFF;
++      hw_state->y *= input_touch_scale;
++   }
+ 
+    if (pointer_device == RARCH_DEVICE_POINTER_SCREEN)
+    {
+diff --git a/settings/settings_def_video_rotation.h b/settings/settings_def_video_rotation.h
+index bdd4771da7..2d825ee1e0 100644
+--- a/settings/settings_def_video_rotation.h
++++ b/settings/settings_def_video_rotation.h
+@@ -9,6 +9,11 @@ S_UINT_EX(video_rotation, VIDEO_ROTATION,
+       0, SD_FLAG_NONE, SDESC_RANGE_MINMAX, 0, 0, 3, 1, 0, setting_action_ok_uint, setting_get_string_representation_uint_video_rotation, NULL, NULL, NULL, NULL, ST_UI_TYPE_UINT_COMBOBOX,
+       "Video Rotation",
+       "Forces a certain rotation of the video. The rotation is added to rotations which the core sets.")
++S_UINT_EX(menu_rotation, MENU_ROTATION,
++      "menu_rotation",
++      0, SD_FLAG_NONE, SDESC_RANGE_MINMAX, 0, 0, 3, 1, 0, setting_action_ok_uint, setting_get_string_representation_uint_video_rotation, NULL, NULL, NULL, NULL, ST_UI_TYPE_UINT_COMBOBOX,
++      "Menu Rotation",
++      "Forces a certain rotation of the menu, for displays mounted rotated. Unlike 'Video Rotation' this is never combined with the rotation a core sets.")
+ S_UINT_EX(screen_orientation, SCREEN_ORIENTATION,
+       "screen_orientation",
+       0, SD_FLAG_NONE, SDESC_RANGE_MINMAX, 0, 0, 3, 1, 0, setting_action_ok_uint, setting_get_string_representation_uint_screen_orientation, NULL, NULL, NULL, NULL, 0,
+-- 
+2.50.1 (Apple Git-155)
+

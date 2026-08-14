@@ -259,11 +259,22 @@ mod run {
         let _ = std::fs::write(RUNNING_MARKER, &key);
 
         // Per-boot overrides that depend on box state (/etc is the
-        // static baseline): the game must rotate with the panel.
+        // static baseline): the game AND the menu must rotate with the
+        // panel. menu_rotation is our patch (see
+        // buildroot/patches/retroarch/) - unlike video_rotation it is
+        // never combined with core-requested rotation. On sideways
+        // panels RGUI's logical screen is landscape, so pick its 5:3
+        // aspect (a 400x240 framebuffer - exactly the 800x480 logical
+        // of the shipped panel; close enough for others).
         let append_cfg = "/run/boompi-game-retroarch.cfg";
         let rotation = panel_rotation_steps();
-        std::fs::write(append_cfg, format!("video_rotation = \"{rotation}\"\n"))
-            .context("write retroarch append config")?;
+        let mut cfg = format!(
+            "video_rotation = \"{rotation}\"\nmenu_rotation = \"{rotation}\"\n"
+        );
+        if rotation % 2 == 1 {
+            cfg.push_str("menu_rgui_aspect_ratio = \"9\"\n"); // RGUI_ASPECT_RATIO_5_3
+        }
+        std::fs::write(append_cfg, cfg).context("write retroarch append config")?;
 
         tracing::info!(%key, core, rotation, "launching game; panel UI stops");
         systemctl(&["stop", "boompi-ui"]).await?;
