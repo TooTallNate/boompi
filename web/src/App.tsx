@@ -33,9 +33,24 @@ type SaveStatus =
   | { kind: "ok" }
   | { kind: "err"; message: string };
 
+function useHashRoute(): string {
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onChange);
+    return () => window.removeEventListener("hashchange", onChange);
+  }, []);
+  return hash;
+}
+
 export default function App() {
   const { hello, state, error, send, applySettings } = useBoompi();
   const settings = state?.settings ?? null;
+  const route = useHashRoute();
+
+  if (route === "#/hardware") {
+    return <HardwarePage />;
+  }
 
   if (state?.setup.required) {
     return (
@@ -110,8 +125,13 @@ export default function App() {
             onSaved={applySettings}
           />
         )}
-        <BoxHardwareSection />
         <DangerSection />
+        <p className="mt-6 text-center text-[12px] text-dim">
+          <a className="underline hover:text-fg" href="#/hardware">
+            Box hardware configuration
+          </a>{" "}
+          - display, wiring, provisioning (advanced)
+        </p>
       </main>
     </div>
   );
@@ -1327,6 +1347,29 @@ const BOX_PRESETS: Record<string, BoxProfile> = {
   },
 };
 
+function HardwarePage() {
+  return (
+    <div className="flex justify-center px-4 pt-6 pb-16">
+      <main className="w-full max-w-lg">
+        <p className="mt-2 text-[13px]">
+          <a className="text-dim underline hover:text-fg" href="#">
+            &larr; Back to settings
+          </a>
+        </p>
+        <h1 className="mt-3 text-[22px] font-semibold">Box hardware</h1>
+        <div className="mt-3 mb-4 rounded-lg border border-err/40 bg-err/10 p-3 text-[13px]">
+          These settings describe this box&apos;s physical build and are
+          written into the boot configuration. A wrong display overlay can
+          leave the screen dark (the box stays reachable over ssh and this
+          page); a wrong GPIO line can conflict with wiring. Only change
+          them if you know the hardware.
+        </div>
+        <BoxHardwareSection />
+      </main>
+    </div>
+  );
+}
+
 function BoxHardwareSection() {
   const [profile, setProfile] = useState<BoxProfile | null>(null);
   const [status, setStatus] = useState<SaveStatus>({ kind: "idle" });
@@ -1341,6 +1384,14 @@ function BoxHardwareSection() {
     setProfile((p) => p && { ...p, ...patch });
 
   const apply = async () => {
+    if (
+      !window.confirm(
+        "Apply this hardware profile? It is written into the boot " +
+          "configuration of both OS slots and takes effect on reboot.",
+      )
+    ) {
+      return;
+    }
     setStatus({ kind: "saving" });
     try {
       const outcome = await putBoxProfile(profile);
