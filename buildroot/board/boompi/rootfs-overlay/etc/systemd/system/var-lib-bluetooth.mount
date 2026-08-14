@@ -1,11 +1,25 @@
 # BlueZ pairing/link-key store lives on /data so paired phones survive
 # an OS reflash. Bind-mounted over the default path - bluetoothd itself
 # needs no configuration.
+#
+# Deliberately NOT part of local-fs.target: a mount in local-fs.target
+# that is also After=systemd-tmpfiles-setup.service (which is itself
+# After=local-fs.target) forms an ordering cycle. systemd breaks cycles
+# by deleting arbitrary jobs; on the first boot of the games image it
+# chose local-fs.target's job and /data was unmounted mid-boot, taking
+# NetworkManager, boompid, and the A/B rollback with it. Hanging off
+# bluetooth.service keeps the same guarantees (tmpfiles has created
+# /data/bluetooth, the bind is up before bluetoothd) without ever
+# touching the local-fs graph. DefaultDependencies=no because the
+# default mount deps are exactly the Before=local-fs.target that
+# caused this; umount.target ordering is re-added by hand.
 [Unit]
 Description=Persistent BlueZ state (bind /data/bluetooth)
+DefaultDependencies=no
 RequiresMountsFor=/data
 After=systemd-tmpfiles-setup.service
-Before=bluetooth.service
+Before=bluetooth.service umount.target
+Conflicts=umount.target
 
 [Mount]
 What=/data/bluetooth
@@ -14,4 +28,4 @@ Type=none
 Options=bind
 
 [Install]
-WantedBy=local-fs.target
+WantedBy=bluetooth.service

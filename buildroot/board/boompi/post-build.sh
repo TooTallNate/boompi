@@ -148,6 +148,30 @@ grep -q "path = /data/games" "${TARGET_DIR}/etc/samba/smb.conf" \
 grep -qE "path = /data\s*$" "${TARGET_DIR}/etc/samba/smb.conf" \
     && fail "smb.conf must never share /data itself (ssh keys live there)"
 
+# Samba's install enables its entire AD/cluster suite; only the guest
+# games share (our custom smbd.service) is wanted. samba.service is a
+# domain controller, smb.service duplicates our unit without the /data
+# ordering, and nmb/winbind/ctdb/samba-bgqd hung the first games-image
+# boot for minutes before timing out. Symlinks removed rather than
+# units masked so they stay available for manual debugging.
+for unit in samba smb nmb winbind ctdb samba-bgqd; do
+    rm -f "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/${unit}.service"
+done
+[ -L "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/smbd.service" ] \
+    || fail "smbd.service not enabled (games SMB share)"
+
+# The bluetooth state bind mount must hang off bluetooth.service, NOT
+# local-fs.target: as a local-fs mount ordered After=tmpfiles-setup it
+# formed an ordering cycle that got /data unmounted mid-boot (systemd
+# breaks cycles by deleting arbitrary jobs). See var-lib-bluetooth.mount.
+[ -L "${TARGET_DIR}/etc/systemd/system/bluetooth.service.wants/var-lib-bluetooth.mount" ] \
+    || fail "var-lib-bluetooth.mount not hooked to bluetooth.service"
+[ -e "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/var-lib-bluetooth.mount" ] \
+    && fail "var-lib-bluetooth.mount is back in local-fs.target (ordering cycle - unmounts /data mid-boot)"
+grep -q "DefaultDependencies=no" \
+    "${TARGET_DIR}/etc/systemd/system/var-lib-bluetooth.mount" \
+    || fail "var-lib-bluetooth.mount lacks DefaultDependencies=no (implicit Before=local-fs.target recreates the cycle)"
+
 # --- /data growth tooling. -----------------------------------------------
 for bin in sfdisk partx resize2fs; do
     find "${TARGET_DIR}/usr/sbin" "${TARGET_DIR}/usr/bin" \
