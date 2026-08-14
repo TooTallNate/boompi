@@ -18,7 +18,6 @@ export component Footer inherits Rectangle {
     in property <float> battery-percentage;
     in property <bool> battery-charging;
 
-    in property <bool> games-available: false;
     callback open-battery();
     callback open-games();
     callback open-settings();
@@ -101,8 +100,9 @@ export component Footer inherits Rectangle {
             overflow: elide;
         }
 
-        // Games (shown once a library exists).
-        if root.games-available: TouchArea {
+        // Games (the screen explains the empty state; hiding the
+        // entry point just buries the feature).
+        TouchArea {
             width: 2rem;
             clicked => {
                 root.open-games();

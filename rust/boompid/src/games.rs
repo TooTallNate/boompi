@@ -149,6 +149,9 @@ fn storage() -> (u64, u64) {
 
 /// Rebuild the shared games state and broadcast if it changed.
 pub async fn refresh(app: &SharedApp) {
+    // statvfs needs the path to exist; first boot has no /data/games
+    // until the first upload otherwise.
+    let _ = std::fs::create_dir_all(roms_dir());
     let running = app.shared.read().await.game_running.clone();
     let (storage_free, storage_total) = storage();
     let state = GamesState {
