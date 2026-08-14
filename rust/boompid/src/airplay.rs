@@ -32,7 +32,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use zbus::zvariant::OwnedValue;
 
-const CONF_PATH: &str = "/tmp/boompi-shairport.conf";
+// Same /run-not-/tmp reasoning as the FIFO below: tmpfiles-clean
+// reaped the /tmp config after NTP jumped the clock forward. Benign
+// (shairport reads it once per spawn, and every spawn rewrites it)
+// but a debugging trap: a running `shairport-sync -c <path>` whose
+// config "does not exist" looks much more broken than it is.
+const CONF_PATH: &str = "/run/boompi/shairport.conf";
 // In /run, NOT /tmp: the boxes boot with a wrong clock (no RTC), so
 // boot-created files carry months-old timestamps until NTP lands, and
 // systemd-tmpfiles' daily clean reaps anything in /tmp "older" than
@@ -358,6 +363,11 @@ metadata = {{
 }};
 "#
     );
+    // RuntimeDirectory= provides /run/boompi under systemd; create it
+    // for bench runs launched by hand.
+    if let Some(dir) = Path::new(CONF_PATH).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
     std::fs::write(CONF_PATH, conf)?;
     Ok(())
 }
