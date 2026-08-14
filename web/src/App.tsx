@@ -131,8 +131,6 @@ export default function App() {
             Box hardware configuration
           </a>{" "}
           - display, wiring, provisioning (advanced).
-          <br />
-          Factory reset: over ssh, <code>boompi-factory-reset</code>
         </p>
       </main>
     </div>
