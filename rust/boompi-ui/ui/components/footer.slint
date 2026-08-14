@@ -3,7 +3,7 @@
 // All iconography is drawn (see icons.slint) - no font dependency.
 
 import { Theme } from "theme.slint";
-import { IconBluetooth, IconSettings, IconSpotify, IconAirplay } from "icons.slint";
+import { IconBluetooth, IconSettings, IconSpotify, IconAirplay, IconGamepad } from "icons.slint";
 import { BatteryGlyph } from "widgets.slint";
 
 export component Footer inherits Rectangle {
@@ -108,13 +108,12 @@ export component Footer inherits Rectangle {
             clicked => {
                 root.open-games();
             }
-            Text {
-                text: "🎮";
-                font-size: 1.1rem;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                width: parent.width;
-                height: parent.height;
+            IconGamepad {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                width: 1.3333rem;
+                height: 1.0667rem; // FA gamepad is 640x512 (5:4)
+                icon-color: Theme.dimmer;
             }
         }
 

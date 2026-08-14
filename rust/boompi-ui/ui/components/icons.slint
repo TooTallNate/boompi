@@ -5,6 +5,7 @@
 //  - ../icons/*.svg from the Geist icon set (geist-icons npm package, MIT -
 //    see ../icons/LICENSE-geist-icons.txt), matching Vercel's geistcn icons.
 //  - spotify.svg + bluetooth.svg from SVG Repo (CC0 collections).
+//  - gamepad.svg from Font Awesome Free (CC BY 4.0, fontawesome.com).
 //
 // Slint renders these with resvg at display resolution, so they stay crisp
 // at any size. Requires i-slint-core's `svg` feature, which both the winit
@@ -74,6 +75,13 @@ export component IconBluetooth inherits Image {
 export component IconSettings inherits Image {
     in property <color> icon-color: white;
     source: @image-url("../icons/settings-gear-fill.svg");
+    colorize: root.icon-color;
+    image-fit: contain;
+}
+
+export component IconGamepad inherits Image {
+    in property <color> icon-color: white;
+    source: @image-url("../icons/gamepad.svg");
     colorize: root.icon-color;
     image-fit: contain;
 }
