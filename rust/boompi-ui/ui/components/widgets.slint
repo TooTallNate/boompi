@@ -76,3 +76,50 @@ export component ActionButton inherits Rectangle {
         }
     }
 }
+
+// Battery glyph drawn from rectangles (no font/SVG dependency), shared
+// by the footer and the screensaver overlay. Geometry follows the
+// original footer icon: body 2:1 with a nub on the right; the whole
+// component is sized by its `height` (total width = 2.214 * height).
+// Colors are injectable because the screensaver draws on pure black
+// with its own dim palette, not the Theme's.
+export component BatteryGlyph {
+    in property <bool> present;
+    in property <float> percentage; // 0..1
+    in property <bool> charging;
+    in property <color> dim: Theme.dim;
+    in property <color> faint: Theme.faint;
+    width: self.height * 2.214;
+
+    Rectangle {
+        // body
+        x: 0;
+        y: 0;
+        width: root.height * 2;
+        height: root.height;
+        border-width: root.height * 0.071;
+        border-color: root.present ? root.dim : root.faint;
+        border-radius: root.height * 0.214;
+        if root.present: Rectangle {
+            // fill level
+            x: root.height * 0.143;
+            y: root.height * 0.143;
+            width: (parent.width - root.height * 0.286) * max(0.04, min(1.0, root.percentage));
+            height: parent.height - root.height * 0.286;
+            border-radius: root.height * 0.143;
+            background: root.charging ? Theme.good
+                : root.percentage < 0.2 ? Theme.bad
+                : root.dim;
+        }
+    }
+    Rectangle {
+        // tip (dim regardless of presence, matching the original
+        // footer icon)
+        x: root.height * 2;
+        y: (root.height - root.height * 0.43) / 2;
+        width: root.height * 0.214;
+        height: root.height * 0.43;
+        border-radius: root.height * 0.071;
+        background: root.dim;
+    }
+}

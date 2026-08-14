@@ -7,6 +7,7 @@
 // hours would invite the exact GPU hangs it coexists with.
 
 import { Theme } from "theme.slint";
+import { BatteryGlyph } from "widgets.slint";
 
 // One column of Matrix rain, drawn with Rezmason's film-traced glyph
 // font (rust/boompi-ui/ui/fonts/Matrix-Code.ttf, MIT - see
@@ -96,6 +97,9 @@ export component Screensaver inherits Rectangle {
     in property <image> artwork;
     in property <bool> has-artwork;
     in property <string> track-title;
+    in property <bool> battery-present;
+    in property <float> battery-percentage;
+    in property <bool> battery-charging;
     callback dismissed();
 
     background: black;
@@ -176,6 +180,34 @@ export component Screensaver inherits Rectangle {
         color: #9999aa;
         font-size: root.height * 0.2;
         font-weight: 300;
+    }
+
+    // Battery status on every saver (only when the box has telemetry):
+    // a glance at the shelf answers "does it need charging?" without
+    // waking the panel. Near the bottom, drifting like the rest of the
+    // content so it cannot burn in.
+    if root.battery-present: HorizontalLayout {
+        x: (root.width - self.preferred-width) * (0.5 + 0.3 * root.drift-x);
+        y: root.height * 0.88 + root.height * 0.03 * root.drift-y;
+        width: self.preferred-width;
+        height: self.preferred-height;
+        spacing: 0.5rem;
+        alignment: center;
+        BatteryGlyph {
+            y: (parent.height - self.height) / 2;
+            height: 0.7778rem;
+            present: true;
+            percentage: root.battery-percentage;
+            charging: root.battery-charging;
+            dim: #555566;
+            faint: #333340;
+        }
+        Text {
+            text: Math.round(root.battery-percentage * 100) + "%";
+            color: #555566;
+            font-size: 0.7778rem;
+            vertical-alignment: center;
+        }
     }
 
     TouchArea {

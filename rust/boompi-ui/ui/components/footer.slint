@@ -4,6 +4,7 @@
 
 import { Theme } from "theme.slint";
 import { IconBluetooth, IconSettings, IconSpotify, IconAirplay } from "icons.slint";
+import { BatteryGlyph } from "widgets.slint";
 
 export component Footer inherits Rectangle {
     in property <string> clock-day;
@@ -125,35 +126,13 @@ export component Footer inherits Rectangle {
             clicked => {
                 root.open-battery();
             }
-            Rectangle {
-                // body
+            BatteryGlyph {
                 x: 0;
                 y: (parent.height - 0.7778rem) / 2;
-                width: 1.5556rem;
                 height: 0.7778rem;
-                border-width: 0.0556rem;
-                border-color: root.battery-present ? Theme.dim : Theme.faint;
-                border-radius: 0.1667rem;
-                if root.battery-present: Rectangle {
-                    // fill level
-                    x: 0.1111rem;
-                    y: 0.1111rem;
-                    width: (parent.width - 0.2222rem) * max(0.04, min(1.0, root.battery-percentage));
-                    height: parent.height - 0.2222rem;
-                    border-radius: 0.1111rem;
-                    background: root.battery-charging ? Theme.good
-                        : root.battery-percentage < 0.2 ? Theme.bad
-                        : Theme.dim;
-                }
-            }
-            Rectangle {
-                // tip
-                x: 1.5556rem;
-                y: (parent.height - 0.3333rem) / 2;
-                width: 0.1667rem;
-                height: 0.3333rem;
-                border-radius: 0.0556rem;
-                background: Theme.dim;
+                present: root.battery-present;
+                percentage: root.battery-percentage;
+                charging: root.battery-charging;
             }
         }
 

@@ -563,6 +563,9 @@ export component AppWindow inherits Window {
         artwork: root.artwork;
         has-artwork: root.has-artwork;
         track-title: root.track-title;
+        battery-present: root.battery-present;
+        battery-percentage: root.battery-percentage;
+        battery-charging: root.battery-charging;
         dismissed => {
             root.saver-dismissed();
         }
