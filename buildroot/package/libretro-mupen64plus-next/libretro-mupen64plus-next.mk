@@ -8,8 +8,12 @@ LIBRETRO_MUPEN64PLUS_NEXT_VERSION = 3a676196500545b637b83cb19fb393d2359e1f9d
 LIBRETRO_MUPEN64PLUS_NEXT_SITE = $(call github,libretro,mupen64plus-libretro-nx,$(LIBRETRO_MUPEN64PLUS_NEXT_VERSION))
 LIBRETRO_MUPEN64PLUS_NEXT_LICENSE = GPL-3.0
 
+# Toolchain only - never $(TARGET_CONFIGURE_OPTS): command-line make
+# variables override the core Makefile's own CFLAGS accumulation
+# (-D__LIBRETRO__, version defines, ...) and the build breaks in
+# undeclared-identifier ways.
 define LIBRETRO_MUPEN64PLUS_NEXT_BUILD_CMDS
-	$(TARGET_MAKE_ENV) $(MAKE) $(TARGET_CONFIGURE_OPTS) -C $(@D) \
+	$(TARGET_MAKE_ENV) $(MAKE) CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" AR="$(TARGET_AR)" -C $(@D) \
 		platform=unix FORCE_GLES=1 WITH_DYNAREC=aarch64 GIT_VERSION=boompi
 endef
 
