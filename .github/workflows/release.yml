@@ -143,15 +143,24 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           # web/CHANGELOG.md sections look like "## 2.1.0"; pull out the
-          # section for the version being released.
+          # section for the version being released. Line-based on
+          # purpose: a regex built from strings crosses two escaping
+          # layers (shell, JS string), and v2.2.0 shipped with empty
+          # notes because [\s\S] had degraded to [sS] on the way.
           node -e "
             const fs = require('fs');
             const version = process.env.TAG.replace(/^v/, '');
             const changelog = fs.existsSync('web/CHANGELOG.md')
               ? fs.readFileSync('web/CHANGELOG.md', 'utf8') : '';
-            const re = new RegExp('## ' + version.replace(/\\./g, '\\\\.') + '\\n([\\s\\S]*?)(?=\\n## |$)');
-            const match = changelog.match(re);
-            fs.writeFileSync('RELEASE_NOTES.md', match ? match[1].trim() : '');
+            const lines = changelog.split('\n');
+            const start = lines.indexOf('## ' + version);
+            let notes = '';
+            if (start !== -1) {
+              const rest = lines.slice(start + 1);
+              const end = rest.findIndex(l => l.startsWith('## '));
+              notes = rest.slice(0, end === -1 ? undefined : end).join('\n').trim();
+            }
+            fs.writeFileSync('RELEASE_NOTES.md', notes);
           "
           cat RELEASE_NOTES.md
 
