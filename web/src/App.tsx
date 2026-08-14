@@ -221,9 +221,11 @@ function GamesSection({
   return (
     <Section title="Games">
       <p className="mb-3 text-[13px] text-dim">
-        RetroArch is aboard. Upload your ROMs, pair a controller (same
-        pairing button as speakers), launch from the panel. Music and
-        gameplay mix; music ducks the game volume.
+        RetroArch is aboard. Upload your ROMs here or drag them onto the
+        network share (<code>smb://{window.location.hostname}/games</code>
+        , guest access), pair a controller (same pairing button as
+        speakers), launch from the panel. Music and gameplay mix; music
+        ducks the game volume.
       </p>
       {games.running && (
         <div className="mb-3 flex items-center gap-3 rounded-lg border border-line bg-bg p-3">

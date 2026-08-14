@@ -1,0 +1,14 @@
+[Unit]
+Description=Samba SMB daemon (guest games share)
+After=network.target data.mount
+RequiresMountsFor=/data
+
+[Service]
+Type=simple
+ExecStartPre=/bin/sh -c 'mkdir -p /data/games /var/log/samba /run/samba /var/lib/samba/private'
+ExecStart=/usr/sbin/smbd -F --no-process-group
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

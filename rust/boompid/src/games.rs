@@ -99,6 +99,11 @@ pub fn scan() -> Vec<Game> {
                 continue;
             }
             let file = entry.file_name().to_string_lossy().into_owned();
+            // Dotfiles: macOS AppleDouble siblings (._Game.nes) arrive
+            // over SMB despite the veto and must never list as games.
+            if file.starts_with('.') {
+                continue;
+            }
             let Some(ext) = file.rsplit('.').next().map(str::to_ascii_lowercase) else {
                 continue;
             };
@@ -418,6 +423,7 @@ mod tests {
         std::fs::write(dir.join("roms/nes/Mario.nes"), b"x").unwrap();
         std::fs::write(dir.join("roms/psx/Game.cue"), b"x").unwrap();
         std::fs::write(dir.join("roms/psx/Game.bin"), b"x").unwrap(); // companion: not listed
+        std::fs::write(dir.join("roms/nes/._Mario.nes"), b"x").unwrap(); // AppleDouble: skipped
         std::env::set_var("BOOMPI_GAMES_DIR", &dir);
         let games = scan();
         std::env::remove_var("BOOMPI_GAMES_DIR");

@@ -11,6 +11,7 @@ what's harmless (volume, screensavers) from what can degrade the box
 |---|---|---|
 | Web settings page / `/api/*` | none (LAN) | everyday settings, updates, Wi-Fi, pairing |
 | Web hardware page / `/api/box` | none **until locked** | boot config, ssh key install, provisioning bundle |
+| SMB `smb://<box>/games` | none (LAN, guest) | read/write the games library only |
 | ssh (root) | **public key only** | everything, incl. `boompi-box`, factory reset |
 | Console (HDMI + keyboard) | root password | everything (physical access) |
 
@@ -58,6 +59,16 @@ includes people in your living room.
 | Dark panel, no key, unlocked | web `#/hardware` page |
 | No key and locked | HDMI console (root / `boompi`) |
 | Everything, sealed enclosure | SD card surgery |
+
+## The SMB games share
+
+`/data/games` (and nothing else on /data) is exported as a guest
+read-write SMB share for drag-drop ROM management. It is safe by
+scoping, not masking: ssh keys, Wi-Fi credentials, and the box
+profile are simply not inside the exported tree. The trust model is
+identical to the web upload API - anyone on the LAN can add or
+remove game files. The share must never be widened to /data (a
+post-build assertion enforces this).
 
 ## Honest limits
 

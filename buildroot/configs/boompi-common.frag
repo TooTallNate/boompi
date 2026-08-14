@@ -36,6 +36,10 @@ BR2_INIT_SYSTEMD=y
 BR2_PACKAGE_RETROARCH=y
 BR2_PACKAGE_LIBRETRO_CORES=y
 
+# Guest SMB share of the games library (drag-drop ROMs from any OS;
+# scoped to /data/games - see the smb.conf comments and SECURITY.md).
+BR2_PACKAGE_SAMBA4=y
+
 # Partition tooling for boompi-grow-data (grow /data to fill the SD
 # card on first boot): sfdisk + partx from util-linux, resize2fs +
 # e2fsck from e2fsprogs.

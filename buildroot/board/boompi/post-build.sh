@@ -139,6 +139,15 @@ for mod in joydev uhid hid-sony hid-playstation hid-nintendo; do
         || fail "kernel module $mod missing (gamepads)"
 done
 
+# --- Guest SMB games share. ---------------------------------------------------
+find "${TARGET_DIR}/usr/sbin" "${TARGET_DIR}/usr/bin" -maxdepth 1 -name smbd 2>/dev/null | grep -q . \
+    || fail "smbd missing (games SMB share)"
+[ -f "${TARGET_DIR}/etc/samba/smb.conf" ] || fail "smb.conf missing"
+grep -q "path = /data/games" "${TARGET_DIR}/etc/samba/smb.conf" \
+    || fail "smb.conf does not scope the share to /data/games"
+grep -qE "path = /data\s*$" "${TARGET_DIR}/etc/samba/smb.conf" \
+    && fail "smb.conf must never share /data itself (ssh keys live there)"
+
 # --- /data growth tooling. -----------------------------------------------
 for bin in sfdisk partx resize2fs; do
     find "${TARGET_DIR}/usr/sbin" "${TARGET_DIR}/usr/bin" \
