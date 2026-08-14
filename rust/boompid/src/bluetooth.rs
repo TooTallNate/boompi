@@ -40,6 +40,11 @@ trait Adapter1 {
     #[zbus(property)]
     fn set_pairable(&self, pairable: bool) -> zbus::Result<()>;
     fn remove_device(&self, device: &ObjectPath<'_>) -> zbus::Result<()>;
+    /// Inquiry scan: gamepads in pairing mode only advertise - the
+    /// speaker must find them and initiate (the opposite of phones,
+    /// which initiate toward the discoverable speaker).
+    fn start_discovery(&self) -> zbus::Result<()>;
+    fn stop_discovery(&self) -> zbus::Result<()>;
 }
 
 #[zbus::proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
@@ -58,6 +63,13 @@ trait Device1 {
     fn connected(&self) -> zbus::Result<bool>;
     #[zbus(property)]
     fn set_trusted(&self, trusted: bool) -> zbus::Result<()>;
+    fn pair(&self) -> zbus::Result<()>;
+    #[zbus(property)]
+    fn paired(&self) -> zbus::Result<bool>;
+    /// bluez's device classification ("input-gaming" for gamepads,
+    /// derived from the BR/EDR Class of Device or the BLE Appearance).
+    #[zbus(property)]
+    fn icon(&self) -> zbus::Result<String>;
 }
 
 #[zbus::proxy(interface = "org.bluez.MediaPlayer1", default_service = "org.bluez")]
@@ -316,6 +328,7 @@ async fn handle_interface_added(
         }
         "org.bluez.Device1" => {
             refresh_devices(ctx).await;
+            maybe_autopair_gamepad(ctx, session, path.clone()).await;
         }
         "org.bluez.MediaPlayer1" => {
             tracing::info!(%path, "media player appeared");
@@ -476,6 +489,13 @@ async fn handle_properties_changed(
             }
         }
         "org.bluez.Device1" => {
+            // Re-discovered cached devices surface as property churn
+            // (RSSI), not InterfacesAdded: give pads the same chance.
+            if changed.contains_key("RSSI") {
+                if let Ok(p) = ObjectPath::try_from(path.to_string()) {
+                    maybe_autopair_gamepad(ctx, session, p.into()).await;
+                }
+            }
             if let Some(connected) = changed.get("Connected").and_then(bool_from_value_ref) {
                 if !connected && session.device_path.as_deref() == Some(path) {
                     tracing::info!(%path, "device disconnected");
@@ -538,6 +558,7 @@ async fn handle_properties_changed(
                             let close = async {
                                 let a =
                                     Adapter1Proxy::builder(&conn).path(adapter)?.build().await?;
+                                let _ = a.stop_discovery().await;
                                 a.set_pairable(false).await?;
                                 a.set_discoverable(false).await
                             }
@@ -767,10 +788,14 @@ async fn handle_bt_command(
                     },
                 )
                 .await;
+                // Phones initiate toward us; gamepads only advertise.
+                // Scan for them while the window is open.
+                set_discovery(ctx, session, true).await;
             }
         }
         BtCommand::Pairing(PairingAction::Cancel) => {
             resolve(false);
+            set_discovery(ctx, session, false).await;
             set_discoverable(ctx, session, false).await;
             crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
         }
@@ -822,6 +847,93 @@ async fn disconnect_all(ctx: &Ctx, session: &Session) {
 }
 
 /// Toggle adapter discoverability (+ pairability). Returns success.
+/// One auto-pair attempt at a time (discovery can surface a pad via
+/// several property events in quick succession).
+static AUTOPAIR_BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// A discovered device during an open pairing window: if it is a
+/// gamepad, pair/trust/connect it - pads only advertise, they never
+/// initiate toward us the way phones do.
+async fn maybe_autopair_gamepad(ctx: &Ctx, session: &Session, path: OwnedObjectPath) {
+    // Only while the user has the pairing window open.
+    let window_open = matches!(
+        ctx.app.shared.read().await.pairing.state,
+        PairingState::Discoverable
+    );
+    if !window_open {
+        return;
+    }
+    let Ok(builder) = Device1Proxy::builder(&ctx.conn).path(path.clone()) else {
+        return;
+    };
+    let Ok(device) = builder.build().await else {
+        return;
+    };
+    // bluez classifies gamepads as "input-gaming" from the BR/EDR
+    // Class of Device or the BLE Appearance value.
+    if device.icon().await.as_deref() != Ok("input-gaming") {
+        return;
+    }
+    if AUTOPAIR_BUSY.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let alias = device.alias().await.unwrap_or_else(|_| "gamepad".into());
+    tracing::info!(%alias, "gamepad discovered; pairing");
+    crate::bt_agent::set_pairing(
+        &ctx.app,
+        Pairing {
+            state: PairingState::Confirm,
+            device_name: Some(alias.clone()),
+            ..Pairing::default()
+        },
+    )
+    .await;
+    let result = async {
+        if !device.paired().await.unwrap_or(false) {
+            device.pair().await?;
+        }
+        device.set_trusted(true).await?;
+        device.connect().await
+    }
+    .await;
+    match result {
+        Ok(()) => tracing::info!(%alias, "gamepad paired + connected"),
+        Err(err) => tracing::warn!(%err, %alias, "gamepad pairing failed"),
+    }
+    // Close the window either way (mirrors the phone flow); leave it
+    // to the user to reopen on failure.
+    set_discovery(ctx, session, false).await;
+    set_discoverable(ctx, session, false).await;
+    crate::bt_agent::set_pairing(&ctx.app, Pairing::default()).await;
+    refresh_devices(ctx).await;
+    AUTOPAIR_BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Start/stop the inquiry scan that finds pairing-mode gamepads.
+/// Failures are logged, not fatal: phone pairing works without it.
+async fn set_discovery(ctx: &Ctx, session: &Session, on: bool) {
+    let Some(path) = &session.adapter_path else {
+        return;
+    };
+    let result = async {
+        let a = Adapter1Proxy::builder(&ctx.conn)
+            .path(path.clone())?
+            .build()
+            .await?;
+        if on {
+            a.start_discovery().await
+        } else {
+            a.stop_discovery().await
+        }
+    }
+    .await;
+    match result {
+        Ok(()) => tracing::info!(scanning = on, "gamepad discovery toggled"),
+        // "No discovery started"/"InProgress" are normal on repeats.
+        Err(err) => tracing::debug!(%err, on, "discovery toggle"),
+    }
+}
+
 async fn set_discoverable(ctx: &Ctx, session: &Session, on: bool) -> bool {
     let Some(path) = &session.adapter_path else {
         tracing::warn!("no BT adapter; cannot toggle discoverable");
