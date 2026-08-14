@@ -492,12 +492,24 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           STAMP: ${{ steps.stamp.outputs.version }}
+        # Windowless update: move the tag, edit-or-create the release,
+        # clobber the asset. Never delete - a failed step must leave
+        # the previous edge intact, not a dark channel (learned the
+        # hard way when a create 403 stranded the fleet's edge checks).
         run: |
-          gh release delete edge --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          gh release create edge \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "edge ($STAMP)" \
-            --notes "$(printf 'Rolling prerelease: latest green build of the dev branch. OTA-only.\n\nstamp: %s' "$STAMP")" \
-            assets/*
+          NOTES="$(printf 'Rolling prerelease: latest green build of the dev branch. OTA-only.\n\nstamp: %s' "$STAMP")"
+          git push -f origin "$GITHUB_SHA:refs/tags/edge"
+          if gh release view edge --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit edge \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "edge ($STAMP)" \
+              --notes "$NOTES"
+          else
+            gh release create edge \
+              --repo "$GITHUB_REPOSITORY" \
+              --prerelease \
+              --title "edge ($STAMP)" \
+              --notes "$NOTES"
+          fi
+          gh release upload edge --repo "$GITHUB_REPOSITORY" --clobber assets/*
