@@ -548,6 +548,7 @@ fn pairing_str(state: PairingState) -> &'static str {
         PairingState::Idle => "idle",
         PairingState::Discoverable => "discoverable",
         PairingState::Confirm => "confirm",
+        PairingState::Pairing => "pairing",
         PairingState::Unavailable => "unavailable",
     }
 }

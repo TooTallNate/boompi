@@ -43,7 +43,12 @@ export interface SettingsPatch {
   screensaver_min?: number;
 }
 
-export type PairingState = "idle" | "discoverable" | "confirm" | "unavailable";
+export type PairingState =
+  | "idle"
+  | "discoverable"
+  | "confirm"
+  | "pairing" // gamepad autopair in progress - informational, no decision
+  | "unavailable";
 
 export interface Pairing {
   state: PairingState;

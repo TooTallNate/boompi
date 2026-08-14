@@ -687,6 +687,14 @@ function BluetoothSection({
           </button>
         </div>
       )}
+      {pairing.state === "pairing" && (
+        <div className="mb-2 rounded-lg border border-ok/40 bg-ok/10 p-3">
+          <p className="text-sm">
+            Pairing <strong>{pairing.device_name ?? "gamepad"}</strong>
+            &hellip;
+          </p>
+        </div>
+      )}
       {pairing.state === "confirm" && (
         <div className="mb-2 rounded-lg border border-ok/40 bg-ok/10 p-3">
           <p className="text-sm">

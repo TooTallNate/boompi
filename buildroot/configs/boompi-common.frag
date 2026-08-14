@@ -91,6 +91,13 @@ BR2_PACKAGE_BLUEZ5_UTILS_OBEX=y
 BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
+# HID plugin: without it bluetoothd has no input profile at all -
+# a paired DualSense connects, finds "no more profiles to connect
+# to", is dropped, and powers itself off. Classic BT pads (DS4/DS5,
+# Switch Pro) need HID; the option selects HOG for BLE pads (newer
+# Xbox). Kernel side (hidp/uhid/hid-playstation) was already in
+# linux-gamepads.fragment.
+BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_HID=y
 # No bluez-tools/bt-agent package: boompid registers its own Agent1
 # (NoInputNoOutput/JustWorks). Consent = the explicit pairing window:
 # while it's open, any pairing is accepted; no on-screen confirm.

@@ -145,6 +145,10 @@ pub enum PairingState {
     Discoverable,
     /// A device requested pairing; awaiting on-screen confirmation.
     Confirm,
+    /// Pairing in progress with no decision to make (gamepad autopair).
+    /// Distinct from Confirm so the UI never flashes Pair/Reject
+    /// buttons for a question nobody is being asked.
+    Pairing,
     /// No Bluetooth adapter present (dongle unplugged / bluetoothd down).
     /// Broadcast instead of silently ignoring a pairing request - a dead
     /// button is indistinguishable from a bug.

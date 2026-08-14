@@ -429,6 +429,47 @@ export component AppWindow inherits Window {
         }
     }
 
+    // ---- gamepad autopair progress (no decision to make) ---------------------
+    // Distinct from the confirm dialog above: autopair asks nothing, so
+    // showing Pair/Reject buttons here just flashes an unanswerable
+    // question. Dismissed by the server broadcasting a non-"pairing"
+    // state when the pad is connected (or pairing failed).
+    if root.pairing-state == "pairing": Rectangle {
+        background: #000000aa;
+        TouchArea { } // swallow touches behind the dialog
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (parent.height - self.height) / 2;
+            width: 24.4444rem;
+            height: 8.8889rem;
+            background: Theme.panel;
+            border-radius: 0.7778rem;
+            border-width: 0.0556rem;
+            border-color: Theme.accent;
+            VerticalLayout {
+                padding: 1.2222rem;
+                spacing: 0.3333rem;
+                Text {
+                    text: "Bluetooth pairing";
+                    color: Theme.dim;
+                    font-size: 0.7778rem;
+                }
+                Text {
+                    text: root.pairing-device == "" ? "Unknown device" : root.pairing-device;
+                    color: Theme.fg;
+                    font-size: 1.2222rem;
+                    font-weight: 600;
+                    overflow: elide;
+                }
+                Text {
+                    text: "Pairing\u{2026}";
+                    color: Theme.dim;
+                    font-size: 0.8333rem;
+                }
+            }
+        }
+    }
+
     // ---- footer (always on top) ---------------------------------------------
     Footer {
         x: 0;

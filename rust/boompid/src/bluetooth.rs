@@ -524,6 +524,15 @@ async fn handle_properties_changed(
                         let result: anyhow::Result<()> = async {
                             let device = Device1Proxy::builder(&conn).path(p)?.build().await?;
                             device.set_trusted(true).await?;
+                            // Gamepads never produce an audio transport: the
+                            // A2DP dial-back below would wait 8 s, disconnect
+                            // the pad (a DualSense powers itself off when the
+                            // host drops the link), and reconnect into thin
+                            // air. The autopair path owns gamepad connection.
+                            if device.icon().await.as_deref() == Ok("input-gaming") {
+                                tracing::info!("gamepad paired; skipping audio dial-back");
+                                return Ok(());
+                            }
                             // Wait for the source's own A2DP setup.
                             let dev_path = device.inner().path().to_string();
                             let mut transport_up = false;
@@ -879,10 +888,13 @@ async fn maybe_autopair_gamepad(ctx: &Ctx, session: &Session, path: OwnedObjectP
     }
     let alias = device.alias().await.unwrap_or_else(|_| "gamepad".into());
     tracing::info!(%alias, "gamepad discovered; pairing");
+    // Informational only - autopair asks nobody anything. Broadcasting
+    // Confirm here flashed a Pair/Reject dialog that auto-resolved
+    // before a human could read it.
     crate::bt_agent::set_pairing(
         &ctx.app,
         Pairing {
-            state: PairingState::Confirm,
+            state: PairingState::Pairing,
             device_name: Some(alias.clone()),
             ..Pairing::default()
         },
