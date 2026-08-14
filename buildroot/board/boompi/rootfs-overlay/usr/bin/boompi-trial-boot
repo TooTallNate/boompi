@@ -17,11 +17,8 @@
 #
 #   Pi 4: autoboot.txt is flipped to the candidate BEFORE the reboot.
 #         There is no one-shot mechanism on this board: rev <= 1.3
-#         power-cycles the PMIC on every reboot, wiping PM_RSTS and
-#         the firmware tryboot flag (both bench-falsified on rev 1.2),
-#         and kexec into a kernel build other than the running one
-#         hangs after "Bye!" on BOTH boards (pi4 confirmed during the
-#         v2.0.0 rollout; kexec is retired). boompi-boot-commit rolls
+#         power-cycles the PMIC on every reboot, which wipes PM_RSTS
+#         and the firmware tryboot flag. boompi-boot-commit rolls
 #         autoboot back if the candidate boots but is sick. A candidate
 #         that cannot boot at all leaves the box on the broken slot
 #         (recovery: edit autoboot.txt on the SD card) - accepted
@@ -69,15 +66,15 @@ case "$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || true)" in
     # byte; bootcode.bin consumes and clears the request, so the boot
     # after this one follows autoboot.txt again.
     #
-    # Arming depends on the kernel era (bench-proven both ways on the
-    # TF-A removal trial):
-    # - TF-A kernels (PSCI): the restart handler never runs; BL31's
-    #   reset preserves a pre-written PM_RSTS -> devmem arms it.
+    # Arming depends on which kernel is running (a rollback slot may
+    # carry an older image):
+    # - PSCI kernels (TF-A armstub): the restart handler never runs;
+    #   BL31's reset preserves a pre-written PM_RSTS -> devmem arms it.
     # - Stock kernels (spin-table): the bcm2835 restart handler
-    #   REWRITES PM_RSTS on reboot (clobbering devmem) but parses the
-    #   reboot syscall argument into the partition bits -> the
-    #   --reboot-argument arms it.
-    # Do both; each era honors one and ignores the other.
+    #   rewrites PM_RSTS on reboot (discarding the devmem write) but
+    #   parses the reboot syscall argument into the partition bits ->
+    #   the --reboot-argument arms it.
+    # Do both; each kernel honors one and ignores the other.
     if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then PART=1; RSTS=0x5a000001; else PART=2; RSTS=0x5a000004; fi
     echo "$TARGET_ROOT" > "$MARKER"
     sync

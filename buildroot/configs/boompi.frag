@@ -28,9 +28,8 @@ BR2_PACKAGE_RPI_FIRMWARE_CONFIG_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/i
 BR2_PACKAGE_RPI_FIRMWARE_CMDLINE_FILE="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/image/cmdline.txt"
 
 # TF-A rpi4 port (bl31.bin, loaded via armstub=bl31.bin under the
-# [pi4] section of config.txt; inert on the Pi 3). Historical: PSCI
-# for the retired kexec trial mechanism. Removing it is a separate
-# trial - the pi4's rollback path is harsher, so it goes last.
+# [pi4] section of config.txt; inert on the Pi 3, which boots the
+# stock firmware chain).
 BR2_TARGET_ARM_TRUSTED_FIRMWARE=y
 BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM="rpi4"
 BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31=y

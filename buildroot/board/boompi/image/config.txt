@@ -17,10 +17,8 @@ dtoverlay=vc4-kms-v3d
 max_framebuffers=2
 
 [pi4]
-# TF-A BL31 as the armstub. Historical: PSCI for the retired kexec
-# trial mechanism; removing it is its own trial (the pi4's rollback
-# path is harsher, so it goes last). The pi3 dropped its armstub with
-# kexec and boots the stock chain.
+# TF-A BL31 as the armstub (PSCI). Pi 4 only; the Pi 3 boots the
+# stock firmware chain with spin-table SMP.
 armstub=bl31.bin
 enable_gic=1
 

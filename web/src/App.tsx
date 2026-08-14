@@ -132,7 +132,7 @@ export default function App() {
           </a>{" "}
           - display, wiring, provisioning (advanced).
           <br />
-          Factory reset moved to ssh: <code>boompi-factory-reset</code>
+          Factory reset: over ssh, <code>boompi-factory-reset</code>
         </p>
       </main>
     </div>

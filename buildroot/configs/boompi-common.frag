@@ -70,7 +70,7 @@ BR2_PACKAGE_BLUEZ5_UTILS_OBEX=y
 BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
-# bluez-tools (bt-agent) retired: boompid registers its own Agent1
+# No bluez-tools/bt-agent package: boompid registers its own Agent1
 # (NoInputNoOutput/JustWorks). Consent = the explicit pairing window:
 # while it's open, any pairing is accepted; no on-screen confirm.
 
