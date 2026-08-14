@@ -18,7 +18,7 @@ add).
 | `config.txt` | firmware (via re-materialization) | dtoverlays, dtparams, gpio lines |
 | `cmdline.txt` | kernel (single line, appended) | e.g. `video=` for an EDID-less panel |
 | `hardware.toml` | boompid (`--hardware-profile`) | `[battery]` wiring/thresholds; `[settings]` seeds first boot only |
-| `env` | boompi-ui (`EnvironmentFile`) | e.g. `SLINT_KMS_ROTATION=270` |
+| `env` | boompi-ui (`EnvironmentFile`) | overrides only - display rotation is derived from the DRM panel-orientation hint (the `dtparam=rotate=` in config.txt); `SLINT_KMS_ROTATION=270` here overrides the hint |
 | `authorized_keys` | sshd (installed to `/data/ssh/`) | ssh public keys; see docs/SECURITY.md |
 
 All files are optional. The bench boxes' profiles live in `boxes/` in

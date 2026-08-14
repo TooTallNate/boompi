@@ -1,4 +1,7 @@
 # George's box - panel service environment (systemd EnvironmentFile).
-# The HyperPixel is portrait-native, mounted landscape; the DRM
-# panel-orientation hint is not auto-applied by Slint (Phase 0).
-SLINT_KMS_ROTATION=270
+#
+# Display rotation needs no entry here anymore: boompi-ui (and the
+# game launcher) derive it from the kernel's DRM panel-orientation
+# hint, which the dtparam=rotate=270 in config.txt publishes - one
+# declaration of how the panel is mounted. Setting
+# SLINT_KMS_ROTATION here still works and overrides the hint.

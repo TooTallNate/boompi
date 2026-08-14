@@ -1,0 +1,10 @@
+[package]
+name = "boompi-panel"
+description = "Read the DRM panel-orientation hint (single source of display rotation truth)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+drm = "0.14"

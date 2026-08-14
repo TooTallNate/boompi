@@ -44,6 +44,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Linux-only hardware integrations, cfg-gated so the workspace stays
 # cross-platform for laptop development (verify with `make cross-boompid`).
 [target.'cfg(target_os = "linux")'.dependencies]
+boompi-panel = { path = "../boompi-panel" }
 # OTA update assets are zstd streams decompressed straight onto the
 # inactive slot's partitions (update.rs).
 async-compression = { version = "0.4", default-features = false, features = ["tokio", "zstd"] }

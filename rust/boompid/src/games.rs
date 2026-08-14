@@ -214,23 +214,31 @@ mod run {
     }
 
     /// Translate the panel mount rotation into RetroArch's
-    /// video_rotation. Sources of truth and conventions:
-    /// - /data/box/env SLINT_KMS_ROTATION: degrees CLOCKWISE (slint's
-    ///   Rotate90 is documented "rotate 90 to the right").
-    /// - video_rotation: 90-degree COUNTER-clockwise steps (libretro's
-    ///   retro_set_rotation convention).
+    /// video_rotation. The kernel's DRM panel-orientation hint (set
+    /// by the box profile's dtparam) is the single source of truth;
+    /// an explicit SLINT_KMS_ROTATION in /data/box/env overrides it
+    /// (same precedence the panel UI applies). Conventions:
+    /// - hint/env: degrees CLOCKWISE (slint's Rotate90 is documented
+    ///   "rotate 90 to the right").
+    /// - video_rotation: 90-degree COUNTER-clockwise steps
+    ///   (libretro's retro_set_rotation convention).
     fn panel_rotation_steps() -> u32 {
-        let Ok(env) = std::fs::read_to_string("/data/box/env") else {
-            return 0;
-        };
+        let deg = env_rotation_override()
+            .or_else(boompi_panel::orientation_degrees)
+            .unwrap_or(0);
+        ((360 - (deg % 360)) % 360) / 90
+    }
+
+    fn env_rotation_override() -> Option<u32> {
+        let env = std::fs::read_to_string("/data/box/env").ok()?;
         for line in env.lines() {
             if let Some(v) = line.trim().strip_prefix("SLINT_KMS_ROTATION=") {
                 if let Ok(deg) = v.trim().parse::<u32>() {
-                    return ((360 - (deg % 360)) % 360) / 90;
+                    return Some(deg);
                 }
             }
         }
-        0
+        None
     }
 
     pub async fn launch(app: &SharedApp, system: &str, file: &str) -> Result<()> {

@@ -185,6 +185,21 @@ fn register_emoji_fallback() {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
+    // Derive the render rotation from the kernel's DRM
+    // panel-orientation hint (published by the box profile's dtparam)
+    // unless the env file already sets it - the single-declaration
+    // path for how the display is mounted. Must happen before
+    // AppWindow::new(): slint's linuxkms backend reads the env var at
+    // platform init.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("SLINT_KMS_ROTATION").is_none() {
+        if let Some(deg) = boompi_panel::orientation_degrees() {
+            if deg != 0 {
+                eprintln!("panel orientation hint: {deg} (SLINT_KMS_ROTATION derived)");
+                std::env::set_var("SLINT_KMS_ROTATION", deg.to_string());
+            }
+        }
+    }
     let ui = AppWindow::new()?;
     // After AppWindow::new: the font collection needs the platform up.
     #[cfg(target_os = "linux")]
