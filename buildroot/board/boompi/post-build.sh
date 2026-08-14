@@ -127,4 +127,36 @@ for mod in snd-usb-audio snd-soc-rpi-simple-soundcard snd-soc-hifiberry-dacplus 
         || fail "kernel module $mod missing (audio output)"
 done
 
+# --- Games (RetroArch + cores + gamepad input). ------------------------------
+[ -x "${TARGET_DIR}/usr/bin/retroarch" ] || fail "retroarch missing"
+for core in fceumm snes9x gambatte mgba pcsx_rearmed mupen64plus_next; do
+    [ -f "${TARGET_DIR}/usr/lib/libretro/${core}_libretro.so" ] \
+        || fail "libretro core ${core} missing"
+done
+[ -f "${TARGET_DIR}/etc/retroarch.cfg" ] || fail "retroarch.cfg missing"
+for mod in joydev uhid hid-sony hid-playstation hid-nintendo; do
+    find "${TARGET_DIR}/lib/modules" -name "${mod}.ko*" 2>/dev/null | grep -q . \
+        || fail "kernel module $mod missing (gamepads)"
+done
+
+# --- /data growth tooling. -----------------------------------------------
+for bin in sfdisk partx resize2fs; do
+    find "${TARGET_DIR}/usr/sbin" "${TARGET_DIR}/usr/bin" \
+         "${TARGET_DIR}/sbin" "${TARGET_DIR}/bin" \
+         -maxdepth 1 -name "$bin" 2>/dev/null | grep -q . \
+        || fail "$bin missing (boompi-grow-data needs it)"
+done
+[ -x "${TARGET_DIR}/usr/bin/boompi-grow-data" ] \
+    || fail "boompi-grow-data missing"
+
+# --- Rootfs size ceiling. --------------------------------------------------
+# A/B partition sizes are frozen at flash time forever: an image that
+# outgrows 512M can never be delivered to an existing card. Fail the
+# build at 85% so the wall is visible a release early.
+USED_KB=$(du -sxk "${TARGET_DIR}" | cut -f1)
+LIMIT_KB=$((512 * 1024 * 85 / 100))
+[ "$USED_KB" -le "$LIMIT_KB" ] \
+    || fail "rootfs content ${USED_KB}KB exceeds 85% of the 512M slot (${LIMIT_KB}KB)"
+echo "rootfs fill: ${USED_KB}KB of $((512 * 1024))KB"
+
 echo "post-build assertions OK"

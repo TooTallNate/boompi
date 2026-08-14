@@ -1,0 +1,14 @@
+[Unit]
+Description=Grow the /data partition to fill the SD card
+DefaultDependencies=no
+After=systemd-udevd.service
+Before=data.mount local-fs.target
+ConditionPathExists=/dev/mmcblk0p6
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-grow-data
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

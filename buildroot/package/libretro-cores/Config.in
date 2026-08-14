@@ -1,0 +1,13 @@
+config BR2_PACKAGE_LIBRETRO_CORES
+	bool "libretro-cores"
+	depends on BR2_PACKAGE_RETROARCH
+	select BR2_PACKAGE_LIBRETRO_FCEUMM
+	select BR2_PACKAGE_LIBRETRO_SNES9X
+	select BR2_PACKAGE_LIBRETRO_GAMBATTE
+	select BR2_PACKAGE_LIBRETRO_MGBA
+	select BR2_PACKAGE_LIBRETRO_PCSX_REARMED
+	select BR2_PACKAGE_LIBRETRO_MUPEN64PLUS_NEXT
+	help
+	  The libretro cores boompi ships: fceumm (NES), snes9x (SNES),
+	  gambatte (GB/GBC), mgba (GBA), pcsx_rearmed (PSX, NEON/ari64
+	  dynarec), mupen64plus-next (N64, GLES). /usr/lib/libretro/.

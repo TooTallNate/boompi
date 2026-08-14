@@ -1,0 +1,4 @@
+config BR2_PACKAGE_LIBRETRO_FCEUMM
+	bool "libretro-fceumm"
+	help
+	  libretro core (libretro-fceumm).

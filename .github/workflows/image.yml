@@ -39,6 +39,53 @@ env:
   BR_VERSION: "2026.02"
 
 jobs:
+  # boompi-grow-data resizes the shared /data partition on live boxes:
+  # prove the exact script against a loopback disk with the real
+  # partition layout before any image carries it.
+  grow-test:
+    name: grow-data loopback test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise boompi-grow-data on a loop device
+        run: |
+          set -eux
+          truncate -s 1024M disk.img
+          # Real card layout: 3 primaries, extended p4 wrapping logical
+          # p5/p6, free space after p4 (the unused rest of the card).
+          sfdisk disk.img <<'EOF'
+          label: dos
+          1 : start=8192, size=16384, type=c
+          2 : start=24576, size=16384, type=c
+          3 : start=40960, size=204800, type=83
+          4 : start=245760, size=442368, type=5
+          5 : start=253952, size=204800, type=83
+          6 : start=466944, size=131072, type=83
+          EOF
+          LOOP=$(sudo losetup -P --show -f disk.img)
+          sudo mkfs.ext4 -q -L data "${LOOP}p6"
+          mkdir -p mnt && sudo mount "${LOOP}p6" mnt
+          echo "survives the grow" | sudo tee mnt/canary >/dev/null
+          sudo umount mnt
+          BEFORE=$(cat /sys/class/block/$(basename "$LOOP")p6/size)
+          sudo env BOOMPI_GROW_DISK="$LOOP"             sh buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-grow-data
+          AFTER=$(cat /sys/class/block/$(basename "$LOOP")p6/size)
+          test "$AFTER" -gt "$BEFORE"
+          # Ends at the disk end (within alignment slack).
+          END=$(( $(cat /sys/class/block/$(basename "$LOOP")p6/start) + AFTER ))
+          DISK=$(cat /sys/class/block/$(basename "$LOOP")/size)
+          test $((DISK - END)) -lt 32768
+          # Filesystem grew and the data survived.
+          sudo mount "${LOOP}p6" mnt
+          grep -q "survives the grow" mnt/canary
+          df -m mnt | tail -1
+          sudo umount mnt
+          # Idempotent: second run is a no-op.
+          sudo env BOOMPI_GROW_DISK="$LOOP"             sh buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-grow-data
+          test "$(cat /sys/class/block/$(basename "$LOOP")p6/size)" -eq "$AFTER"
+          sudo losetup -d "$LOOP"
+
   # web/dist is a build artifact (boompid embeds it via rust-embed).
   # Build it once here; both board jobs download it before the Rust
   # cross-build.
@@ -154,7 +201,7 @@ jobs:
           retention-days: 14
 
   image:
-    needs: [web, skia]
+    needs: [web, skia, grow-test]
     name: image
     runs-on: ubuntu-24.04
     timeout-minutes: 340

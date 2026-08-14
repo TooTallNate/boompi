@@ -30,6 +30,23 @@ BR2_INIT_SYSTEMD=y
 # (and its wait-online unit fails the boot health picture).
 # BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
+# Games easter egg: RetroArch (KMS/GBM + GLES2, same display stack as
+# the panel UI) + the six shipped libretro cores. ROMs are user
+# content on /data/games; nothing copyrighted ships in the image.
+BR2_PACKAGE_RETROARCH=y
+BR2_PACKAGE_LIBRETRO_CORES=y
+
+# Partition tooling for boompi-grow-data (grow /data to fill the SD
+# card on first boot): sfdisk + partx from util-linux, resize2fs +
+# e2fsck from e2fsprogs.
+BR2_PACKAGE_UTIL_LINUX=y
+BR2_PACKAGE_UTIL_LINUX_BINARIES=y
+BR2_PACKAGE_UTIL_LINUX_FDISK=y
+BR2_PACKAGE_UTIL_LINUX_PARTX=y
+BR2_PACKAGE_E2FSPROGS=y
+BR2_PACKAGE_E2FSPROGS_RESIZE2FS=y
+BR2_PACKAGE_E2FSPROGS_FSCK=y
+
 # Package patches (e.g. the bluez AVRCP absolute-volume backport).
 BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_BOOMPI_PATH)/patches"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
@@ -41,7 +58,7 @@ BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,bba53a117a4a5c29da892962332ff1605990e17a)/linux-bba53a117a4a5c29da892962332ff1605990e17a.tar.gz"
 # kexec for A/B trial boots - firmware tryboot is not used on either
 # board (see board/boompi/linux-kexec.fragment).
-BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-audio.fragment"
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-audio.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-gamepads.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y

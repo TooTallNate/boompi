@@ -1,0 +1,4 @@
+config BR2_PACKAGE_LIBRETRO_MUPEN64PLUS_NEXT
+	bool "libretro-mupen64plus-next"
+	help
+	  libretro core (mupen64plus-libretro-nx).

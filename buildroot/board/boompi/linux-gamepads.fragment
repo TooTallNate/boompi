@@ -1,0 +1,15 @@
+# Bluetooth/USB gamepads for the games feature: evdev joysticks
+# (RetroArch's udev driver), uhid (bluez routes BLE HID through it),
+# and the pad-specific HID drivers (PS4/PS5, Xbox, Switch Pro,
+# Steam).
+CONFIG_INPUT_JOYDEV=m
+CONFIG_UHID=m
+CONFIG_INPUT_FF_MEMLESS=m
+CONFIG_HID_SONY=m
+CONFIG_SONY_FF=y
+CONFIG_HID_PLAYSTATION=m
+CONFIG_PLAYSTATION_FF=y
+CONFIG_HID_MICROSOFT=m
+CONFIG_HID_NINTENDO=m
+CONFIG_NINTENDO_FF=y
+CONFIG_HID_STEAM=m

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_LIBRETRO_SNES9X
+	bool "libretro-snes9x"
+	help
+	  libretro core (snes9x).

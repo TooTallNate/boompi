@@ -1,0 +1,13 @@
+config BR2_PACKAGE_RETROARCH
+	bool "retroarch"
+	depends on BR2_PACKAGE_MESA3D_OPENGL_EGL # KMS/GBM + GLES
+	select BR2_PACKAGE_LIBDRM
+	select BR2_PACKAGE_ALSA_LIB
+	select BR2_PACKAGE_ZLIB
+	select BR2_PACKAGE_FREETYPE
+	help
+	  RetroArch libretro frontend, built for KMS/GBM + GLES2 with
+	  udev input (no X11/Wayland). Cores are separate packages
+	  (libretro-cores).
+
+	  https://www.retroarch.com

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_LIBRETRO_MGBA
+	bool "libretro-mgba"
+	help
+	  libretro core (mgba).

@@ -1,0 +1,4 @@
+config BR2_PACKAGE_LIBRETRO_PCSX_REARMED
+	bool "libretro-pcsx-rearmed"
+	help
+	  libretro core (pcsx_rearmed).

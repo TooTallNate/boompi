@@ -1,0 +1,48 @@
+#!/bin/sh
+# Grow the /data partition (p6, last on the card) to fill the SD card.
+#
+# Images ship with a 512M data partition; cards are 16-32GB. Runs
+# before data.mount on every boot (offline resize - no mounted-fs
+# complications) and exits fast when there is nothing to do, so a
+# fresh flash grows once and every later boot is a no-op.
+#
+# /data is shared by both A/B slots, so this script is deliberately
+# paranoid: it only ever extends the END of p6 (and the extended
+# container p4 around it), never touches a start sector, and bails on
+# any anomaly. The exact logic is exercised against a loopback image
+# in CI on every build.
+set -eu
+
+DISK="${BOOMPI_GROW_DISK:-/dev/mmcblk0}"
+PART_NUM=6
+EXT_NUM=4
+PART="${DISK}p${PART_NUM}"
+
+[ -b "$DISK" ] || { echo "no disk $DISK"; exit 0; }
+[ -b "$PART" ] || { echo "no partition $PART"; exit 0; }
+
+# Anything to gain? Compare the partition's end with the disk's end.
+DISK_SECTORS=$(cat "/sys/class/block/$(basename "$DISK")/size")
+PART_START=$(cat "/sys/class/block/$(basename "$PART")/start")
+PART_SIZE=$(cat "/sys/class/block/$(basename "$PART")/size")
+PART_END=$((PART_START + PART_SIZE))
+GAP=$((DISK_SECTORS - PART_END))
+# Below 16MiB of headroom (32768 sectors) it is not worth the write.
+if [ "$GAP" -lt 32768 ]; then
+    exit 0
+fi
+
+echo "growing $PART: $((GAP / 2048))MiB of unused card space"
+
+# The extended container first, then the logical partition inside it.
+# ",+" = keep start, extend to the maximum. --no-reread/--force are
+# required because the DISK has mounted partitions (the rootfs);
+# p4/p6 themselves are untouched by any mount at this point.
+echo ", +" | sfdisk --no-reread --force -N "$EXT_NUM" "$DISK"
+echo ", +" | sfdisk --no-reread --force -N "$PART_NUM" "$DISK"
+
+# Tell the kernel, then grow the filesystem to match.
+partx -u "$DISK" || true
+e2fsck -f -p "$PART" || true
+resize2fs "$PART"
+echo "done: $(($(cat "/sys/class/block/$(basename "$PART")/size") / 2048))MiB"
