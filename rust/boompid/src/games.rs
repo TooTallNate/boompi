@@ -213,6 +213,26 @@ mod run {
         Ok(())
     }
 
+    /// Translate the panel mount rotation into RetroArch's
+    /// video_rotation. Sources of truth and conventions:
+    /// - /data/box/env SLINT_KMS_ROTATION: degrees CLOCKWISE (slint's
+    ///   Rotate90 is documented "rotate 90 to the right").
+    /// - video_rotation: 90-degree COUNTER-clockwise steps (libretro's
+    ///   retro_set_rotation convention).
+    fn panel_rotation_steps() -> u32 {
+        let Ok(env) = std::fs::read_to_string("/data/box/env") else {
+            return 0;
+        };
+        for line in env.lines() {
+            if let Some(v) = line.trim().strip_prefix("SLINT_KMS_ROTATION=") {
+                if let Ok(deg) = v.trim().parse::<u32>() {
+                    return ((360 - (deg % 360)) % 360) / 90;
+                }
+            }
+        }
+        0
+    }
+
     pub async fn launch(app: &SharedApp, system: &str, file: &str) -> Result<()> {
         let (_, core, _) = SYSTEMS
             .iter()
@@ -238,7 +258,14 @@ mod run {
         std::fs::create_dir_all(games_dir().join("states")).ok();
         let _ = std::fs::write(RUNNING_MARKER, &key);
 
-        tracing::info!(%key, core, "launching game; panel UI stops");
+        // Per-boot overrides that depend on box state (/etc is the
+        // static baseline): the game must rotate with the panel.
+        let append_cfg = "/run/boompi-game-retroarch.cfg";
+        let rotation = panel_rotation_steps();
+        std::fs::write(append_cfg, format!("video_rotation = \"{rotation}\"\n"))
+            .context("write retroarch append config")?;
+
+        tracing::info!(%key, core, rotation, "launching game; panel UI stops");
         systemctl(&["stop", "boompi-ui"]).await?;
         let out = tokio::process::Command::new("systemd-run")
             .args([
@@ -250,6 +277,8 @@ mod run {
                 &core_path,
                 "--config",
                 "/etc/retroarch.cfg",
+                "--appendconfig",
+                append_cfg,
             ])
             .arg(&rom)
             .output()

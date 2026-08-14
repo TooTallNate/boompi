@@ -1,0 +1,9 @@
+config BR2_PACKAGE_RETROARCH_JOYPAD_AUTOCONFIG
+	bool "retroarch-joypad-autoconfig"
+	help
+	  Joypad autoconfig profiles for RetroArch's udev driver.
+	  Without these a connected gamepad is detected but no buttons
+	  are mapped to the retropad - the pad appears completely dead
+	  in-game.
+
+	  https://github.com/libretro/retroarch-joypad-autoconfig

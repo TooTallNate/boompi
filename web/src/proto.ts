@@ -188,6 +188,7 @@ export type ServerMessage =
 
 /** Client → server WebSocket messages used by the settings UI. */
 export type ClientMessage =
+  | { type: "set_volume"; level: number }
   | { type: "emoji_font"; action: EmojiFontAction; id: string }
   | { type: "update"; action: UpdateAction }
   | { type: "preview_screensaver" }

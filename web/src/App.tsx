@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   fetchBoxProfile,
@@ -77,6 +77,8 @@ export default function App() {
               ? `boompid v${hello.version} · up ${Math.floor(hello.uptime_secs / 60)} min`
               : "connecting…")}
         </p>
+
+        {state && <VolumeSection volume={state.volume} send={send} />}
 
         {settings && (
           <>
@@ -942,6 +944,63 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 interface SectionProps {
   settings: Settings;
   onSaved: (s: Settings) => void;
+}
+
+/// Master volume: same ClientMessage the panel slider sends
+/// (set_volume -> PipeWire sink + AVRCP echo to the phone). Local
+/// state while dragging so the server's volume broadcasts (from the
+/// panel or the phone) don't fight the thumb mid-gesture.
+function VolumeSection({
+  volume,
+  send,
+}: {
+  volume: number;
+  send: (msg: ClientMessage) => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const [local, setLocal] = useState(volume);
+  const shown = dragging ? local : volume;
+  const throttle = useRef<number>(0);
+  const trailing = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const push = (level: number) => {
+    // Leading-edge immediate, then at most ~10/s with a trailing
+    // flush - mirrors the panel slider's throttle.
+    const now = Date.now();
+    if (now - throttle.current >= 100) {
+      throttle.current = now;
+      send({ type: "set_volume", level });
+    } else {
+      if (trailing.current) clearTimeout(trailing.current);
+      trailing.current = setTimeout(() => {
+        throttle.current = Date.now();
+        send({ type: "set_volume", level });
+      }, 100);
+    }
+  };
+  return (
+    <Section title="Volume">
+      <label className="block text-[13px] text-dim">
+        Speaker volume: {Math.round(shown * 100)}%
+        <input
+          type="range"
+          min={0}
+          max={100}
+          className="mt-1 block w-full"
+          value={Math.round(shown * 100)}
+          onPointerDown={() => {
+            setLocal(volume);
+            setDragging(true);
+          }}
+          onPointerUp={() => setDragging(false)}
+          onChange={(e) => {
+            const level = Number(e.target.value) / 100;
+            setLocal(level);
+            push(level);
+          }}
+        />
+      </label>
+    </Section>
+  );
 }
 
 /** Shared patch-submit helper with status handling. */

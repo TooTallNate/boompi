@@ -197,6 +197,25 @@ done
 [ -x "${TARGET_DIR}/usr/bin/boompi-grow-data" ] \
     || fail "boompi-grow-data missing"
 
+# --- Gamepad support. -------------------------------------------------------
+# All three legs must land: kernel HID drivers arrive via the kernel
+# fragment, the bluez input profile via PLUGINS_HID, and the udev
+# button maps via retroarch-joypad-autoconfig. A missing leg means a
+# pad that pairs but plays dead.
+[ -f "${TARGET_DIR}/usr/share/retroarch/autoconfig/udev/Sony Interactive Entertainment DualSense Wireless Controller.cfg" ] \
+    || fail "DualSense udev autoconfig profile missing (pad would be unmapped in-game)"
+grep -q 'joypad_autoconfig_dir' "${TARGET_DIR}/etc/retroarch.cfg" \
+    || fail "retroarch.cfg lacks joypad_autoconfig_dir"
+strings "${TARGET_DIR}/usr/libexec/bluetooth/bluetoothd" | grep -q ClassicBondedOnly \
+    || fail "bluetoothd built without the HID input profile (pads pair then power off)"
+grep -q "ClassicBondedOnly=false" "${TARGET_DIR}/etc/bluetooth/input.conf" \
+    || fail "input.conf lacks ClassicBondedOnly=false (8BitDo/Nintendo pads could never reconnect)"
+# xpad is the one non-HID leg (wired Xbox-protocol pads).
+find "${TARGET_DIR}/lib/modules" -name 'xpad.ko*' 2>/dev/null | grep -q . \
+    || fail "xpad module missing (wired Xbox/8BitDo X-input pads)"
+find "${TARGET_DIR}/lib/modules" -name 'hid-nintendo.ko*' 2>/dev/null | grep -q . \
+    || fail "hid-nintendo module missing (Switch Pro / 8BitDo Switch mode)"
+
 # --- Rootfs size ceiling. --------------------------------------------------
 # A/B partition sizes are frozen at flash time forever: an image that
 # outgrows 512M can never be delivered to an existing card. Fail the

@@ -1,7 +1,9 @@
 # Bluetooth/USB gamepads for the games feature: evdev joysticks
 # (RetroArch's udev driver), uhid (bluez routes BLE HID through it),
 # and the pad-specific HID drivers (PS4/PS5, Xbox, Switch Pro,
-# Steam).
+# Steam). 8BitDo pads need no driver of their own: they impersonate
+# whatever mode they're switched to (Switch -> hid-nintendo, X-input
+# -> xpad/hid-microsoft, D-input -> hid-generic).
 CONFIG_INPUT_JOYDEV=m
 CONFIG_UHID=m
 CONFIG_INPUT_FF_MEMLESS=m
@@ -13,3 +15,10 @@ CONFIG_HID_MICROSOFT=m
 CONFIG_HID_NINTENDO=m
 CONFIG_NINTENDO_FF=y
 CONFIG_HID_STEAM=m
+# Wired/USB-dongle Xbox-protocol pads (Xbox 360/One/Series, 8BitDo
+# X-input mode, most generic "PC" pads). xpad is not a HID driver, so
+# it needs the classic joystick menu opened.
+CONFIG_INPUT_JOYSTICK=y
+CONFIG_JOYSTICK_XPAD=m
+CONFIG_JOYSTICK_XPAD_FF=y
+CONFIG_JOYSTICK_XPAD_LEDS=y
