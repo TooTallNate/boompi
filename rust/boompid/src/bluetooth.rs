@@ -813,6 +813,7 @@ async fn handle_bt_command(
             // Entering pairing mode releases current connections: the user
             // is explicitly adding a new device, and the dongle struggles
             // to accept pairings while servicing an A2DP link anyway.
+            // (Gamepads are spared - see disconnect_all.)
             disconnect_all(ctx, session).await;
             if set_discoverable(ctx, session, true).await {
                 crate::bt_agent::set_pairing(
@@ -823,9 +824,30 @@ async fn handle_bt_command(
                     },
                 )
                 .await;
-                // Phones initiate toward us; gamepads only advertise.
-                // Scan for them while the window is open.
-                set_discovery(ctx, session, true).await;
+                // Phones initiate toward us; gamepads only advertise, so
+                // finding a NEW pad needs an active inquiry scan. But
+                // active inquiry competes with the inquiry/page scans
+                // that let a phone find and connect to us - with an ACL
+                // link also live (a connected gamepad), phone pairing
+                // reliably failed on the bench until the pad was
+                // disconnected. Only hunt for pads when nothing is
+                // connected; pairing a second pad requires disconnecting
+                // the first (rare, documented trade).
+                let any_connected = ctx
+                    .app
+                    .shared
+                    .read()
+                    .await
+                    .bt_devices
+                    .iter()
+                    .any(|d| d.connected);
+                if any_connected {
+                    tracing::info!(
+                        "pairing window open; skipping gamepad discovery (device connected)"
+                    );
+                } else {
+                    set_discovery(ctx, session, true).await;
+                }
             }
         }
         BtCommand::Pairing(PairingAction::Cancel) => {
