@@ -164,38 +164,19 @@ pub struct Pairing {
     pub passkey: Option<u32>,
 }
 
-/// Who applies Bluetooth loudness for a paired device.
-///
-/// Modern iOS scales the PCM it streams according to its own volume
-/// slider and uses AVRCP absolute volume as position sync; the AVRCP
-/// spec instead expects the renderer to apply the value to full-scale
-/// audio (how Android behaves). Applying it on both ends attenuates
-/// twice, applying it on neither leaves a sender at full blast.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BtVolumeMode {
-    /// Vendor-based default: Apple senders get `Phone`, others `Speaker`.
-    #[default]
-    Auto,
-    /// The sender scales its PCM; AVRCP only syncs the displayed volume.
-    Phone,
-    /// The speaker applies AVRCP volume to its output (AVRCP spec).
-    Speaker,
-}
-
 /// A Bluetooth device known to the adapter (paired, or mid-pairing).
+///
+/// (The per-device volume-mode assignment is gone: every sender is
+/// handled the AVRCP-spec way - full-scale PCM in, the speaker
+/// renders the volume. iOS's source-side scaling turned out to be a
+/// reaction to the host's hw-volume handshake, disabled in the
+/// wireplumber config.)
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BtDevice {
     /// Colon-form address ("6C:3A:FF:58:84:4C") - the id for device actions.
     pub address: String,
     pub name: String,
     pub connected: bool,
-    /// The user's assignment for this device (default `Auto`).
-    #[serde(default)]
-    pub volume_mode: BtVolumeMode,
-    /// What `Auto` resolves to for this device (`Phone` or `Speaker`).
-    #[serde(default)]
-    pub volume_mode_auto: BtVolumeMode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -205,10 +186,6 @@ pub enum BtDeviceAction {
     Disconnect,
     /// Unpair (BlueZ `RemoveDevice`).
     Remove,
-    /// Assign who applies this device's loudness (persisted).
-    SetVolumeMode {
-        mode: BtVolumeMode,
-    },
 }
 
 /// UI theme.
@@ -290,8 +267,9 @@ pub struct Settings {
     /// false.
     #[serde(default)]
     pub clock_24h: bool,
-    /// RetroArch stream volume (0.0-1.0) while an external audio
-    /// source is active: music ducks the game, not vice versa.
+    /// The game track's loudness (0.0-1.0): RetroArch's stream volume,
+    /// independent of the music track. No ducking - each track holds
+    /// its own level and the system sink stays at reference.
     #[serde(default = "default_game_volume")]
     pub game_volume: f32,
     /// MQTT broker for Home Assistant integration ("host" or
@@ -757,8 +735,6 @@ mod tests {
                 address: "AA:BB:CC:DD:EE:FF".into(),
                 name: "Phone".into(),
                 connected: true,
-                volume_mode: BtVolumeMode::Auto,
-                volume_mode_auto: BtVolumeMode::Phone,
             }],
         };
         let json = serde_json::to_value(&msg).unwrap();

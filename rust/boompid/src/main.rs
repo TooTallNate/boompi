@@ -11,11 +11,11 @@
 #[cfg(target_os = "linux")]
 mod airplay;
 #[cfg(target_os = "linux")]
+mod mixer;
+#[cfg(target_os = "linux")]
 mod netname;
 #[cfg(target_os = "linux")]
 mod artwork;
-#[cfg(target_os = "linux")]
-mod audio;
 #[cfg(target_os = "linux")]
 mod battery;
 #[cfg(target_os = "linux")]
@@ -115,6 +115,7 @@ async fn main() -> anyhow::Result<()> {
             tracing::info!("hardware mode: BlueZ source + INA260 battery + visualizer");
             bluetooth::spawn(app.clone());
             netname::spawn(app.clone());
+            mixer::spawn(app.clone());
             battery::spawn(app.clone());
             visualizer::spawn(app.clone());
             spotify::spawn(app.clone());
@@ -148,20 +149,6 @@ async fn main() -> anyhow::Result<()> {
             {
                 let app = app.clone();
                 tokio::spawn(mqtt::run(app));
-            }
-            // Seed the volume from the current system state.
-            {
-                let app = app.clone();
-                tokio::spawn(async move {
-                    match audio::get_system_volume().await {
-                        Ok(level) => {
-                            let mut s = app.shared.write().await;
-                            s.volume = level;
-                            s.sink_volume = level;
-                        }
-                        Err(err) => tracing::warn!(%err, "could not read system volume"),
-                    }
-                });
             }
             // First boot: broadcast the onboarding hotspot when nothing
             // else provides a way to reach the setup page.

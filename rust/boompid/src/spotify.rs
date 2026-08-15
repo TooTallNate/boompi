@@ -394,6 +394,11 @@ impl Sink for PwCatSink {
                     "2",
                     "--format",
                     "s16",
+                    // Tag the stream so the mixer can steer the music
+                    // track (bare pw-cat streams are indistinguishable
+                    // from each other in pw-dump).
+                    "-P",
+                    "{ application.name = boompi-music }",
                     "-",
                 ])
                 .stdin(Stdio::piped())

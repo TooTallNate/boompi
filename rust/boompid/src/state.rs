@@ -117,17 +117,11 @@ pub struct Shared {
     /// The user-facing volume: what the sliders show. Equals the sink
     /// volume for locally-scaled sources (Spotify, AirPlay); mirrors the
     /// phone's slider for Bluetooth, where iOS scales the PCM itself.
+    /// The music track's volume: one level shared by every audio
+    /// source's stream (applied by mixer.rs; the system sink stays at
+    /// reference). Remote volume commands (AVRCP, DACP, Spirc) and the
+    /// panel/web sliders all read and write this.
     pub volume: f32,
-    /// The actual PipeWire sink volume. Pinned to 1.0 while Bluetooth is
-    /// the active source (the samples already carry the phone's volume);
-    /// the visualizer offsets its bars by this, not `volume`, so the
-    /// display always shows what is audibly playing.
-    pub sink_volume: f32,
-    /// True while the active source scales its own PCM (Bluetooth
-    /// "Phone" volume mode - iOS): the loudness lives inside the
-    /// captured samples instead of the sink, and the visualizer must
-    /// compensate differently (see visualizer.rs).
-    pub volume_in_stream: bool,
     pub battery: Option<Battery>,
     /// Games library snapshot (maintained by the games module).
     pub games: boompi_proto::GamesState,
@@ -140,8 +134,6 @@ pub struct Shared {
     pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
-    /// Per-device Bluetooth volume-mode assignments (address → mode).
-    pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
     /// Durable clock prefs (see config::Config::timezone).
     pub timezone: Option<String>,
     pub ntp: Option<bool>,
@@ -184,7 +176,7 @@ impl App {
             required: !cfg.setup_complete,
             wifi_status: None,
         };
-        let cfg2_bt_volume_modes = cfg.bt_volume_modes.clone();
+        let cfg2_volume = cfg.volume.clamp(0.0, 1.0);
         let cfg2_timezone = cfg.timezone.clone();
         let cfg2_ntp = cfg.ntp;
         let cfg2_emoji_font = cfg.settings.emoji_font.clone();
@@ -194,12 +186,9 @@ impl App {
             cfg_generation: tokio::sync::watch::channel(0).0,
             started: Instant::now(),
             shared: RwLock::new(Shared {
-                volume: 0.5,
-                sink_volume: 0.5,
-                volume_in_stream: false,
+                volume: cfg2_volume,
                 settings,
                 setup,
-                bt_volume_modes: cfg2_bt_volume_modes,
                 timezone: cfg2_timezone,
                 ntp: cfg2_ntp,
                 emoji_font: cfg2_emoji_font,
@@ -325,7 +314,7 @@ impl App {
             cfg.settings.screensaver_min = s.settings.screensaver_min;
             cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
-            cfg.bt_volume_modes = s.bt_volume_modes.clone();
+            cfg.volume = s.volume;
             cfg.timezone = s.timezone.clone();
             cfg.ntp = s.ntp;
         }
@@ -385,30 +374,21 @@ impl App {
         self.source_cmds.lock().unwrap().insert(kind, tx);
     }
 
-    /// A source reported the sender-side volume (AirPlay DACP, Spotify
-    /// Connect): apply it to the system output and tell every UI.
+    /// A source reported the sender-side volume (AVRCP absolute
+    /// volume, AirPlay DACP, Spotify Connect): it becomes the music
+    /// track's volume. The mixer applies it to every music stream
+    /// within a second; the sink never moves. No-ops (echoes of our
+    /// own writes bouncing back) are dropped without a broadcast.
     #[cfg(target_os = "linux")]
     pub async fn apply_external_volume(&self, level: f32) {
         let level = level.clamp(0.0, 1.0);
-        if let Err(err) = crate::audio::set_system_volume(level).await {
-            tracing::warn!(%err, "failed to set system volume");
+        {
+            let mut s = self.shared.write().await;
+            if (s.volume - level).abs() < 0.004 {
+                return;
+            }
+            s.volume = level;
         }
-        let mut s = self.shared.write().await;
-        s.volume = level;
-        s.sink_volume = level;
-        s.volume_in_stream = false;
-        drop(s);
-        self.broadcast(ServerMessage::Volume { level });
-    }
-
-    /// A source reported a volume that is already applied inside the
-    /// audio it sends (iOS Bluetooth: the phone scales its PCM and the
-    /// AVRCP value is position sync only). Update the displayed volume
-    /// without touching the sink.
-    #[cfg(target_os = "linux")]
-    pub async fn apply_remote_volume_display(&self, level: f32) {
-        let level = level.clamp(0.0, 1.0);
-        self.shared.write().await.volume = level;
         self.broadcast(ServerMessage::Volume { level });
     }
 

@@ -58,14 +58,11 @@ export interface Pairing {
 
 export type PairingAction = "enable" | "cancel" | "confirm" | "reject";
 
-export type BtVolumeMode = "auto" | "phone" | "speaker";
 
 export interface BtDevice {
   address: string;
   name: string;
   connected: boolean;
-  volume_mode: BtVolumeMode;
-  volume_mode_auto: BtVolumeMode;
 }
 
 export interface EmojiFontInfo {
@@ -110,8 +107,7 @@ export type UpdateAction = "check" | "apply";
 export type BtDeviceAction =
   | "connect"
   | "disconnect"
-  | "remove"
-  | { set_volume_mode: { mode: BtVolumeMode } };
+  | "remove";
 
 export interface Hello {
   proto_version: number;

@@ -321,25 +321,15 @@ mod run {
     }
 
     /// Watch the game unit; when it exits (menu quit, web stop,
-    /// crash), bring the panel back and duck/unduck along the way.
+    /// crash), bring the panel back. (No ducking anymore: the game
+    /// track holds its own volume - settings.game_volume, applied by
+    /// mixer.rs - independent of the music track.)
     fn spawn_monitor(app: SharedApp) {
         tokio::spawn(async move {
-            let mut last_duck: Option<f32> = None;
             loop {
                 tokio::time::sleep(std::time::Duration::from_secs(1)).await;
                 if !unit_active().await {
                     break;
-                }
-                // Ducking: music takes precedence over gameplay.
-                let (source_active, volume) = {
-                    let s = app.shared.read().await;
-                    (s.source.active.is_some(), s.settings.game_volume)
-                };
-                let want = if source_active { volume } else { 1.0 };
-                if last_duck != Some(want) {
-                    if set_stream_volume("RetroArch", want).await {
-                        last_duck = Some(want);
-                    }
                 }
             }
             tracing::info!("game exited; panel UI returns");
@@ -384,38 +374,6 @@ mod run {
         });
     }
 
-    /// Set a PipeWire stream's volume by application name (pw-dump to
-    /// find the node, wpctl to set). Returns false when the node
-    /// isn't up yet.
-    async fn set_stream_volume(app_name: &str, volume: f32) -> bool {
-        let Ok(out) = tokio::process::Command::new("pw-dump").output().await else {
-            return false;
-        };
-        let Ok(json): Result<serde_json::Value, _> = serde_json::from_slice(&out.stdout) else {
-            return false;
-        };
-        let Some(arr) = json.as_array() else {
-            return false;
-        };
-        for obj in arr {
-            let props = &obj["info"]["props"];
-            if props["application.name"] == app_name
-                && props["media.class"]
-                    .as_str()
-                    .is_some_and(|c| c.starts_with("Stream/Output/Audio"))
-            {
-                if let Some(id) = obj["id"].as_u64() {
-                    return tokio::process::Command::new("wpctl")
-                        .args(["set-volume", &id.to_string(), &format!("{volume:.2}")])
-                        .status()
-                        .await
-                        .map(|s| s.success())
-                        .unwrap_or(false);
-                }
-            }
-        }
-        false
-    }
 }
 
 #[cfg(target_os = "linux")]

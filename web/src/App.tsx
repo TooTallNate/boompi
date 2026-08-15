@@ -18,7 +18,6 @@ import type {
   Battery,
   BtDevice,
   GamesState,
-  BtVolumeMode,
   ClientMessage,
   EmojiFontsState,
   Pairing,
@@ -293,7 +292,7 @@ function GamesSection({
         </ul>
       )}
       <label className="block text-[13px] text-dim">
-        Game volume while music plays: {Math.round(settings.game_volume * 100)}%
+        Game volume: {Math.round(settings.game_volume * 100)}%
         <input
           type="range"
           min={0}
@@ -743,30 +742,6 @@ function BluetoothSection({
                 )}
                 <span className="ml-2 font-mono">{d.address}</span>
               </div>
-              <label className="mt-1 flex items-center gap-2 text-[12px] text-dim">
-                Volume control
-                <select
-                  className="rounded-md border border-line bg-transparent px-2 py-1 text-[12px] text-fg"
-                  value={d.volume_mode}
-                  onChange={(e) =>
-                    send({
-                      type: "bt_device",
-                      address: d.address,
-                      action: {
-                        set_volume_mode: {
-                          mode: e.target.value as BtVolumeMode,
-                        },
-                      },
-                    })
-                  }
-                >
-                  <option value="auto">
-                    Auto ({d.volume_mode_auto === "phone" ? "phone" : "speaker"})
-                  </option>
-                  <option value="phone">Phone applies volume</option>
-                  <option value="speaker">Speaker applies volume</option>
-                </select>
-              </label>
             </div>
             <div className="flex flex-none gap-2">
               <button

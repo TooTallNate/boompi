@@ -25,9 +25,11 @@ pub struct Config {
     /// The appliance image ships a config without this flag; the setup
     /// flow persists it. Dev boxes set it manually.
     pub setup_complete: bool,
-    /// Per-device Bluetooth volume-mode assignments (address → mode);
-    /// devices absent from the map are `Auto`.
-    pub bt_volume_modes: std::collections::HashMap<String, boompi_proto::BtVolumeMode>,
+    /// The music track's volume (0.0-1.0): one level shared by every
+    /// audio source's stream (see mixer.rs), persisted so the speaker
+    /// wakes at the loudness it went to sleep with.
+    #[serde(default = "default_music_volume")]
+    pub volume: f32,
     /// User timezone (IANA name). The system copy lives in /etc/localtime
     /// on the rootfs, which an A/B update replaces wholesale - this is
     /// the durable copy, re-applied at startup.
@@ -45,7 +47,7 @@ impl Default for Config {
             airplay: AirplayConfig::default(),
             settings: SettingsConfig::default(),
             setup_complete: false,
-            bt_volume_modes: Default::default(),
+            volume: default_music_volume(),
             timezone: None,
             ntp: None,
         }
@@ -561,4 +563,8 @@ update_channel = "edge"
         let out = toml::to_string(&cfg).unwrap();
         assert!(!out.contains("airplay_pin"));
     }
+}
+
+fn default_music_volume() -> f32 {
+    0.5
 }
