@@ -743,17 +743,19 @@ async fn apply_sink_policy(ctx: &Ctx, session: &Session) {
     s.volume_in_stream = phone_scaled;
 }
 
-/// Vendor-based default: Apple senders scale their own PCM.
-fn auto_mode_for(modalias: Option<&str>) -> BtVolumeMode {
-    let apple = modalias
-        .and_then(|m| m.split_once('v'))
-        .and_then(|(_, rest)| rest.get(0..4))
-        .is_some_and(|v| v.eq_ignore_ascii_case("004c"));
-    if apple {
-        BtVolumeMode::Phone
-    } else {
-        BtVolumeMode::Speaker
-    }
+/// Auto resolves to Speaker for everyone. The old Apple special-case
+/// (Phone mode: sender scales its own PCM, sink pinned at reference)
+/// existed because iOS used to arrive scaling its PCM source-side -
+/// which turned out to be a REACTION to PipeWire's participation in
+/// the AVRCP absolute-volume handshake, not an Apple constant. With
+/// bluez5.enable-hw-volume=false (see the wireplumber overlay conf)
+/// iOS sends full-scale PCM plus SetAbsoluteVolume commands and the
+/// sink renders the volume - the same model as AirPlay and Spotify
+/// Connect, bench-proven with a constant-sine PCM capture. The
+/// manual per-device Phone assignment remains for senders that
+/// genuinely self-scale (none currently known).
+fn auto_mode_for(_modalias: Option<&str>) -> BtVolumeMode {
+    BtVolumeMode::Speaker
 }
 
 /// The mode actually in force for the connected device: the user's
