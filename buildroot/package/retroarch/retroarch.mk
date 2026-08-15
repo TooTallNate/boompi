@@ -75,8 +75,19 @@ define RETROARCH_CONFIGURE_CMDS
 	|| { echo "=== qb config.log ==="; cat config.log; exit 1; }
 endef
 
+# UDEV_TOUCH_SUPPORT is a phantom feature upstream: the whole
+# touchscreen subsystem exists in udev_input.c behind this define,
+# config.def.h references it, and nothing in qb or the Makefiles ever
+# sets it - without it the udev driver never even enumerates
+# ID_INPUT_TOUCHSCREEN devices (the panel fell through to the
+# keyboard classifier via its ID_INPUT_KEY flag). Passed as
+# ENVIRONMENT CFLAGS on purpose: the Makefile accumulates CFLAGS with
+# += (env survives as the base), while a command-line CFLAGS would
+# override the whole accumulation and break the build.
 define RETROARCH_BUILD_CMDS
-	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D)
+	cd $(@D) && \
+	$(TARGET_MAKE_ENV) CFLAGS="$(TARGET_CFLAGS) -DUDEV_TOUCH_SUPPORT" \
+		$(MAKE)
 endef
 
 define RETROARCH_INSTALL_TARGET_CMDS
