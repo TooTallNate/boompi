@@ -50,6 +50,7 @@ trait Adapter1 {
 #[zbus::proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
 trait Device1 {
     fn connect(&self) -> zbus::Result<()>;
+    fn connect_profile(&self, uuid: &str) -> zbus::Result<()>;
     fn disconnect(&self) -> zbus::Result<()>;
     #[zbus(property)]
     fn alias(&self) -> zbus::Result<String>;
@@ -544,13 +545,32 @@ async fn handle_properties_changed(
                                 }
                             }
                             if !transport_up {
-                                // Passive source (macOS): dial it ourselves.
-                                tracing::info!("no audio transport after pairing; connecting back");
-                                if let Err(err) = device.disconnect().await {
-                                    tracing::debug!(%err, "pre-connect disconnect (may not be up)");
+                                if device.connected().await.unwrap_or(false) {
+                                    // Still connected, just no A2DP yet: bring
+                                    // the profile up IN PLACE. Yanking a live
+                                    // link mid-setup is how iOS pops
+                                    // 'Connection Unsuccessful' and stops
+                                    // page-scanning (bench: congested radio,
+                                    // gamepad + pairing + USB audio sharing
+                                    // one dwc_otg bus stretched setup past
+                                    // the old 8s disconnect). AudioSource
+                                    // only - a full connect() also pokes HFP,
+                                    // which a speaker cannot answer.
+                                    tracing::info!(
+                                        "no audio transport after pairing; connecting A2DP in place"
+                                    );
+                                    device
+                                        .connect_profile("0000110a-0000-1000-8000-00805f9b34fb")
+                                        .await?;
+                                } else {
+                                    // Paired then dropped the link entirely:
+                                    // the passive-sender pattern (macOS pairs
+                                    // and waits to be dialed).
+                                    tracing::info!(
+                                        "no audio transport after pairing; dialing back"
+                                    );
+                                    device.connect().await?;
                                 }
-                                tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
-                                device.connect().await?;
                             }
                             tracing::info!(
                                 transport_up,
