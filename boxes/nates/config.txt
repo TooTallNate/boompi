@@ -9,3 +9,9 @@ dtparam=audio=off
 
 # INA260 battery monitor on the standard I2C bus.
 dtparam=i2c_arm=on
+
+# USB Bluetooth dongle (UB500 Plus - same RTL8761BU/2357:0604 as the
+# UB500 despite the name) is the only radio: onboard BT off, same
+# reasoning as georges (antenna sharing stutters, and two controllers
+# make boompid's adapter selection a boot-order coin flip).
+dtoverlay=disable-bt
