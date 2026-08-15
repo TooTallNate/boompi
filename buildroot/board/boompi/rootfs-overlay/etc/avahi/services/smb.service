@@ -1,6 +1,10 @@
 <?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
-<!-- Finder/Explorer sidebar discovery for the guest games share. -->
+<!-- Finder/Explorer sidebar discovery for the guest games share.
+     Baseline only: boompid (netname.rs) rewrites this file so the
+     instance name follows the speaker name (emoji and all - DNS-SD
+     instance names are user-visible UTF-8 per RFC 6763). The %h
+     wildcard covers first boot before boompid's first write. -->
 <service-group>
   <name replace-wildcards="yes">%h</name>
   <service>

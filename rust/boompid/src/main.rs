@@ -11,6 +11,8 @@
 #[cfg(target_os = "linux")]
 mod airplay;
 #[cfg(target_os = "linux")]
+mod netname;
+#[cfg(target_os = "linux")]
 mod artwork;
 #[cfg(target_os = "linux")]
 mod audio;
@@ -112,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
         {
             tracing::info!("hardware mode: BlueZ source + INA260 battery + visualizer");
             bluetooth::spawn(app.clone());
+            netname::spawn(app.clone());
             battery::spawn(app.clone());
             visualizer::spawn(app.clone());
             spotify::spawn(app.clone());
