@@ -232,7 +232,25 @@ jobs:
           echo "version=$STAMP" >> "$GITHUB_OUTPUT"
           echo "OS version: $STAMP"
 
+      # ---- Base-image cache --------------------------------------------------
+      # buildroot/** (plus the defconfig generator and this workflow)
+      # fingerprints the SYSTEM layer. When a commit touches only the
+      # apps (rust/, web/), the previous run's images and staging
+      # sysroot are restored and Buildroot never runs: the Rust
+      # binaries are rebuilt and spliced into the cached image
+      # (~15 min instead of ~45). Any buildroot-affecting change
+      # misses this cache and takes the full path below, which then
+      # repopulates it. rootfs-overlay-ci is excluded because the full
+      # path generates it mid-run.
+      - name: Restore base image cache
+        id: base
+        uses: actions/cache/restore@v6
+        with:
+          path: /home/runner/br-base
+          key: br-base-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/**', '!buildroot/board/boompi/rootfs-overlay-ci/**', 'scripts/gen-defconfig.sh', '.github/workflows/image.yml') }}
+
       - name: Install host dependencies
+        if: steps.base.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -243,6 +261,7 @@ jobs:
       # build still persists its progress (kernel/toolchain objects, downloads)
       # - otherwise every red run repeats the full ~80 min pass 1.
       - name: Restore Buildroot downloads
+        if: steps.base.outputs.cache-hit != 'true'
         id: restore-br-dl
         uses: actions/cache/restore@v6
         with:
@@ -252,6 +271,7 @@ jobs:
             br-dl-${{ env.BR_VERSION }}-
 
       - name: Restore ccache
+        if: steps.base.outputs.cache-hit != 'true'
         uses: actions/cache/restore@v6
         with:
           path: /home/runner/.buildroot-ccache
@@ -271,6 +291,7 @@ jobs:
             cargo-image-
 
       - name: Fetch Buildroot ${{ env.BR_VERSION }}
+        if: steps.base.outputs.cache-hit != 'true'
         run: |
           curl -fsSL "https://buildroot.org/downloads/buildroot-${BR_VERSION}.tar.xz" | tar -xJ -C "$HOME"
           mv "$HOME/buildroot-${BR_VERSION}" "$HOME/buildroot"
@@ -282,6 +303,7 @@ jobs:
           done
 
       - name: Configure
+        if: steps.base.outputs.cache-hit != 'true'
         # The defconfig is generated from the fragments
         # (buildroot/configs/*.frag) so nothing can drift.
         run: |
@@ -291,6 +313,7 @@ jobs:
             BR2_DEFCONFIG="$HOME/boompi_defconfig" defconfig
 
       - name: Build system (pass 1)
+        if: steps.base.outputs.cache-hit != 'true'
         run: make -C "$OUTPUT" -j"$(nproc)"
 
       - name: Install Rust cross tooling
@@ -317,6 +340,10 @@ jobs:
       - name: Cross-build boompid + boompi-ui against staging
         run: |
           STAGING="$OUTPUT/staging"
+          # Fast path: the staging sysroot restored with the base image.
+          if [ "${{ steps.base.outputs.cache-hit }}" = "true" ]; then
+            STAGING=/home/runner/br-base/staging
+          fi
           # Target exactly the image's glibc so linking against staging .so
           # files never references newer symbol versions than zig provides.
           # NB: `$OUTPUT/staging` is a symlink into host/<tuple>/sysroot, so
@@ -351,6 +378,7 @@ jobs:
             -p boompi-ui --no-default-features --features kms-skia
 
       - name: Inject binaries + emoji font into the image overlay
+        if: steps.base.outputs.cache-hit != 'true'
         run: |
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
@@ -370,7 +398,64 @@ jobs:
             | sha256sum -c -
 
       - name: Build image (pass 2, picks up the overlay)
+        if: steps.base.outputs.cache-hit != 'true'
         run: make -C "$OUTPUT" -j"$(nproc)"
+
+      # Full path: stage the system layer for future app-only commits.
+      # The staging sysroot rides along because the Rust cross-build
+      # links against it (headers, .pc files, libstdc++). The images
+      # contain THIS commit's binaries - harmless, the fast path
+      # replaces them wholesale.
+      - name: Populate base image cache
+        if: steps.base.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /home/runner/br-base
+          cp "$OUTPUT/images/sdcard.img" "$OUTPUT/images/rootfs.ext4" \
+             "$OUTPUT/images/boot-a.vfat" "$OUTPUT/images/boot-b.vfat" \
+             /home/runner/br-base/
+          cp -a "$(readlink -f "$OUTPUT/staging")" /home/runner/br-base/staging
+
+      # Fast path: splice the freshly built binaries into the cached
+      # image. The rootfs is loop-mounted and patched (binaries +
+      # version stamp), fsck'd, then dd'd into both A/B rootfs windows
+      # of the card image. Boot partitions are system-layer content
+      # and come straight from the cache.
+      - name: Splice binaries into cached base image
+        if: steps.base.outputs.cache-hit == 'true'
+        run: |
+          set -eux
+          mkdir -p "$OUTPUT/images"
+          cp /home/runner/br-base/rootfs.ext4 /home/runner/br-base/sdcard.img \
+             /home/runner/br-base/boot-a.vfat /home/runner/br-base/boot-b.vfat \
+             "$OUTPUT/images/"
+          ROOTFS="$OUTPUT/images/rootfs.ext4"
+          BIN=rust/target/aarch64-unknown-linux-gnu/release
+          MNT=$(mktemp -d)
+          sudo mount -o loop "$ROOTFS" "$MNT"
+          sudo install -m 0755 "$BIN/boompid"   "$MNT/usr/bin/boompid"
+          sudo install -m 0755 "$BIN/boompi-ui" "$MNT/usr/bin/boompi-ui"
+          printf '%s' "${{ steps.stamp.outputs.version }}" \
+            | sudo tee "$MNT/etc/boompi-version" >/dev/null
+          sudo umount "$MNT"
+          # 0 = clean, 1 = fixed something; both fine.
+          e2fsck -f -p "$ROOTFS" || [ "$?" -le 1 ]
+          # Both A/B windows of the card image get the patched rootfs.
+          SD="$OUTPUT/images/sdcard.img"
+          for part in 3 5; do
+            START=$(sfdisk -d "$SD" | sed -n "s/^.*img${part} :.*start= *\([0-9]*\).*/\1/p")
+            SIZE=$(sfdisk -d "$SD" | sed -n "s/^.*img${part} :.*size= *\([0-9]*\).*/\1/p")
+            test -n "$START" && test -n "$SIZE"
+            # The rootfs must fit its window exactly or smaller.
+            test "$(stat -c %s "$ROOTFS")" -le "$((SIZE * 512))"
+            dd if="$ROOTFS" of="$SD" bs=1M oflag=seek_bytes \
+               seek="$((START * 512))" conv=notrunc status=none
+          done
+          # Sanity: read the version back out of the card's slot A.
+          P3=$(sfdisk -d "$SD" | sed -n "s/^.*img3 :.*start= *\([0-9]*\).*/\1/p")
+          sudo mount -o loop,ro,offset=$((P3 * 512)) "$SD" "$MNT"
+          test "$(cat "$MNT/etc/boompi-version")" = "${{ steps.stamp.outputs.version }}"
+          cmp "$MNT/usr/bin/boompid" "$BIN/boompid"
+          sudo umount "$MNT"
 
       - name: Compress image
         run: |
@@ -403,18 +488,27 @@ jobs:
       # unconditional saves warn 'unable to reserve cache' on every warm run.
       # The ccache key includes the commit SHA, so it always saves cleanly.
       - name: Save Buildroot downloads
-        if: always() && steps.restore-br-dl.outputs.cache-hit != 'true'
+        if: always() && steps.base.outputs.cache-hit != 'true' && steps.restore-br-dl.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: /home/runner/br-dl
           key: br-dl-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/configs/*.frag', 'buildroot/buildroot-patches/*.patch') }}
 
       - name: Save ccache
-        if: always()
+        if: always() && steps.base.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: /home/runner/.buildroot-ccache
           key: br-ccache-${{ github.sha }}
+
+      # Content-keyed like br-dl: only the full path produces it, and
+      # only a missing key needs it.
+      - name: Save base image cache
+        if: steps.base.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /home/runner/br-base
+          key: br-base-${{ env.BR_VERSION }}-${{ hashFiles('buildroot/**', '!buildroot/board/boompi/rootfs-overlay-ci/**', 'scripts/gen-defconfig.sh', '.github/workflows/image.yml') }}
 
       - name: Save cargo cache
         if: always() && steps.restore-cargo.outputs.cache-hit != 'true'
