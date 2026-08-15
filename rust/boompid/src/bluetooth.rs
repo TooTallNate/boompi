@@ -841,7 +841,12 @@ async fn has_media_transport(conn: &zbus::Connection, dev_path: &str) -> bool {
     })
 }
 
-/// Disconnect every connected device (entering pairing mode).
+/// Disconnect connected AUDIO devices (entering pairing mode). The
+/// dongle struggles to accept pairings while servicing an A2DP link,
+/// but a HID link is featherweight - and disconnecting a gamepad
+/// kills the player's inputs mid-game (pads do not re-initiate after
+/// a host-side disconnect; the first bench attempt to pair a phone
+/// during gameplay did exactly this).
 async fn disconnect_all(ctx: &Ctx, session: &Session) {
     let connected: Vec<String> = ctx
         .app
@@ -854,6 +859,24 @@ async fn disconnect_all(ctx: &Ctx, session: &Session) {
         .map(|d| d.address.clone())
         .collect();
     for address in connected {
+        if let Some(adapter) = &session.adapter_path {
+            let dev_path = format!("{}/dev_{}", adapter.as_str(), address.replace(':', "_"));
+            let icon = async {
+                let path = ObjectPath::try_from(dev_path).ok()?;
+                let device = Device1Proxy::builder(&ctx.conn)
+                    .path(path)
+                    .ok()?
+                    .build()
+                    .await
+                    .ok()?;
+                device.icon().await.ok()
+            }
+            .await;
+            if icon.as_deref() == Some("input-gaming") {
+                tracing::info!(%address, "keeping gamepad connected through pairing mode");
+                continue;
+            }
+        }
         tracing::info!(%address, "disconnecting for pairing mode");
         device_action(ctx, session, &address, BtDeviceAction::Disconnect).await;
     }
@@ -891,6 +914,22 @@ async fn maybe_autopair_gamepad(ctx: &Ctx, session: &Session, path: OwnedObjectP
         return;
     }
     let alias = device.alias().await.unwrap_or_else(|_| "gamepad".into());
+    // A pad we already know reappearing while the window is open is
+    // not a pairing candidate - the user is adding something else.
+    // Reconnect it quietly if needed and leave the window alone
+    // (closing it here is how a powered-on pad used to slam the door
+    // on the phone the user was actually trying to pair).
+    if device.paired().await.unwrap_or(false) {
+        if !device.connected().await.unwrap_or(false) {
+            tracing::info!(%alias, "known gamepad seen during pairing window; reconnecting");
+            if let Err(err) = device.connect().await {
+                tracing::debug!(%err, %alias, "known gamepad reconnect failed");
+            }
+            refresh_devices(ctx).await;
+        }
+        AUTOPAIR_BUSY.store(false, std::sync::atomic::Ordering::SeqCst);
+        return;
+    }
     tracing::info!(%alias, "gamepad discovered; pairing");
     // Informational only - autopair asks nobody anything. Broadcasting
     // Confirm here flashed a Pair/Reject dialog that auto-resolved
@@ -905,9 +944,7 @@ async fn maybe_autopair_gamepad(ctx: &Ctx, session: &Session, path: OwnedObjectP
     )
     .await;
     let result = async {
-        if !device.paired().await.unwrap_or(false) {
-            device.pair().await?;
-        }
+        device.pair().await?;
         device.set_trusted(true).await?;
         device.connect().await
     }
