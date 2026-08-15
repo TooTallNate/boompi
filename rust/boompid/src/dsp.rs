@@ -69,12 +69,14 @@ impl SpectrumAnalyzer {
     /// Analyze the most recent `FFT_SIZE` samples (i16 mono) and return the
     /// smoothed bars. Call at the frame rate (~30 fps).
     ///
-    /// `volume` (0..=1, the system output volume) shifts the whole display
-    /// down by the equivalent dB so the bars show what is audibly playing,
-    /// not the pre-volume stream content. The sink monitor we capture taps
-    /// before the sink volume, so this is the only place volume can enter
+    /// `gain` shifts the whole display by the equivalent dB so the bars
+    /// show what is audibly playing, not the raw capture. Usually the
+    /// system output volume (0..=1, the capture taps before the sink
+    /// volume); above 1 it *boosts* - the visualizer uses that to undo
+    /// sender-side attenuation when the volume lives inside the stream
+    /// (Bluetooth Phone mode). This is the only place level can enter
     /// the picture - and it keeps the display consistent across sources.
-    pub fn process(&mut self, samples: &[i16], volume: f32) -> [u16; BARS] {
+    pub fn process(&mut self, samples: &[i16], gain: f32) -> [u16; BARS] {
         assert!(samples.len() >= FFT_SIZE, "need at least FFT_SIZE samples");
         let tail = &samples[samples.len() - FFT_SIZE..];
         for (dst, (&s, &w)) in self
@@ -101,7 +103,7 @@ impl SpectrumAnalyzer {
             for bin in &self.spectrum[lo..hi] {
                 peak = peak.max(bin.norm() * scale);
             }
-            let db = 20.0 * (peak + 1e-9).log10() + 20.0 * volume.clamp(0.001, 1.0).log10();
+            let db = 20.0 * (peak + 1e-9).log10() + 20.0 * gain.clamp(0.001, 16.0).log10();
             // Slight tilt: music has less energy up high; lift the top bands
             // so the display looks balanced (cava does similar weighting).
             let tilt = 1.0 + 0.35 * (i as f32 / (BARS - 1) as f32);

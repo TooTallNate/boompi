@@ -716,7 +716,11 @@ async fn apply_sink_policy(ctx: &Ctx, session: &Session) {
     if let Err(err) = crate::audio::set_system_volume(target).await {
         tracing::warn!(%err, target, "failed to set sink for bluetooth volume mode");
     }
-    ctx.app.shared.write().await.sink_volume = target;
+    let phone_scaled =
+        matches!(effective_volume_mode(ctx, session).await, BtVolumeMode::Phone);
+    let mut s = ctx.app.shared.write().await;
+    s.sink_volume = target;
+    s.volume_in_stream = phone_scaled;
 }
 
 /// Vendor-based default: Apple senders scale their own PCM.
@@ -1411,6 +1415,7 @@ async fn clear_session(ctx: &Ctx, session: &mut Session) {
     }
     s.track = None;
     s.source = SourceInfo::default();
+    s.volume_in_stream = false;
     drop(s);
     ctx.app
         .broadcast(ServerMessage::Source(SourceInfo::default()));

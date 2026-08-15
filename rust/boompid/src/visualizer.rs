@@ -89,12 +89,27 @@ async fn capture(app: &SharedApp) -> anyhow::Result<()> {
 
         if last_frame.elapsed() >= FRAME_INTERVAL {
             last_frame = tokio::time::Instant::now();
-            // Offset by the *sink* volume: for Bluetooth the phone's
-            // volume is already inside the samples and the sink sits at
-            // reference, so the capture equals the audible output on
-            // every source.
-            let volume = app.shared.read().await.sink_volume;
-            let bars = analyzer.process(&ring, volume);
+            // Bars should read the same at the same displayed volume on
+            // every source. The capture taps pre-sink-volume, so for
+            // sink-scaled sources (AirPlay, Spotify, BT Speaker mode)
+            // the sink volume is applied here as a display shift. In BT
+            // Phone mode (iOS) the phone scales its own PCM - with a
+            // steeper-than-linear curve - and the sink sits at
+            // reference, which used to flatline the bars at moderate
+            // phone volumes while other sources still danced. Undo the
+            // phone's attenuation (approximated as amplitude ~ V^2, the
+            // usual perceptual taper) and re-apply the same linear V
+            // the sink path gets: net gain V/V^2 = 1/V, capped so deep
+            // attenuation doesn't amplify noise into a full-scale show.
+            let gain = {
+                let s = app.shared.read().await;
+                if s.volume_in_stream {
+                    (1.0 / s.volume.max(0.05)).min(10.0)
+                } else {
+                    s.sink_volume
+                }
+            };
+            let bars = analyzer.process(&ring, gain);
             let active = bars.iter().any(|&b| b > 0);
             if active {
                 was_active = true;

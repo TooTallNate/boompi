@@ -123,6 +123,11 @@ pub struct Shared {
     /// the visualizer offsets its bars by this, not `volume`, so the
     /// display always shows what is audibly playing.
     pub sink_volume: f32,
+    /// True while the active source scales its own PCM (Bluetooth
+    /// "Phone" volume mode - iOS): the loudness lives inside the
+    /// captured samples instead of the sink, and the visualizer must
+    /// compensate differently (see visualizer.rs).
+    pub volume_in_stream: bool,
     pub battery: Option<Battery>,
     /// Games library snapshot (maintained by the games module).
     pub games: boompi_proto::GamesState,
@@ -191,6 +196,7 @@ impl App {
             shared: RwLock::new(Shared {
                 volume: 0.5,
                 sink_volume: 0.5,
+                volume_in_stream: false,
                 settings,
                 setup,
                 bt_volume_modes: cfg2_bt_volume_modes,
@@ -390,6 +396,7 @@ impl App {
         let mut s = self.shared.write().await;
         s.volume = level;
         s.sink_volume = level;
+        s.volume_in_stream = false;
         drop(s);
         self.broadcast(ServerMessage::Volume { level });
     }
