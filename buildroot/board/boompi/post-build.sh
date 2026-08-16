@@ -63,6 +63,12 @@ for bin in nmcli wireplumber wpctl pw-cat pw-record \
         || fail "runtime binary '$bin' missing from the image"
 done
 
+# CA trust store: without it every on-box HTTPS client except boompid
+# (rustls, compiled-in roots) fails with a trust-anchor error - curl,
+# wget, anything a bench session shells out to.
+[ -s "${TARGET_DIR}/etc/ssl/certs/ca-certificates.crt" ] \
+    || fail "missing /etc/ssl/certs/ca-certificates.crt (BR2_PACKAGE_CA_CERTIFICATES)"
+
 # --- AVRCP cover art plumbing (both boards). ---------------------------------
 # obexd only speaks to a session bus; the image runs a private one
 # (obex-bus.service). Missing pieces here = silently no cover art.

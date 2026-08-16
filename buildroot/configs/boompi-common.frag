@@ -193,6 +193,10 @@ BR2_PACKAGE_HTOP=y
 BR2_PACKAGE_LIBCURL=y
 BR2_PACKAGE_LIBCURL_CURL=y
 BR2_PACKAGE_LIBCURL_VERBOSE=y
+# CA trust store for on-box curl/wget HTTPS. boompid's updater doesn't
+# need it (rustls + compiled-in webpki roots), but without it every
+# other HTTPS client on the box fails with a trust-anchor error.
+BR2_PACKAGE_CA_CERTIFICATES=y
 
 # Filesystem / image
 BR2_TARGET_ROOTFS_EXT2=y
