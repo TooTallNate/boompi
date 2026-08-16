@@ -53,6 +53,7 @@ define RETROARCH_CONFIGURE_CMDS
 		--disable-vulkan \
 		--disable-opengl \
 		--enable-opengles \
+		--enable-opengles3 \
 		--enable-egl \
 		--enable-kms \
 		--disable-videocore \

@@ -1,0 +1,8 @@
+config BR2_PACKAGE_LIBRETRO_MUPEN64PLUS_NEXT_PI4
+	bool "libretro-mupen64plus-next-pi4"
+	help
+	  Pi 4 (BCM2711/Cortex-A72) build of the mupen64plus-next core.
+	  The rpi3_64 build runs on the Pi 3 but its dynarec segfaults
+	  on the A72; Batocera builds per-board (platform=rpi4_64,
+	  GLES3) and so do we. boompid's launcher picks this variant on
+	  Pi 4 hardware.

@@ -256,7 +256,20 @@ mod run {
         if app.shared.read().await.game_running.is_some() || unit_active().await {
             bail!("a game is already running");
         }
-        let core_path = format!("/usr/lib/libretro/{core}_libretro.so");
+        // Per-board core variants: JIT-heavy cores are built per SoC
+        // (the N64 recompiler runs on the Pi 3's A53 but jumps into
+        // never-written JIT memory on the Pi 4's A72 - Batocera also
+        // builds these per board). A <core>_pi4_libretro.so is
+        // preferred on Pi 4 hardware when present.
+        let is_pi4 = std::fs::read_to_string("/proc/device-tree/model")
+            .map(|m| m.contains("Raspberry Pi 4"))
+            .unwrap_or(false);
+        let pi4_path = format!("/usr/lib/libretro/{core}_pi4_libretro.so");
+        let core_path = if is_pi4 && std::path::Path::new(&pi4_path).exists() {
+            pi4_path
+        } else {
+            format!("/usr/lib/libretro/{core}_libretro.so")
+        };
         if !std::path::Path::new(&core_path).exists() {
             bail!("core {core} is not installed in this image");
         }
