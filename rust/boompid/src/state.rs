@@ -177,7 +177,11 @@ impl App {
             required: !cfg.setup_complete,
             wifi_status: None,
         };
-        let cfg2_volume = cfg.volume.clamp(0.0, 1.0);
+        // Boot ceiling: restore the persisted volume but never wake
+        // louder than 70% - a restart must not be able to blast the
+        // house, whatever state was persisted (bench: a calibration
+        // session left 1.0 behind; 12:30am; wife).
+        let cfg2_volume = cfg.volume.clamp(0.0, 0.7);
         let cfg2_timezone = cfg.timezone.clone();
         let cfg2_ntp = cfg.ntp;
         let cfg2_emoji_font = cfg.settings.emoji_font.clone();
