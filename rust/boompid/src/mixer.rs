@@ -103,7 +103,16 @@ async fn reconcile(music: f32, game: f32) {
             .get("application.name")
             .and_then(|v| v.as_str())
             .unwrap_or("");
-        let desired = if node_name.starts_with("bluez_input.") || app_name == "boompi-music" {
+        let desired = if node_name.starts_with("bluez_input.") {
+            // Bench-calibrated makeup gain: identical content measured
+            // -13.6 dBFS over Bluetooth vs -9.3 over AirPlay AND
+            // Spotify (which agree to 0.1 dB) - iOS reserves ~4.3 dB
+            // of SBC headroom even at confirmed-max absolute volume.
+            // +4.3 dB linear = x1.64 = x1.18 in wpctl's cubic scale,
+            // so all three sources land at the same loudness for the
+            // same content.
+            (music * 1.18).min(1.18)
+        } else if app_name == "boompi-music" {
             music
         } else if app_name == "RetroArch" {
             game
@@ -134,7 +143,7 @@ fn current_volume(info: &serde_json::Value) -> Option<f32> {
 
 async fn set_volume(id: u64, volume: f32) {
     let _ = tokio::process::Command::new("wpctl")
-        .args(["set-volume", &id.to_string(), &format!("{:.3}", volume.clamp(0.0, 1.0))])
+        .args(["set-volume", &id.to_string(), &format!("{:.3}", volume.clamp(0.0, 1.25))])
         .output()
         .await;
 }
