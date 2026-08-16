@@ -458,6 +458,28 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
+        ui.on_wifi_rejoin(move |ssid| {
+            let _ = tx.send(ClientMessage::Wifi(boompi_proto::WifiAction::Rejoin {
+                ssid: ssid.to_string(),
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_wifi_disconnect(move || {
+            let _ = tx.send(ClientMessage::Wifi(boompi_proto::WifiAction::Disconnect));
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_wifi_ap_toggled(move |enabled| {
+            let _ = tx.send(ClientMessage::Wifi(boompi_proto::WifiAction::Ap {
+                enabled,
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
         ui.on_theme_toggled(move |light| {
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
                 theme: Some(if light {

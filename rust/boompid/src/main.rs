@@ -11,13 +11,11 @@
 #[cfg(target_os = "linux")]
 mod airplay;
 #[cfg(target_os = "linux")]
-mod mixer;
-#[cfg(target_os = "linux")]
-mod netname;
-#[cfg(target_os = "linux")]
 mod artwork;
 #[cfg(target_os = "linux")]
 mod battery;
+#[cfg(target_os = "linux")]
+mod ble_gatt;
 #[cfg(target_os = "linux")]
 mod bluetooth;
 mod boxprofile;
@@ -28,6 +26,10 @@ mod clock;
 mod config;
 mod fonts;
 mod games;
+#[cfg(target_os = "linux")]
+mod mixer;
+#[cfg(target_os = "linux")]
+mod netname;
 // DSP is platform-independent (unit-tested everywhere) but only consumed by
 // the Linux-only visualizer.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -114,6 +116,10 @@ async fn main() -> anyhow::Result<()> {
         {
             tracing::info!("hardware mode: BlueZ source + INA260 battery + visualizer");
             bluetooth::spawn(app.clone());
+            // BLE GATT control bridge: the WebSocket protocol over
+            // Bluetooth LE for clients with no shared IP network
+            // (native phone apps, Web Bluetooth). See docs/BLE.md.
+            ble_gatt::spawn(app.clone());
             netname::spawn(app.clone());
             mixer::spawn(app.clone());
             battery::spawn(app.clone());
@@ -169,6 +175,20 @@ async fn main() -> anyhow::Result<()> {
                         }
                         Ok(_) => tracing::info!("setup pending; network already available"),
                         Err(err) => tracing::warn!(%err, "wifi status unavailable for onboarding"),
+                    }
+                });
+            }
+            // Wi-Fi watcher: keep the mirrored WifiState fresh (panel
+            // Wi-Fi card, hotspot toggle) even when connectivity changes
+            // outside our own actions (router reboot, lease change).
+            {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    // Let NetworkManager + the server's port binding settle.
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    loop {
+                        app.refresh_wifi().await;
+                        tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                     }
                 });
             }

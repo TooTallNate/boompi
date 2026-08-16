@@ -134,6 +134,10 @@ pub struct Shared {
     pub bt_devices: Vec<BtDevice>,
     pub settings: Settings,
     pub setup: SetupState,
+    /// Wi-Fi link + hotspot state mirrored to clients. Refreshed by the
+    /// watcher task in main.rs and after every Wi-Fi action; sim/non-Linux
+    /// paths mutate it directly.
+    pub wifi: boompi_proto::WifiState,
     /// Durable clock prefs (see config::Config::timezone).
     pub timezone: Option<String>,
     pub ntp: Option<bool>,
@@ -289,6 +293,34 @@ impl App {
         self.broadcast(ServerMessage::Setup(setup));
     }
 
+    /// Re-read Wi-Fi facts from NetworkManager and broadcast when they
+    /// changed. Called by the periodic watcher and after every Wi-Fi
+    /// action (HTTP or protocol).
+    #[cfg(target_os = "linux")]
+    pub async fn refresh_wifi(&self) {
+        let mut wifi = match crate::wifi::state().await {
+            Ok(w) => w,
+            Err(err) => {
+                tracing::debug!(%err, "wifi state refresh failed");
+                return;
+            }
+        };
+        wifi.settings_url = self.settings_url();
+        self.publish_wifi(wifi).await;
+    }
+
+    /// Store + broadcast a Wi-Fi state snapshot (no-op when unchanged).
+    pub async fn publish_wifi(&self, wifi: boompi_proto::WifiState) {
+        {
+            let mut s = self.shared.write().await;
+            if s.wifi == wifi {
+                return;
+            }
+            s.wifi = wifi.clone();
+        }
+        self.broadcast(ServerMessage::Wifi(wifi));
+    }
+
     /// Persist the current runtime settings back to the config file.
     pub async fn persist_config(&self) {
         let Some(path) = &self.config_path else {
@@ -435,6 +467,7 @@ impl App {
             bt_devices: s.bt_devices.clone(),
             settings: s.settings.clone(),
             setup: s.setup.clone(),
+            wifi: s.wifi.clone(),
             emoji_fonts: boompi_proto::EmojiFontsState {
                 #[cfg(target_os = "linux")]
                 fonts: crate::fonts::list(&s.emoji_font),
@@ -704,6 +737,73 @@ impl App {
                 }
                 if renamed {
                     self.cfg_generation.send_modify(|g| *g += 1);
+                }
+            }
+            ClientMessage::Wifi(action) => {
+                #[cfg(target_os = "linux")]
+                {
+                    // Spawned: joins can take tens of seconds and this is
+                    // called from the per-connection WebSocket loop.
+                    let app = self.clone();
+                    tokio::spawn(async move {
+                        use boompi_proto::WifiAction as W;
+                        let result = match &action {
+                            W::Rejoin { ssid } => crate::wifi::connect(ssid, None).await,
+                            W::Disconnect => crate::wifi::disconnect().await,
+                            W::Forget { ssid } => crate::wifi::forget(ssid).await,
+                            W::Ap { enabled: true } => {
+                                crate::wifi::start_ap(&app.speaker_name().await).await
+                            }
+                            W::Ap { enabled: false } => crate::wifi::stop_ap().await,
+                        };
+                        if let Err(err) = result {
+                            tracing::warn!(%err, ?action, "wifi action failed");
+                        }
+                        app.refresh_wifi().await;
+                    });
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    // No NetworkManager (--sim / non-Linux): mirror state
+                    // so UI development has something to bind to.
+                    use boompi_proto::WifiAction as W;
+                    let mut wifi = self.shared.read().await.wifi.clone();
+                    match action {
+                        W::Rejoin { ssid } => {
+                            wifi.connected = Some(ssid);
+                            wifi.ip = Some("192.168.1.42/24".into());
+                            wifi.ap_active = false;
+                            wifi.ap_ssid = None;
+                        }
+                        W::Disconnect => {
+                            wifi.connected = None;
+                            wifi.ip = None;
+                        }
+                        W::Forget { ssid } => {
+                            wifi.saved.retain(|s| s != &ssid);
+                            if wifi.connected.as_deref() == Some(ssid.as_str()) {
+                                wifi.connected = None;
+                                wifi.ip = None;
+                            }
+                        }
+                        W::Ap { enabled } => {
+                            wifi.ap_active = enabled;
+                            wifi.ap_ssid = if enabled {
+                                Some(self.speaker_name().await)
+                            } else {
+                                None
+                            };
+                            if enabled {
+                                wifi.connected = None;
+                                wifi.ip = Some("10.42.0.1/24".into());
+                                wifi.settings_url = Some("http://10.42.0.1/".into());
+                            } else {
+                                wifi.ip = None;
+                                wifi.settings_url = self.settings_url();
+                            }
+                        }
+                    }
+                    self.publish_wifi(wifi).await;
                 }
             }
             ClientMessage::PreviewScreensaver => {

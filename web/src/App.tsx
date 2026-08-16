@@ -451,7 +451,7 @@ function WifiSection() {
               )}
               {wifi.ap_active && (
                 <span className="text-[13px] text-accent">
-                  - setup hotspot active
+                  - hotspot active
                 </span>
               )}
             </span>
@@ -468,14 +468,35 @@ function WifiSection() {
 
           {wifi.ap_active && (
             <p className="py-1.5 text-sm text-dim">
-              You’re connected through the speaker’s setup hotspot. The
+              You’re connected through the speaker’s own hotspot. The
               networks below were found just before the hotspot started.
               Joining one switches the hotspot off while the speaker
               connects - rejoin your normal Wi-Fi afterwards. If the
               password is wrong, the hotspot comes back within a minute so
-              you can retry. You can also skip this and set up Wi-Fi later
-              from this page over your home network or Ethernet.
+              you can retry.
             </p>
+          )}
+
+          {/* Hotspot: the speaker broadcasts its own open network so a
+              phone can reach this page (and the panel's WebSocket) with
+              no shared Wi-Fi at all - camping mode. Hidden while it is
+              the connection being used (turning it off would strand the
+              phone mid-request; the panel can always turn it off). */}
+          {!wifi.ap_active && (
+            <div className="flex items-center justify-between gap-3 border-t border-line py-2.5">
+              <span>
+                Hotspot{" "}
+                <span className="block text-[13px] text-dim">
+                  Speaker broadcasts its own network - control it anywhere,
+                  no shared Wi-Fi needed. Turning it on drops the speaker
+                  off this network.
+                </span>
+              </span>
+              <Toggle
+                checked={wifi.ap_active}
+                onChange={(v) => act({ action: "ap", enabled: v })}
+              />
+            </div>
           )}
 
           {wifi.enabled &&
@@ -502,6 +523,16 @@ function WifiSection() {
                       <span className="text-[12px] text-dim">saved</span>
                     )}
                   </button>
+                  {n.in_use && (
+                    <button
+                      className="flex-none rounded-lg border border-line px-3 py-1 text-[13px] text-dim hover:bg-line/30"
+                      onClick={() => act({ action: "disconnect" })}
+                      disabled={busy}
+                      title="Leave this network without forgetting its password"
+                    >
+                      Disconnect
+                    </button>
+                  )}
                   {(n.saved || n.in_use) && (
                     <button
                       className="flex-none rounded-lg border border-err/40 px-3 py-1 text-[13px] text-err hover:bg-err/10"

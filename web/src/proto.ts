@@ -109,6 +109,27 @@ export type BtDeviceAction =
   | "disconnect"
   | "remove";
 
+/** Wi-Fi link + hotspot state mirrored to all clients (scan results
+    stay on GET /api/wifi). */
+export interface WifiState {
+  supported: boolean;
+  enabled: boolean;
+  connected?: string;
+  ip?: string;
+  ap_active: boolean;
+  ap_ssid?: string;
+  saved: string[];
+  /** Settings-UI URL reachable right now (hotspot gateway while
+      ap_active). */
+  settings_url?: string;
+}
+
+export type WifiAction =
+  | { action: "rejoin"; ssid: string }
+  | { action: "disconnect" }
+  | { action: "forget"; ssid: string }
+  | { action: "ap"; enabled: boolean };
+
 export interface Hello {
   proto_version: number;
   name: string;
@@ -123,6 +144,7 @@ export interface AppState {
   pairing: Pairing;
   bt_devices: BtDevice[];
   setup: { required: boolean; wifi_status?: unknown };
+  wifi: WifiState;
   emoji_fonts: EmojiFontsState;
   updates: UpdateState;
   // Present but unused by the settings UI so far:
@@ -176,6 +198,7 @@ export type ServerMessage =
   | ({ type: "emoji_fonts" } & EmojiFontsState)
   | ({ type: "update" } & UpdateState)
   | ({ type: "pairing" } & Pairing)
+  | ({ type: "wifi" } & WifiState)
   | { type: "bt_devices"; devices: BtDevice[] }
   | { type: "volume"; level: number }
   | ({ type: "battery" } & Battery)
@@ -192,4 +215,5 @@ export type ClientMessage =
   | { type: "game"; action: "launch"; system: string; file: string }
   | { type: "game"; action: "stop" }
   | { type: "pairing"; action: PairingAction }
-  | { type: "bt_device"; address: string; action: BtDeviceAction };
+  | { type: "bt_device"; address: string; action: BtDeviceAction }
+  | ({ type: "wifi" } & WifiAction);

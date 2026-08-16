@@ -79,6 +79,17 @@ export component SettingsPanel inherits Rectangle {
     in property <string> update-status: "idle";
     in property <string> update-detail;
     in-out property <bool> update-channel-edge;
+    // Wi-Fi card (rejoin saved networks, disconnect, hotspot toggle).
+    // Joining NEW networks (password entry) stays on the web UI.
+    in property <bool> wifi-supported;
+    in property <string> wifi-connected; // SSID, "" = not connected
+    in property <string> wifi-ip;
+    in-out property <bool> wifi-ap-active;
+    in property <string> wifi-ap-ssid;
+    in property <[string]> wifi-saved: [];
+    callback wifi-rejoin(string);
+    callback wifi-disconnect();
+    callback wifi-ap-toggled(bool);
     callback emoji-font-tapped(string, string); // (id, status)
     callback update-check();
     callback update-apply();
@@ -387,6 +398,126 @@ export component SettingsPanel inherits Rectangle {
                         checked <=> root.clock-24h;
                         toggled => {
                             root.clock-24h-toggled(self.checked);
+                        }
+                    }
+                }
+
+                // ---- Wi-Fi ------------------------------------------------
+                // Touch-appropriate subset: rejoin a saved network, drop
+                // the current one, and the hotspot toggle. New networks
+                // (keyboard for the password) go through the web UI.
+                if root.wifi-supported: Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: wifi-col.preferred-height;
+                    wifi-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        HorizontalLayout {
+                            spacing: 0.56rem;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 0.11rem;
+                                Text {
+                                    text: "Wi-Fi";
+                                    color: Theme.fg;
+                                    font-size: 0.94rem;
+                                }
+                                Text {
+                                    text: root.wifi-connected != ""
+                                        ? "Connected to “" + root.wifi-connected + "”"
+                                            + (root.wifi-ip != "" ? " - " + root.wifi-ip : "")
+                                        : root.wifi-ap-active
+                                        ? "Hotspot mode - not on a network"
+                                        : "Not connected";
+                                    color: root.wifi-connected != "" ? Theme.good : Theme.dimmer;
+                                    font-size: 0.72rem;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Rectangle { }
+                            if root.wifi-connected != "": VerticalLayout {
+                                alignment: center;
+                                ActionButton {
+                                    text: "Disconnect";
+                                    clicked => {
+                                        root.wifi-disconnect();
+                                    }
+                                }
+                            }
+                        }
+                        // Saved networks: tap to rejoin (password kept by
+                        // the saved profile).
+                        for ssid[i] in root.wifi-saved: VerticalLayout {
+                            spacing: 0.5rem;
+                            Rectangle {
+                                height: 0.06rem;
+                                background: Theme.faint;
+                            }
+                            HorizontalLayout {
+                                spacing: 0.56rem;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Text {
+                                        text: ssid;
+                                        color: Theme.fg;
+                                        font-size: 0.89rem;
+                                        overflow: elide;
+                                    }
+                                }
+                                Rectangle { }
+                                VerticalLayout {
+                                    alignment: center;
+                                    if ssid == root.wifi-connected: Text {
+                                        text: "Connected";
+                                        color: Theme.good;
+                                        font-size: 0.83rem;
+                                    }
+                                    if ssid != root.wifi-connected: ActionButton {
+                                        text: "Join";
+                                        clicked => {
+                                            root.wifi-rejoin(ssid);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Rectangle {
+                            height: 0.06rem;
+                            background: Theme.faint;
+                        }
+                        // Hotspot: the speaker broadcasts its own network so
+                        // a phone can reach the web UI (and control it) with
+                        // no shared Wi-Fi - camping mode.
+                        HorizontalLayout {
+                            spacing: 0.56rem;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 0.11rem;
+                                Text {
+                                    text: "Hotspot";
+                                    color: Theme.fg;
+                                    font-size: 0.89rem;
+                                }
+                                Text {
+                                    text: root.wifi-ap-active
+                                        ? "Broadcasting “" + root.wifi-ap-ssid + "” - join it and scan the QR below"
+                                        : "Speaker broadcasts its own network - control it anywhere, no Wi-Fi needed";
+                                    color: root.wifi-ap-active ? Theme.good : Theme.dimmer;
+                                    font-size: 0.72rem;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Rectangle { }
+                            VerticalLayout {
+                                alignment: center;
+                                Switch {
+                                    checked <=> root.wifi-ap-active;
+                                    toggled => {
+                                        root.wifi-ap-toggled(self.checked);
+                                    }
+                                }
+                            }
                         }
                     }
                 }

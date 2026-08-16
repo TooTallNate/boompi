@@ -7,7 +7,9 @@
 //!
 //! AP mode: a `shared` connection named [`AP_CONNECTION`] turns wlan0 into
 //! an open access point with NM's built-in DHCP - the onboarding path when
-//! no Wi-Fi is configured (see docs/PLAN.md Phase 5).
+//! no Wi-Fi is configured (see docs/PLAN.md Phase 5), and toggleable at any
+//! time from the panel/web settings so the web UI stays reachable with no
+//! shared network at all (camping mode).
 
 #![cfg(target_os = "linux")]
 
@@ -205,6 +207,56 @@ pub async fn connect(ssid: &str, psk: Option<&str>) -> anyhow::Result<()> {
         }
     }
     tracing::info!(%ssid, "wifi connected");
+    Ok(())
+}
+
+/// Cheap always-known facts for the protocol's [`WifiState`] broadcast:
+/// no scan, no `settings_url` (the caller fills that in - it needs the
+/// bound UI port).
+pub async fn state() -> anyhow::Result<boompi_proto::WifiState> {
+    let st = status(false).await?;
+    let ap_ssid = if st.ap_active {
+        nmcli(&[
+            "-t",
+            "-g",
+            "802-11-wireless.ssid",
+            "con",
+            "show",
+            AP_CONNECTION,
+        ])
+        .await
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    } else {
+        None
+    };
+    Ok(boompi_proto::WifiState {
+        supported: st.supported,
+        enabled: st.enabled,
+        connected: st.connected,
+        ip: st.ip,
+        ap_active: st.ap_active,
+        ap_ssid,
+        saved: st.saved,
+        settings_url: None,
+    })
+}
+
+/// Drop the current Wi-Fi connection without deleting its profile.
+/// `nmcli dev disconnect` (not `con down`) on purpose: it also blocks
+/// autoconnect until something is activated manually, so "leave my
+/// home network" sticks instead of NM instantly rejoining.
+pub async fn disconnect() -> anyhow::Result<()> {
+    let devices = nmcli(&["-t", "-f", "DEVICE,TYPE", "dev"]).await?;
+    let dev = devices
+        .lines()
+        .map(split_terse)
+        .find(|f| f.len() >= 2 && f[1] == "wifi")
+        .map(|f| f[0].clone())
+        .ok_or_else(|| anyhow::anyhow!("no wifi device"))?;
+    nmcli(&["dev", "disconnect", &dev]).await?;
+    tracing::info!(%dev, "wifi disconnected");
     Ok(())
 }
 

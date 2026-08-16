@@ -183,6 +183,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let saver_kind = screensaver_kind_str(state.settings.screensaver);
             let saver_min = state.settings.screensaver_min.min(240) as i32;
             let clock_24h = state.settings.clock_24h;
+            apply_wifi(ctx, state.wifi.clone());
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 apply_emoji_fonts(&ui, &emoji);
                 apply_update(&ui, &updates);
@@ -251,6 +252,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             });
         }
         ServerMessage::BtDevices { .. } => {} // panel device list: future work
+        ServerMessage::Wifi(wifi) => apply_wifi(ctx, wifi),
         ServerMessage::EmojiFonts(state) => {
             let _ = ctx
                 .weak
@@ -364,6 +366,36 @@ fn clear_track(ctx: &NetCtx) {
         ui.set_playing(false);
         ui.set_has_artwork(false);
         ui.global::<crate::Theme>().set_art_active(false);
+    });
+}
+
+/// Project WifiState into the settings screen's Wi-Fi card. Also keeps
+/// the settings QR current: toggling the hotspot changes the reachable
+/// URL (LAN IP ↔ 10.42.0.1) and Hello only arrives on (re)connect.
+fn apply_wifi(ctx: &NetCtx, wifi: boompi_proto::WifiState) {
+    // QR pixels off the UI thread, like the Hello handler.
+    let qr = wifi
+        .settings_url
+        .as_deref()
+        .and_then(crate::util::qr_pixels);
+    let saved: Vec<slint::SharedString> = wifi
+        .saved
+        .iter()
+        .map(|s| slint::SharedString::from(s.as_str()))
+        .collect();
+    let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
+        ui.set_wifi_supported(wifi.supported);
+        ui.set_wifi_connected(wifi.connected.unwrap_or_default().into());
+        ui.set_wifi_ip(wifi.ip.unwrap_or_default().into());
+        ui.set_wifi_ap_active(wifi.ap_active);
+        ui.set_wifi_ap_ssid(wifi.ap_ssid.unwrap_or_default().into());
+        ui.set_wifi_saved(ModelRc::new(VecModel::from(saved)));
+        if let Some(url) = wifi.settings_url {
+            ui.set_settings_url(url.into());
+            if let Some(buf) = qr {
+                ui.set_settings_qr(slint::Image::from_rgba8(buf));
+            }
+        }
     });
 }
 

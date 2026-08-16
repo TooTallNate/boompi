@@ -345,6 +345,57 @@ pub struct SettingsPatch {
     pub screensaver_min: Option<u32>,
 }
 
+/// Wi-Fi link + hotspot state, mirrored to all clients (panel Wi-Fi
+/// card, web settings). Scan results are *not* included - scanning is
+/// on-demand and stays on `GET /api/wifi`; this carries only the cheap
+/// always-known facts.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct WifiState {
+    /// A Wi-Fi capable device exists.
+    pub supported: bool,
+    /// Radio on?
+    pub enabled: bool,
+    /// SSID of the active connection, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connected: Option<String>,
+    /// wlan IP (CIDR form) when connected or in AP mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ip: Option<String>,
+    /// The speaker's own hotspot (open AP) is broadcasting.
+    pub ap_active: bool,
+    /// SSID the hotspot broadcasts while `ap_active`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ap_ssid: Option<String>,
+    /// Saved Wi-Fi profile names (rejoinable without a password).
+    #[serde(default)]
+    pub saved: Vec<String>,
+    /// Browser URL of the settings web UI reachable *right now* (LAN
+    /// address, or the hotspot gateway while `ap_active`). The panel
+    /// re-renders its QR code from this - `Hello.settings_url` only
+    /// arrives on connect and goes stale when the hotspot toggles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings_url: Option<String>,
+}
+
+/// Wi-Fi actions available over the protocol (panel + web). Joining a
+/// *new* network (needs a password prompt/keyboard) stays on the HTTP
+/// API (`POST /api/wifi` with `connect`); these cover everything a
+/// touchscreen can drive.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "action")]
+pub enum WifiAction {
+    /// Reconnect a saved network (profile keeps its password).
+    Rejoin { ssid: String },
+    /// Drop the current connection (suppresses autoconnect until a
+    /// manual rejoin - the "leave my home Wi-Fi" camping prep).
+    Disconnect,
+    /// Delete a saved profile.
+    Forget { ssid: String },
+    /// The speaker's own hotspot: phones join it to reach the web UI
+    /// (and this WebSocket) with no shared network - camping mode.
+    Ap { enabled: bool },
+}
+
 /// Live Wi-Fi join progress, surfaced on the panel: the join usually
 /// kills the portal connection it was requested over (single radio),
 /// so the speaker's own screen is the only reliable status display.
@@ -532,6 +583,8 @@ pub struct State {
     pub settings: Settings,
     pub setup: SetupState,
     #[serde(default)]
+    pub wifi: WifiState,
+    #[serde(default)]
     pub emoji_fonts: EmojiFontsState,
     #[serde(default)]
     pub updates: UpdateState,
@@ -598,6 +651,7 @@ pub enum ServerMessage {
     },
     Settings(Settings),
     Setup(SetupState),
+    Wifi(WifiState),
     EmojiFonts(EmojiFontsState),
     Update(UpdateState),
     /// Relay: a client asked to preview the screensaver; the panel
@@ -647,6 +701,8 @@ pub enum ClientMessage {
     },
     SetSettings(SettingsPatch),
     Setup(SetupCommand),
+    /// Wi-Fi management (rejoin/disconnect/forget/hotspot).
+    Wifi(WifiAction),
     /// Preview the configured screensaver on the panel right now
     /// (relayed to the panel via [`ServerMessage::ScreensaverPreview`]).
     PreviewScreensaver,
@@ -700,6 +756,106 @@ pub fn decode_visualizer_frame(frame: &[u8]) -> Option<Vec<u16>> {
             .map(|c| u16::from_le_bytes([c[0], c[1]]))
             .collect(),
     )
+}
+
+// ---------------------------------------------------------------------------
+// BLE GATT transport (see docs/BLE.md)
+// ---------------------------------------------------------------------------
+
+/// BLE GATT control channel: the same JSON [`ServerMessage`] /
+/// [`ClientMessage`] envelopes as the WebSocket, carried over a custom
+/// GATT service so phones (native apps via CoreBluetooth/Android BLE,
+/// or Chrome via Web Bluetooth) can control the speaker with **no
+/// shared IP network at all**.
+///
+/// JSON messages routinely exceed the ATT MTU (~23-517 bytes), so both
+/// characteristics carry *chunked* messages: each chunk starts with a
+/// 1-byte header of [`ble::CHUNK_FIRST`] / [`ble::CHUNK_LAST`] flags.
+/// High-rate binary frames (visualizer, artwork) are deliberately NOT
+/// carried over BLE - fetch artwork via `GET /art/{id}` when an IP
+/// path exists.
+pub mod ble {
+    /// Primary GATT service advertised by boompid.
+    pub const SERVICE_UUID: &str = "a5e90001-9c60-4b2a-a6ca-0d0a2b5f0e1f";
+    /// Write / write-without-response: client → server chunked JSON
+    /// [`super::ClientMessage`].
+    pub const CONTROL_CHAR_UUID: &str = "a5e90002-9c60-4b2a-a6ca-0d0a2b5f0e1f";
+    /// Notify: server → client chunked JSON [`super::ServerMessage`]
+    /// deltas (subscribe, then read STATE for the initial snapshot).
+    pub const EVENTS_CHAR_UUID: &str = "a5e90003-9c60-4b2a-a6ca-0d0a2b5f0e1f";
+    /// Read: full JSON [`super::State`] snapshot (GATT long-read;
+    /// offset reads continue the snapshot taken at offset 0).
+    pub const STATE_CHAR_UUID: &str = "a5e90004-9c60-4b2a-a6ca-0d0a2b5f0e1f";
+
+    /// Chunk header flag: first chunk of a message (resets reassembly).
+    pub const CHUNK_FIRST: u8 = 0x01;
+    /// Chunk header flag: last chunk of a message (message complete).
+    pub const CHUNK_LAST: u8 = 0x02;
+
+    /// Reassembly cap: protocol messages are small; anything bigger is
+    /// a framing error, not a message.
+    pub const MAX_MESSAGE: usize = 64 * 1024;
+
+    /// Conservative default chunk size (header + payload) when the ATT
+    /// MTU is unknown: fits the 185-byte MTU iOS negotiates by default
+    /// (notification payload = MTU - 3).
+    pub const DEFAULT_CHUNK: usize = 176;
+
+    /// Split a message into tagged chunks of at most `max_chunk` bytes
+    /// (header byte included; `max_chunk` must be ≥ 2).
+    pub fn chunk_message(payload: &[u8], max_chunk: usize) -> Vec<Vec<u8>> {
+        let body = max_chunk.saturating_sub(1).max(1);
+        let mut chunks: Vec<Vec<u8>> = payload
+            .chunks(body)
+            .map(|c| {
+                let mut buf = Vec::with_capacity(1 + c.len());
+                buf.push(0);
+                buf.extend_from_slice(c);
+                buf
+            })
+            .collect();
+        if chunks.is_empty() {
+            chunks.push(vec![0]); // empty message: one empty chunk
+        }
+        chunks.first_mut().unwrap()[0] |= CHUNK_FIRST;
+        chunks.last_mut().unwrap()[0] |= CHUNK_LAST;
+        chunks
+    }
+
+    /// Reassembles chunked messages. One instance per client/direction.
+    #[derive(Debug, Default)]
+    pub struct Reassembler {
+        buf: Vec<u8>,
+        /// A FIRST chunk has arrived and the message is still open.
+        open: bool,
+    }
+
+    impl Reassembler {
+        /// Feed one chunk; returns the complete message when its LAST
+        /// chunk lands. Malformed sequences (missing FIRST, oversize)
+        /// drop the partial message and resynchronize on the next
+        /// FIRST chunk.
+        pub fn push(&mut self, chunk: &[u8]) -> Option<Vec<u8>> {
+            let (&flags, payload) = chunk.split_first()?;
+            if flags & CHUNK_FIRST != 0 {
+                self.buf.clear();
+                self.open = true;
+            } else if !self.open {
+                return None; // continuation without a start: drop
+            }
+            if self.buf.len() + payload.len() > MAX_MESSAGE {
+                self.buf.clear();
+                self.open = false;
+                return None;
+            }
+            self.buf.extend_from_slice(payload);
+            if flags & CHUNK_LAST != 0 {
+                self.open = false;
+                return Some(std::mem::take(&mut self.buf));
+            }
+            None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -772,6 +928,82 @@ mod tests {
             ClientMessage::Pairing {
                 action: PairingAction::Enable
             }
+        );
+    }
+
+    #[test]
+    fn wifi_messages_round_trip() {
+        let msg = ServerMessage::Wifi(WifiState {
+            supported: true,
+            enabled: true,
+            connected: Some("Home".into()),
+            ip: Some("192.168.1.7/24".into()),
+            ap_active: false,
+            ap_ssid: None,
+            saved: vec!["Home".into(), "Cabin".into()],
+            settings_url: Some("http://192.168.1.7/".into()),
+        });
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["type"], "wifi");
+        assert_eq!(json["connected"], "Home");
+        assert!(json.get("ap_ssid").is_none());
+        let back: ServerMessage = serde_json::from_value(json).unwrap();
+        assert_eq!(back, msg);
+
+        let rejoin: ClientMessage =
+            serde_json::from_str(r#"{"type":"wifi","action":"rejoin","ssid":"Home"}"#).unwrap();
+        assert_eq!(
+            rejoin,
+            ClientMessage::Wifi(WifiAction::Rejoin {
+                ssid: "Home".into()
+            })
+        );
+        let ap =
+            serde_json::to_value(ClientMessage::Wifi(WifiAction::Ap { enabled: true })).unwrap();
+        assert_eq!(ap["type"], "wifi");
+        assert_eq!(ap["action"], "ap");
+        assert_eq!(ap["enabled"], true);
+        let disc: ClientMessage =
+            serde_json::from_str(r#"{"type":"wifi","action":"disconnect"}"#).unwrap();
+        assert_eq!(disc, ClientMessage::Wifi(WifiAction::Disconnect));
+    }
+
+    #[test]
+    fn ble_chunking_round_trip() {
+        // Multi-chunk message survives reassembly.
+        let msg: Vec<u8> = (0..1000u32).map(|i| (i % 251) as u8).collect();
+        let chunks = ble::chunk_message(&msg, ble::DEFAULT_CHUNK);
+        assert!(chunks.len() > 1);
+        assert!(chunks.iter().all(|c| c.len() <= ble::DEFAULT_CHUNK));
+        assert_eq!(chunks[0][0] & ble::CHUNK_FIRST, ble::CHUNK_FIRST);
+        assert_eq!(chunks.last().unwrap()[0] & ble::CHUNK_LAST, ble::CHUNK_LAST);
+        let mut r = ble::Reassembler::default();
+        let mut out = None;
+        for (i, c) in chunks.iter().enumerate() {
+            let res = r.push(c);
+            if i + 1 < chunks.len() {
+                assert!(res.is_none());
+            } else {
+                out = res;
+            }
+        }
+        assert_eq!(out.unwrap(), msg);
+
+        // Single-chunk (and empty) messages carry FIRST|LAST.
+        let one = ble::chunk_message(b"hi", 100);
+        assert_eq!(one.len(), 1);
+        assert_eq!(one[0][0], ble::CHUNK_FIRST | ble::CHUNK_LAST);
+        assert_eq!(ble::Reassembler::default().push(&one[0]).unwrap(), b"hi");
+        let empty = ble::chunk_message(b"", 100);
+        assert_eq!(empty, vec![vec![ble::CHUNK_FIRST | ble::CHUNK_LAST]]);
+
+        // Continuation without a start is dropped; resync on next FIRST.
+        let mut r = ble::Reassembler::default();
+        assert!(r.push(&[0x00, 1, 2, 3]).is_none());
+        assert!(r.push(&[ble::CHUNK_LAST, 4]).is_none());
+        assert_eq!(
+            r.push(&[ble::CHUNK_FIRST | ble::CHUNK_LAST, 9]).unwrap(),
+            vec![9]
         );
     }
 

@@ -47,9 +47,32 @@ const PLAYLIST: &[SimTrack] = &[
 ];
 
 pub fn spawn(app: SharedApp) {
+    tokio::spawn(seed_wifi(app.clone()));
     tokio::spawn(track_loop(app.clone()));
     tokio::spawn(battery_loop(app.clone()));
     tokio::spawn(visualizer_loop(app));
+}
+
+/// Fake Wi-Fi facts so the panel/web Wi-Fi cards are exercisable
+/// anywhere; the non-Linux `ClientMessage::Wifi` handler mutates these.
+async fn seed_wifi(app: SharedApp) {
+    // Let the server bind its UI listener first so settings_url resolves.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let wifi = boompi_proto::WifiState {
+        supported: true,
+        enabled: true,
+        connected: Some("Simulated Wi-Fi".into()),
+        ip: Some("192.168.1.42/24".into()),
+        ap_active: false,
+        ap_ssid: None,
+        saved: vec![
+            "Simulated Wi-Fi".into(),
+            "Cabin".into(),
+            "Phone Hotspot".into(),
+        ],
+        settings_url: app.settings_url(),
+    };
+    app.publish_wifi(wifi).await;
 }
 
 /// Simulates a connected Bluetooth phone cycling through a playlist.
