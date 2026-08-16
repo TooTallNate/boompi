@@ -104,15 +104,17 @@ async fn reconcile(music: f32, game: f32) {
             .and_then(|v| v.as_str())
             .unwrap_or("");
         let desired = if node_name.starts_with("bluez_input.") {
-            // Bench-calibrated makeup gain: identical content measured
-            // -13.6 dBFS over Bluetooth vs -9.3 over AirPlay AND
-            // Spotify (which agree to 0.1 dB) - iOS reserves ~4.3 dB
-            // of SBC headroom even at confirmed-max absolute volume.
-            // +4.3 dB linear = x1.64 = x1.18 in wpctl's cubic scale,
-            // so all three sources land at the same loudness for the
-            // same content.
-            (music * 1.18).min(1.18)
+            // Fixed makeup into the bus, bench-calibrated: identical
+            // content measured -13.6 dBFS over Bluetooth vs -9.3 over
+            // AirPlay AND Spotify (which agree to 0.1 dB) - iOS
+            // reserves ~4.3 dB of SBC headroom even at confirmed-max
+            // absolute volume. +4.3 dB = x1.18 in wpctl's cubic scale.
+            1.18
         } else if app_name == "boompi-music" {
+            // Bridges mix into the bus at unity.
+            1.0
+        } else if node_name == "music-out" {
+            // The loopback out of the music bus: THE music volume.
             music
         } else if app_name == "RetroArch" {
             game

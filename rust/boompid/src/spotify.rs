@@ -398,7 +398,7 @@ impl Sink for PwCatSink {
                     // track (bare pw-cat streams are indistinguishable
                     // from each other in pw-dump).
                     "-P",
-                    "{ application.name = boompi-music }",
+                    "{ application.name = boompi-music, target.object = music-bus }",
                     "-",
                 ])
                 .stdin(Stdio::piped())

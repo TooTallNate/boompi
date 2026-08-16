@@ -168,6 +168,9 @@ pub struct SettingsConfig {
     /// source is active (music ducks the game).
     #[serde(default = "default_game_volume")]
     pub game_volume: f32,
+    /// Panel visualizer opacity (0.1-1.0).
+    #[serde(default = "default_visualizer_opacity")]
+    pub visualizer_opacity: f32,
     /// Idle screensaver style ("off" / "clock" / "matrix" / "art").
     #[serde(default)]
     pub screensaver: boompi_proto::ScreensaverKind,
@@ -178,6 +181,10 @@ pub struct SettingsConfig {
 
 fn default_screensaver_min() -> u32 {
     10
+}
+
+fn default_visualizer_opacity() -> f32 {
+    1.0
 }
 
 fn default_game_volume() -> f32 {
@@ -207,6 +214,7 @@ impl Default for SettingsConfig {
             mqtt_username: String::new(),
             mqtt_password: String::new(),
             game_volume: default_game_volume(),
+            visualizer_opacity: default_visualizer_opacity(),
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
         }

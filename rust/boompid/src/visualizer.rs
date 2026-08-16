@@ -39,6 +39,10 @@ async fn capture(app: &SharedApp) -> anyhow::Result<()> {
             &SAMPLE_RATE.to_string(),
             "--channels",
             "1",
+            // Tap the music bus's monitor: the unity mix of every
+            // music source, before the music volume is applied.
+            "--target",
+            "music-bus",
             "-P",
             "{ stream.capture.sink = true }",
             "-",
@@ -89,17 +93,12 @@ async fn capture(app: &SharedApp) -> anyhow::Result<()> {
 
         if last_frame.elapsed() >= FRAME_INTERVAL {
             last_frame = tokio::time::Instant::now();
-            // Bars show CONTENT, independent of output volume (a
-            // deliberate choice: the display looks the same at any
-            // loudness). The capture taps the sink monitor, which is
-            // post-stream-volume - so divide the music track's volume
-            // back out. Deterministic: boompid owns that number.
-            // Capped so near-mute doesn't amplify noise into a show.
-            let gain = {
-                let v = app.shared.read().await.volume;
-                (1.0 / v.max(0.06)).min(16.0)
-            };
-            let bars = analyzer.process(&ring, gain);
+            // Bars show CONTENT, independent of output volume: the
+            // capture taps the music BUS monitor, which mixes the
+            // sources at unity BEFORE the music volume is applied
+            // (see pipewire.conf.d/40-boompi-music-bus.conf). No
+            // compensation math, no quantization loss at low volume.
+            let bars = analyzer.process(&ring, 1.0);
             let active = bars.iter().any(|&b| b > 0);
             if active {
                 was_active = true;

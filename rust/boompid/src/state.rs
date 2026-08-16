@@ -166,6 +166,7 @@ impl App {
             airplay_classic: cfg.settings.airplay_classic,
             clock_24h: cfg.settings.clock_24h,
             game_volume: cfg.settings.game_volume,
+            visualizer_opacity: cfg.settings.visualizer_opacity,
             mqtt_broker: cfg.settings.mqtt_broker.clone(),
             mqtt_username: cfg.settings.mqtt_username.clone(),
             mqtt_password: cfg.settings.mqtt_password.clone(),
@@ -307,6 +308,7 @@ impl App {
             cfg.settings.airplay_classic = s.settings.airplay_classic;
             cfg.settings.clock_24h = s.settings.clock_24h;
             cfg.settings.game_volume = s.settings.game_volume;
+            cfg.settings.visualizer_opacity = s.settings.visualizer_opacity;
             cfg.settings.mqtt_broker = s.settings.mqtt_broker.clone();
             cfg.settings.mqtt_username = s.settings.mqtt_username.clone();
             cfg.settings.mqtt_password = s.settings.mqtt_password.clone();
@@ -621,6 +623,9 @@ impl App {
                     }
                     if let Some(v) = patch.game_volume {
                         s.settings.game_volume = v.clamp(0.0, 1.0);
+                    }
+                    if let Some(v) = patch.visualizer_opacity {
+                        s.settings.visualizer_opacity = v.clamp(0.1, 1.0);
                     }
                     if let Some(classic) = patch.airplay_classic {
                         if classic != s.settings.airplay_classic {

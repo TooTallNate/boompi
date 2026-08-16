@@ -430,6 +430,10 @@ async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
                 "2",
                 "--format",
                 "s16",
+                // Tag + route: the mixer steers music streams, and the
+                // music bus is where they mix (pre-volume, unity).
+                "-P",
+                "{ application.name = boompi-music, target.object = music-bus }",
                 "-",
             ])
             .stdin(std::process::Stdio::piped())
