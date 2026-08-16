@@ -29,6 +29,7 @@ export interface Settings {
 
 export interface SettingsPatch {
   ui_scale?: number;
+  visualizer_opacity?: number;
   airplay_model?: string;
   name?: string;
   theme?: Theme;
