@@ -795,17 +795,31 @@ async fn handle_bt_command(
                 // disconnected. Only hunt for pads when nothing is
                 // connected; pairing a second pad requires disconnecting
                 // the first (rare, documented trade).
-                let any_connected = ctx
-                    .app
-                    .shared
-                    .read()
-                    .await
-                    .bt_devices
-                    .iter()
-                    .any(|d| d.connected);
+                //
+                // The disconnects issued above land asynchronously, so
+                // poll LIVE state briefly instead of trusting the
+                // bt_devices snapshot (bench: the snapshot still showed
+                // the just-released phone, discovery got skipped, and a
+                // DualSense waiting to be discovered never was).
+                let mut any_connected = true;
+                for _ in 0..10 {
+                    refresh_devices(ctx).await;
+                    any_connected = ctx
+                        .app
+                        .shared
+                        .read()
+                        .await
+                        .bt_devices
+                        .iter()
+                        .any(|d| d.connected);
+                    if !any_connected {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
                 if any_connected {
                     tracing::info!(
-                        "pairing window open; skipping gamepad discovery (device connected)"
+                        "pairing window open; skipping gamepad discovery (gamepad still connected)"
                     );
                 } else {
                     set_discovery(ctx, session, true).await;
