@@ -9,7 +9,7 @@
 import { Switch } from "std-widgets.slint";
 import { ActionButton } from "widgets.slint";
 import { Theme } from "theme.slint";
-import { IconBack, IconAirplayGeneric, IconAirplayHomePodMini, IconAirplayHomePod, IconAirplayAppleTV } from "icons.slint";
+import { IconBack, IconAirplayGeneric, IconAirplayHomePodMini, IconAirplayHomePod, IconAirplayAppleTV, IconSun, IconNote, IconWifi, IconBluetooth, IconDownload } from "icons.slint";
 
 // One emoji font row (built in net.rs from EmojiFontsState).
 // status: "active" | "installed" | "missing" | "downloading" | "busy"
@@ -52,6 +52,26 @@ component Row inherits Rectangle {
         VerticalLayout {
             alignment: center;
             @children
+        }
+    }
+}
+
+
+// One icon-only tab in the settings rail (the panel is too small for
+// labels; the icons match the web sidebar's grouping).
+component RailTab inherits Rectangle {
+    in property <bool> active;
+    callback tapped();
+    width: 2.44rem;
+    height: 2.44rem;
+    border-radius: 0.44rem;
+    background: root.active ? Theme.bar : transparent;
+    border-width: root.active ? 0.09rem : 0;
+    border-color: Theme.accent;
+    @children
+    TouchArea {
+        clicked => {
+            root.tapped();
         }
     }
 }
@@ -101,6 +121,9 @@ export component SettingsPanel inherits Rectangle {
     callback pairing-enable();
     callback pairing-cancel();
 
+    // Active rail tab: appearance | media | wifi | bluetooth | software.
+    in-out property <string> tab: "appearance";
+
     background: Theme.bg;
 
     VerticalLayout {
@@ -131,12 +154,88 @@ export component SettingsPanel inherits Rectangle {
             }
             Rectangle { }
         }
+        HorizontalLayout {
+            spacing: 0.56rem;
 
-        Flickable {
+            // Icon rail: settings split into focused tabs instead of one
+            // endless scroll - same grouping as the web sidebar.
             VerticalLayout {
-                spacing: 0.56rem;
+                spacing: 0.44rem;
                 alignment: start;
+                RailTab {
+                    active: root.tab == "appearance";
+                    tapped => {
+                        root.tab = "appearance";
+                    }
+                    IconSun {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 1.33rem;
+                        height: 1.33rem;
+                        icon-color: root.tab == "appearance" ? Theme.accent : Theme.dim;
+                    }
+                }
+                RailTab {
+                    active: root.tab == "media";
+                    tapped => {
+                        root.tab = "media";
+                    }
+                    IconNote {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 1.33rem;
+                        height: 1.33rem;
+                        icon-color: root.tab == "media" ? Theme.accent : Theme.dim;
+                    }
+                }
+                if root.wifi-supported: RailTab {
+                    active: root.tab == "wifi";
+                    tapped => {
+                        root.tab = "wifi";
+                    }
+                    IconWifi {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 1.33rem;
+                        height: 1.33rem;
+                        icon-color: root.tab == "wifi" ? Theme.accent : Theme.dim;
+                    }
+                }
+                RailTab {
+                    active: root.tab == "bluetooth";
+                    tapped => {
+                        root.tab = "bluetooth";
+                    }
+                    IconBluetooth {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 1.33rem;
+                        height: 1.33rem;
+                        icon-color: root.tab == "bluetooth" ? Theme.accent : Theme.dim;
+                    }
+                }
+                RailTab {
+                    active: root.tab == "software";
+                    tapped => {
+                        root.tab = "software";
+                    }
+                    IconDownload {
+                        x: (parent.width - self.width) / 2;
+                        y: (parent.height - self.height) / 2;
+                        width: 1.33rem;
+                        height: 1.33rem;
+                        icon-color: root.tab == "software" ? Theme.accent : Theme.dim;
+                    }
+                }
+            }
 
+            Flickable {
+                VerticalLayout {
+                    spacing: 0.56rem;
+                    alignment: start;
+
+                    if root.tab == "appearance": VerticalLayout {
+                        spacing: 0.56rem;
                 Row {
                     label: "Light theme";
                     sublabel: "Also switchable from the web settings";
@@ -168,6 +267,88 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
+                Row {
+                    label: "24-hour clock";
+                    sublabel: "Footer and screensaver time format";
+                    Switch {
+                        checked <=> root.clock-24h;
+                        toggled => {
+                            root.clock-24h-toggled(self.checked);
+                        }
+                    }
+                }
+
+                // ---- screensaver ------------------------------------------
+                Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: saver-col.preferred-height;
+                    saver-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        HorizontalLayout {
+                            spacing: 0.56rem;
+                            VerticalLayout {
+                                alignment: center;
+                                spacing: 0.11rem;
+                                Text {
+                                    text: "Screensaver";
+                                    color: Theme.fg;
+                                    font-size: 0.94rem;
+                                }
+                                Text {
+                                    text: "Starts after idle; protects the panel from burn-in";
+                                    color: Theme.dimmer;
+                                    font-size: 0.72rem;
+                                    wrap: word-wrap;
+                                }
+                            }
+                            Rectangle { }
+                            if root.saver-kind != "off": VerticalLayout {
+                                alignment: center;
+                                ActionButton {
+                                    text: "Preview";
+                                    clicked => {
+                                        root.saver-preview-tapped();
+                                    }
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 0.44rem;
+                            for m[i] in [
+                                { label: "Off", value: "off" },
+                                { label: "Clock", value: "clock" },
+                                { label: "Matrix", value: "matrix" },
+                                { label: "Album art", value: "art" },
+                            ]: Rectangle {
+                                border-radius: 0.33rem;
+                                border-width: 0.09rem;
+                                border-color: root.saver-kind == m.value ? Theme.accent : Theme.faint;
+                                background: root.saver-kind == m.value ? Theme.bar : transparent;
+                                height: saver-tile.preferred-height;
+                                saver-tile := VerticalLayout {
+                                    padding: 0.44rem;
+                                    Text {
+                                        text: m.label;
+                                        color: root.saver-kind == m.value ? Theme.fg : Theme.dim;
+                                        font-size: 0.72rem;
+                                        horizontal-alignment: center;
+                                    }
+                                }
+                                TouchArea {
+                                    clicked => {
+                                        root.saver-kind-tapped(m.value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                    }
+
+                    if root.tab == "media": VerticalLayout {
+                        spacing: 0.56rem;
                 // One card for the whole catalog: separate rows read as
                 // unrelated settings, and this mirrors the web's list.
                 Rectangle {
@@ -322,86 +503,10 @@ export component SettingsPanel inherits Rectangle {
                         }
                     }
                 }
-
-                // ---- screensaver ------------------------------------------
-                Rectangle {
-                    background: Theme.panel;
-                    border-radius: 0.44rem;
-                    height: saver-col.preferred-height;
-                    saver-col := VerticalLayout {
-                        padding: 0.78rem;
-                        spacing: 0.5rem;
-                        HorizontalLayout {
-                            spacing: 0.56rem;
-                            VerticalLayout {
-                                alignment: center;
-                                spacing: 0.11rem;
-                                Text {
-                                    text: "Screensaver";
-                                    color: Theme.fg;
-                                    font-size: 0.94rem;
-                                }
-                                Text {
-                                    text: "Starts after idle; protects the panel from burn-in";
-                                    color: Theme.dimmer;
-                                    font-size: 0.72rem;
-                                    wrap: word-wrap;
-                                }
-                            }
-                            Rectangle { }
-                            if root.saver-kind != "off": VerticalLayout {
-                                alignment: center;
-                                ActionButton {
-                                    text: "Preview";
-                                    clicked => {
-                                        root.saver-preview-tapped();
-                                    }
-                                }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 0.44rem;
-                            for m[i] in [
-                                { label: "Off", value: "off" },
-                                { label: "Clock", value: "clock" },
-                                { label: "Matrix", value: "matrix" },
-                                { label: "Album art", value: "art" },
-                            ]: Rectangle {
-                                border-radius: 0.33rem;
-                                border-width: 0.09rem;
-                                border-color: root.saver-kind == m.value ? Theme.accent : Theme.faint;
-                                background: root.saver-kind == m.value ? Theme.bar : transparent;
-                                height: saver-tile.preferred-height;
-                                saver-tile := VerticalLayout {
-                                    padding: 0.44rem;
-                                    Text {
-                                        text: m.label;
-                                        color: root.saver-kind == m.value ? Theme.fg : Theme.dim;
-                                        font-size: 0.72rem;
-                                        horizontal-alignment: center;
-                                    }
-                                }
-                                TouchArea {
-                                    clicked => {
-                                        root.saver-kind-tapped(m.value);
-                                    }
-                                }
-                            }
-                        }
                     }
-                }
 
-                Row {
-                    label: "24-hour clock";
-                    sublabel: "Footer and screensaver time format";
-                    Switch {
-                        checked <=> root.clock-24h;
-                        toggled => {
-                            root.clock-24h-toggled(self.checked);
-                        }
-                    }
-                }
-
+                    if root.tab == "wifi": VerticalLayout {
+                        spacing: 0.56rem;
                 // ---- Wi-Fi ------------------------------------------------
                 // Touch-appropriate subset: rejoin a saved network, drop
                 // the current one, and the hotspot toggle. New networks
@@ -521,7 +626,10 @@ export component SettingsPanel inherits Rectangle {
                         }
                     }
                 }
+                    }
 
+                    if root.tab == "bluetooth": VerticalLayout {
+                        spacing: 0.56rem;
                 Row {
                     label: "Bluetooth pairing";
                     sublabel: root.pairing-state == "discoverable"
@@ -541,7 +649,10 @@ export component SettingsPanel inherits Rectangle {
                         }
                     }
                 }
+                    }
 
+                    if root.tab == "software": VerticalLayout {
+                        spacing: 0.56rem;
                 // ---- software update --------------------------------------
                 Rectangle {
                     background: Theme.panel;
@@ -703,6 +814,8 @@ export component SettingsPanel inherits Rectangle {
                     color: Theme.faint;
                     font-size: 0.72rem;
                     horizontal-alignment: center;
+                }
+                    }
                 }
             }
         }
