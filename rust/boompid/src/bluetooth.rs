@@ -99,6 +99,20 @@ trait MediaTransport1 {
     fn set_volume(&self, volume: u16) -> zbus::Result<()>;
 }
 
+/// Client-side view of a remote device's GATT characteristic (we are
+/// the GATT client here - distinct from ble_gatt.rs where boompid
+/// *serves* GATT). Used to read a phone's Current Time Service.
+#[zbus::proxy(interface = "org.bluez.GattCharacteristic1", default_service = "org.bluez")]
+trait GattCharacteristic1 {
+    fn read_value(&self, options: HashMap<String, Value<'_>>) -> zbus::Result<Vec<u8>>;
+    #[zbus(property, name = "UUID")]
+    fn uuid(&self) -> zbus::Result<String>;
+}
+
+/// Current Time Service characteristic UUIDs (Bluetooth SIG assigned).
+const CTS_CURRENT_TIME_UUID: &str = "00002a2b-0000-1000-8000-00805f9b34fb";
+const CTS_LOCAL_TIME_INFO_UUID: &str = "00002a0f-0000-1000-8000-00805f9b34fb";
+
 /// AVRCP absolute volume is 0-127.
 const AVRCP_MAX: f32 = 127.0;
 
@@ -363,6 +377,26 @@ async fn handle_interface_added(
             }
             publish_track(ctx, session).await;
         }
+        "org.bluez.GattCharacteristic1" => {
+            // A remote device's GATT database resolved and it exposes the
+            // Current Time characteristic (phones do - iOS in particular):
+            // a time source for the RTC-less box. Only worth a radio round
+            // trip when NTP hasn't disciplined the clock this boot.
+            let uuid = props.get("UUID").and_then(str_from_value);
+            if uuid.as_deref() == Some(CTS_CURRENT_TIME_UUID) {
+                tracing::info!(%path, "remote Current Time Service discovered");
+                let conn = ctx.conn.clone();
+                let char_path = path.clone();
+                tokio::spawn(async move {
+                    if crate::clock::ntp_synchronized().await {
+                        return;
+                    }
+                    if let Err(err) = sync_from_cts(&conn, &char_path).await {
+                        tracing::warn!(%err, %char_path, "CTS time sync failed");
+                    }
+                });
+            }
+        }
         "org.bluez.MediaTransport1" => {
             tracing::info!(%path, "media transport appeared");
             session.transport_path = Some(path.clone());
@@ -385,6 +419,83 @@ async fn handle_interface_added(
         }
         _ => {}
     }
+}
+
+/// Read a phone's Current Time Service and offer the result to the
+/// system clock. `char_path` is the `0x2A2B` characteristic; its
+/// sibling `0x2A0F` (Local Time Information) supplies the UTC offset
+/// when the phone exposes it, otherwise the reading is interpreted in
+/// the box's own timezone (phone and boombox are in the same room).
+async fn sync_from_cts(conn: &zbus::Connection, char_path: &OwnedObjectPath) -> anyhow::Result<()> {
+    let current = GattCharacteristic1Proxy::builder(conn)
+        .path(char_path.clone())?
+        .build()
+        .await?
+        .read_value(HashMap::new())
+        .await?;
+    let time = crate::cts::parse_current_time(&current)
+        .ok_or_else(|| anyhow::anyhow!("unparseable Current Time value {current:02x?}"))?;
+
+    // The service object is the characteristic's parent; look for a
+    // sibling Local Time Information characteristic under it.
+    let service_prefix = match char_path.as_str().rsplit_once('/') {
+        Some((service, _)) => format!("{service}/"),
+        None => return Err(anyhow::anyhow!("unexpected characteristic path")),
+    };
+    let om = ObjectManagerProxy::builder(conn)
+        .destination("org.bluez")?
+        .path("/")?
+        .build()
+        .await?;
+    let mut utc_offset = None;
+    for (path, ifaces) in om.get_managed_objects().await? {
+        if !path.as_str().starts_with(&service_prefix) {
+            continue;
+        }
+        let is_lti = ifaces
+            .get("org.bluez.GattCharacteristic1")
+            .and_then(|props| props.get("UUID"))
+            .and_then(|v| <&str>::try_from(v).ok())
+            .is_some_and(|uuid| uuid == CTS_LOCAL_TIME_INFO_UUID);
+        if !is_lti {
+            continue;
+        }
+        if let Ok(proxy) = GattCharacteristic1Proxy::builder(conn).path(path)?.build().await {
+            utc_offset = proxy
+                .read_value(HashMap::new())
+                .await
+                .ok()
+                .and_then(|bytes| crate::cts::parse_utc_offset(&bytes));
+        }
+        break;
+    }
+
+    let epoch_ms = match utc_offset {
+        Some(offset) => crate::cts::epoch_ms(time, offset),
+        None => epoch_ms_box_local(time)
+            .ok_or_else(|| anyhow::anyhow!("mktime failed for {time:?}"))?,
+    };
+    match crate::clock::offer_time(epoch_ms).await {
+        Ok(true) => tracing::info!(?time, ?utc_offset, "clock set from phone's Current Time Service"),
+        Ok(false) => tracing::debug!("CTS time offer not needed"),
+        Err(err) => tracing::warn!(%err, "CTS time offer rejected"),
+    }
+    Ok(())
+}
+
+/// Interpret a civil time in the box's configured timezone via libc
+/// `mktime` (tm_isdst = -1 lets libc resolve DST from the tz database).
+fn epoch_ms_box_local(t: crate::cts::CivilTime) -> Option<u64> {
+    let mut tm: libc::tm = unsafe { std::mem::zeroed() };
+    tm.tm_year = t.year as libc::c_int - 1900;
+    tm.tm_mon = t.month as libc::c_int - 1;
+    tm.tm_mday = t.day as libc::c_int;
+    tm.tm_hour = t.hour as libc::c_int;
+    tm.tm_min = t.minute as libc::c_int;
+    tm.tm_sec = t.second as libc::c_int;
+    tm.tm_isdst = -1;
+    let secs = unsafe { libc::mktime(&mut tm) };
+    (secs > 0).then_some(secs as u64 * 1_000)
 }
 
 async fn handle_interfaces_removed(

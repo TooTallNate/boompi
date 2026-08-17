@@ -24,6 +24,7 @@ mod bt_agent;
 #[cfg(target_os = "linux")]
 mod clock;
 mod config;
+mod cts;
 mod fonts;
 mod games;
 #[cfg(target_os = "linux")]

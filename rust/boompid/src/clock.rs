@@ -67,6 +67,19 @@ pub async fn restore(app: &crate::state::SharedApp) {
     }
 }
 
+/// Whether the kernel clock has been NTP-disciplined this boot
+/// (timesyncd via timedate1). Errors read as "not synchronized" so
+/// fallback time sources stay available when D-Bus is unhappy.
+pub async fn ntp_synchronized() -> bool {
+    async {
+        let conn = zbus::Connection::system().await.ok()?;
+        let td = TimeDate1Proxy::new(&conn).await.ok()?;
+        td.ntp_synchronized().await.ok()
+    }
+    .await
+    .unwrap_or(false)
+}
+
 /// Fallback clock sync from a connected client (browser `Date.now()`,
 /// phone app over BLE). The boxes have no RTC, so when NTP is
 /// unreachable the clock is off by months; any client that connects
@@ -89,14 +102,7 @@ pub async fn offer_time(epoch_ms: u64) -> anyhow::Result<bool> {
     }
 
     // NTP synced -> the system clock is already better than any client's.
-    let synchronized = async {
-        let conn = zbus::Connection::system().await.ok()?;
-        let td = TimeDate1Proxy::new(&conn).await.ok()?;
-        td.ntp_synchronized().await.ok()
-    }
-    .await
-    .unwrap_or(false);
-    if synchronized {
+    if ntp_synchronized().await {
         return Ok(false);
     }
 
