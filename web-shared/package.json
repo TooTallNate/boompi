@@ -11,6 +11,7 @@
     "./lib/*": "./src/lib/*.ts",
     "./hooks/*": "./src/hooks/*.ts",
     "./proto": "./src/proto.ts",
+    "./ble": "./src/ble.ts",
     "./transport": "./src/transport.ts",
     "./shell": "./src/shell.tsx"
   },

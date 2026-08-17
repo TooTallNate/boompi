@@ -1,0 +1,31 @@
+{
+  "name": "boompi-remote",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hosted Boompi remote: controls a speaker over BLE GATT via Web Bluetooth - no shared network required. Deployed on Vercel (HTTPS is a Web Bluetooth requirement).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint src",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@boompi/ui": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "lucide-react": "^0.545.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "@types/web-bluetooth": "^0.0.21",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

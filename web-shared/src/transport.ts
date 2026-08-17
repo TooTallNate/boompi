@@ -109,6 +109,41 @@ export function useSave() {
   return { status, save };
 }
 
+/** Apply one ServerMessage delta to client state - transport-agnostic
+ *  (the WebSocket and BLE links carry identical messages). `state` and
+ *  `hello` messages are handled by the callers (they replace rather
+ *  than patch). */
+export function applyServerMessage(
+  s: AppState,
+  msg: Record<string, unknown> & { type: string },
+): AppState {
+  const { type, ...body } = msg;
+  switch (type) {
+    case "settings":
+      return { ...s, settings: body as never };
+    case "pairing":
+      return { ...s, pairing: body as never };
+    case "bt_devices":
+      return { ...s, bt_devices: body["devices"] as never };
+    case "volume":
+      return { ...s, volume: body["level"] as never };
+    case "battery":
+      return { ...s, battery: body as never };
+    case "games":
+      return { ...s, games: body as never };
+    case "wifi":
+      return { ...s, wifi: body as never };
+    case "emoji_fonts":
+      return { ...s, emoji_fonts: body as never };
+    case "update":
+      return { ...s, updates: body as never };
+    case "setup":
+      return { ...s, setup: { required: body["required"] as boolean } };
+    default:
+      return s;
+  }
+}
+
 export function formatDuration(secs: number): string {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
