@@ -353,8 +353,8 @@ pub struct SettingsPatch {
 
 /// Wi-Fi link + hotspot state, mirrored to all clients (panel Wi-Fi
 /// card, web settings). Scan results are *not* included - scanning is
-/// on-demand and stays on `GET /api/wifi`; this carries only the cheap
-/// always-known facts.
+/// on-demand ([`WifiAction::Scan`] or `GET /api/wifi`); this carries
+/// only the cheap always-known facts.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct WifiState {
     /// A Wi-Fi capable device exists.
@@ -383,13 +383,40 @@ pub struct WifiState {
     pub settings_url: Option<String>,
 }
 
-/// Wi-Fi actions available over the protocol (panel + web). Joining a
-/// *new* network (needs a password prompt/keyboard) stays on the HTTP
-/// API (`POST /api/wifi` with `connect`); these cover everything a
-/// touchscreen can drive.
+/// One scanned Wi-Fi network (deduped by SSID, strongest kept).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WifiNetwork {
+    pub ssid: String,
+    /// 0-100.
+    pub signal: u8,
+    /// nmcli security string ("WPA2", ...); "" = open.
+    pub security: String,
+    pub in_use: bool,
+    pub saved: bool,
+}
+
+/// Wi-Fi actions available over the protocol (panel, web, BLE). The
+/// full lifecycle rides the protocol so BLE-only clients (the hosted
+/// remote, phone apps) can manage Wi-Fi with no IP path at all:
+/// [`WifiAction::Scan`] answers with a [`ServerMessage::WifiNetworks`]
+/// broadcast, [`WifiAction::Connect`] carries the password. The HTTP
+/// API (`POST /api/wifi`) remains as the synchronous-error flavor the
+/// box's own web app prefers.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "action")]
 pub enum WifiAction {
+    /// Scan for nearby networks; results arrive as a
+    /// [`ServerMessage::WifiNetworks`] broadcast.
+    Scan,
+    /// Join a network. `psk: None` for open networks (or saved
+    /// profiles, though [`WifiAction::Rejoin`] says that clearer).
+    /// Join progress is surfaced via `WifiJoinStatus` and the
+    /// follow-up `Wifi` state broadcast.
+    Connect {
+        ssid: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        psk: Option<String>,
+    },
     /// Reconnect a saved network (profile keeps its password).
     Rejoin { ssid: String },
     /// Drop the current connection (suppresses autoconnect until a
@@ -397,6 +424,8 @@ pub enum WifiAction {
     Disconnect,
     /// Delete a saved profile.
     Forget { ssid: String },
+    /// Radio on/off.
+    Radio { enabled: bool },
     /// The speaker's own hotspot: phones join it to reach the web UI
     /// (and this WebSocket) with no shared network - camping mode.
     Ap { enabled: bool },
@@ -662,6 +691,11 @@ pub enum ServerMessage {
     Settings(Settings),
     Setup(SetupState),
     Wifi(WifiState),
+    /// Scan results, answering a [`WifiAction::Scan`] (broadcast to
+    /// all clients - scans are radio-global anyway).
+    WifiNetworks {
+        networks: Vec<WifiNetwork>,
+    },
     EmojiFonts(EmojiFontsState),
     Update(UpdateState),
     /// Relay: a client asked to preview the screensaver; the panel

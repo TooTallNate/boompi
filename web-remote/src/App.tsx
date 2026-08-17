@@ -103,10 +103,9 @@ function Landing({
             </Alert>
           )}
           <p className="text-xs text-muted-foreground">
-            Some settings (Wi-Fi scans, ROM uploads, timezone) need an IP
-            connection and unlock when you open the speaker's own settings
-            page over Wi-Fi - everything else works right here over the
-            radio.
+            Almost everything works right here over the radio - including
+            Wi-Fi setup. A couple of things (ROM uploads, timezone) need an
+            IP connection and unlock on the speaker's own settings page.
           </p>
         </CardContent>
       </Card>

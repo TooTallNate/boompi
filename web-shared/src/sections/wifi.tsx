@@ -8,12 +8,8 @@ import { Input } from "@boompi/ui/components/input";
 import { Separator } from "@boompi/ui/components/separator";
 import { Switch } from "@boompi/ui/components/switch";
 import { cn } from "@boompi/ui/lib/utils";
-import {
-  useBoompi,
-  type WifiNetwork,
-  type WifiRestAction,
-  type WifiStatus,
-} from "@boompi/ui/transport";
+import type { WifiNetwork } from "@boompi/ui/proto";
+import { useBoompi, type WifiRestAction } from "@boompi/ui/transport";
 import { Lock } from "lucide-react";
 
 function SignalBars({ signal }: { signal: number }) {
@@ -31,25 +27,44 @@ function SignalBars({ signal }: { signal: number }) {
   );
 }
 
-/** Requires an IP path (REST scan results); hidden on BLE-only links
- *  except for the hotspot toggle, which rides the protocol. */
+/** A transport-independent view of Wi-Fi. REST fills it from
+ *  GET/POST /api/wifi (synchronous errors); protocol links (BLE) fill
+ *  it from WifiState broadcasts + wifi_networks scan broadcasts. */
+interface WifiView {
+  supported: boolean;
+  enabled: boolean;
+  connected: string | null;
+  ip: string | null;
+  ap_active: boolean;
+  networks: WifiNetwork[];
+}
+
+/** Fully functional on every transport: scans and password-joins ride
+ *  the protocol (WifiAction::Scan / Connect), so the BLE-only remote
+ *  manages Wi-Fi the same as the box's own web app. */
 export function WifiSection() {
   const { rest, send, state } = useBoompi();
-  const [wifi, setWifi] = useState<WifiStatus | null>(null);
+  const [restView, setRestView] = useState<WifiView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState<string | null>(null); // ssid with open psk prompt
   const [psk, setPsk] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // REST: poll the status+scan endpoint (returns fresh scan results).
+  // Protocol: request a scan; results arrive as wifi_networks
+  // broadcasts and land in state.
   const refresh = useCallback(async () => {
-    if (!rest) return;
-    try {
-      setWifi(await rest.fetchWifi());
-      setError(null);
-    } catch (e) {
-      setError(String(e));
+    if (rest) {
+      try {
+        setRestView(await rest.fetchWifi());
+        setError(null);
+      } catch (e) {
+        setError(String(e));
+      }
+    } else {
+      send({ type: "wifi", action: "scan" });
     }
-  }, [rest]);
+  }, [rest, send]);
 
   useEffect(() => {
     refresh();
@@ -57,57 +72,36 @@ export function WifiSection() {
     return () => clearInterval(t);
   }, [refresh]);
 
-  // BLE-only: offer what the protocol carries - live link state and the
-  // hotspot toggle (the escape hatch that creates an IP path).
-  if (!rest) {
-    const w = state?.wifi;
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Wi-Fi</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {w?.connected ? (
-            <p className="text-sm">
-              Connected to <strong>{w.connected}</strong>
-              {w.ip ? ` (${w.ip})` : ""}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Not connected to Wi-Fi.
-            </p>
-          )}
-          <Field orientation="horizontal">
-            <div className="flex flex-col gap-1">
-              <FieldLabel htmlFor="wifi-hotspot">Hotspot</FieldLabel>
-              <FieldDescription>
-                Speaker broadcasts its own network - join it to reach the full
-                settings page ({w?.settings_url ?? "shown on the speaker"}).
-              </FieldDescription>
-            </div>
-            <Switch
-              id="wifi-hotspot"
-              checked={w?.ap_active ?? false}
-              onCheckedChange={(v) => send({ type: "wifi", action: "ap", enabled: v })}
-            />
-          </Field>
-          <Alert>
-            <AlertDescription>
-              Network scanning and joining need an IP connection - use the
-              speaker's panel or open the settings page over Wi-Fi.
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
-  }
+  const view: WifiView | null = rest
+    ? restView
+    : state?.wifi
+      ? {
+          supported: state.wifi.supported,
+          enabled: state.wifi.enabled,
+          connected: state.wifi.connected ?? null,
+          ip: state.wifi.ip ?? null,
+          ap_active: state.wifi.ap_active,
+          networks: state.wifi_networks ?? [],
+        }
+      : null;
 
   async function act(a: WifiRestAction) {
-    if (!rest) return;
     setBusy(true);
     setError(null);
     try {
-      setWifi(await rest.wifiAction(a));
+      if (rest) {
+        setRestView(await rest.wifiAction(a));
+      } else {
+        // Same actions over the protocol; results come back as state
+        // broadcasts. (`forget` differs in field name only.)
+        send({
+          type: "wifi",
+          ...(a.action === "forget" ? { action: "forget", ssid: a.name } : a),
+        } as never);
+        // A join kicked off over BLE reports through WifiJoinStatus /
+        // Wifi broadcasts; refresh the list shortly after.
+        setTimeout(() => send({ type: "wifi", action: "scan" }), 3000);
+      }
       setJoining(null);
       setPsk("");
     } catch (e) {
@@ -132,51 +126,61 @@ export function WifiSection() {
         <CardTitle>Wi-Fi</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {!wifi ? (
+        {!view ? (
           <p className="text-sm text-muted-foreground">{error ?? "loading…"}</p>
-        ) : !wifi.supported ? (
+        ) : !view.supported ? (
           <p className="text-sm text-muted-foreground">No Wi-Fi hardware.</p>
         ) : (
           <>
             <div className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2">
                 Wi-Fi
-                {wifi.connected && (
+                {view.connected && (
                   <span className="text-xs text-success">
-                    {wifi.connected}
-                    {wifi.ip ? ` (${wifi.ip})` : ""}
+                    {view.connected}
+                    {view.ip ? ` (${view.ip})` : ""}
                   </span>
                 )}
-                {wifi.ap_active && <Badge>hotspot active</Badge>}
+                {view.ap_active && <Badge>hotspot active</Badge>}
               </span>
               {/* No radio toggle while the setup hotspot is up: turning the
                   radio off would kill this very connection (and the captive
                   portal with it). */}
-              {!wifi.ap_active && (
+              {!view.ap_active && (
                 <Switch
-                  checked={wifi.enabled}
+                  checked={view.enabled}
                   onCheckedChange={(v) => act({ action: "radio", enabled: v })}
                 />
               )}
             </div>
 
-            {wifi.ap_active && (
+            {view.ap_active && (
               <Alert>
                 <AlertDescription>
-                  You're connected through the speaker's own hotspot. The
-                  networks below were found just before the hotspot started.
-                  Joining one switches the hotspot off while the speaker
-                  connects - rejoin your normal Wi-Fi afterwards. If the
-                  password is wrong, the hotspot comes back within a minute so
-                  you can retry.
+                  {rest ? (
+                    <>
+                      You're connected through the speaker's own hotspot. The
+                      networks below were found just before the hotspot
+                      started. Joining one switches the hotspot off while the
+                      speaker connects - rejoin your normal Wi-Fi afterwards.
+                      If the password is wrong, the hotspot comes back within
+                      a minute so you can retry.
+                    </>
+                  ) : (
+                    <>
+                      The speaker's hotspot is broadcasting. Joining a network
+                      below switches the hotspot off - your Bluetooth
+                      connection here survives either way.
+                    </>
+                  )}
                 </AlertDescription>
               </Alert>
             )}
 
             {/* Hotspot: the speaker broadcasts its own open network so a
-                phone can reach this page with no shared Wi-Fi at all -
+                phone can reach the web UI with no shared Wi-Fi at all -
                 camping mode. Hidden while it is the connection being used. */}
-            {!wifi.ap_active && (
+            {!view.ap_active && (
               <>
                 <Separator />
                 <Field orientation="horizontal">
@@ -190,15 +194,18 @@ export function WifiSection() {
                   </div>
                   <Switch
                     id="hotspot"
-                    checked={wifi.ap_active}
+                    checked={view.ap_active}
                     onCheckedChange={(v) => act({ action: "ap", enabled: v })}
                   />
                 </Field>
               </>
             )}
 
-            {wifi.enabled &&
-              wifi.networks.map((n) => (
+            {view.enabled && view.networks.length === 0 && !rest && (
+              <p className="text-xs text-muted-foreground">scanning…</p>
+            )}
+            {view.enabled &&
+              view.networks.map((n) => (
                 <div key={n.ssid} className="flex flex-col gap-2 border-t pt-3">
                   <div className="flex items-center justify-between gap-3">
                     <button

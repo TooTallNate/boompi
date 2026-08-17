@@ -126,10 +126,22 @@ export interface WifiState {
   settings_url?: string;
 }
 
+/** One scanned Wi-Fi network (`wifi_networks` broadcast). */
+export interface WifiNetwork {
+  ssid: string;
+  signal: number;
+  security: string;
+  in_use: boolean;
+  saved: boolean;
+}
+
 export type WifiAction =
+  | { action: "scan" }
+  | { action: "connect"; ssid: string; psk?: string }
   | { action: "rejoin"; ssid: string }
   | { action: "disconnect" }
   | { action: "forget"; ssid: string }
+  | { action: "radio"; enabled: boolean }
   | { action: "ap"; enabled: boolean };
 
 export interface Hello {
@@ -147,6 +159,9 @@ export interface AppState {
   bt_devices: BtDevice[];
   setup: { required: boolean; wifi_status?: unknown };
   wifi: WifiState;
+  /** Client-side only: latest `wifi_networks` broadcast (protocol
+   *  scan results; the REST path carries its own). */
+  wifi_networks?: WifiNetwork[];
   emoji_fonts: EmojiFontsState;
   updates: UpdateState;
   // Present but unused by the settings UI so far:

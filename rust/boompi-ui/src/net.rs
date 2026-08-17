@@ -281,6 +281,9 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_setup_wifi_text(text.into());
             });
         }
+        // Scan results answer another client's Scan (broadcasts are
+        // global); the panel's Wi-Fi tab only lists saved networks.
+        ServerMessage::WifiNetworks { .. } => {}
     }
 }
 

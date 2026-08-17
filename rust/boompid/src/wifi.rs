@@ -42,16 +42,9 @@ pub struct WifiStatus {
     pub saved: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct WifiNetwork {
-    pub ssid: String,
-    /// 0-100.
-    pub signal: u8,
-    /// Human security summary ("WPA2", "WPA2 WPA3", "" = open).
-    pub security: String,
-    pub in_use: bool,
-    pub saved: bool,
-}
+// Shared with the protocol: scan results also travel as
+// `ServerMessage::WifiNetworks` (BLE clients have no REST).
+pub use boompi_proto::WifiNetwork;
 
 async fn nmcli(args: &[&str]) -> anyhow::Result<String> {
     let out = Command::new("nmcli").args(args).output().await?;

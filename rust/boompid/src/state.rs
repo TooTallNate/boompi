@@ -765,11 +765,42 @@ impl App {
                     // called from the per-connection WebSocket loop.
                     let app = self.clone();
                     tokio::spawn(async move {
-                        use boompi_proto::WifiAction as W;
+                        use boompi_proto::{WifiAction as W, WifiJoinStatus};
                         let result = match &action {
+                            W::Scan => match crate::wifi::status(true).await {
+                                Ok(st) => {
+                                    app.broadcast(ServerMessage::WifiNetworks {
+                                        networks: st.networks,
+                                    });
+                                    Ok(())
+                                }
+                                Err(err) => Err(err),
+                            },
+                            // Full join with password - the path BLE-only
+                            // clients use. Progress via WifiJoinStatus like
+                            // the HTTP handler (a join over the hotspot
+                            // kills the very link that requested it, so
+                            // status must survive on the panel/broadcasts).
+                            W::Connect { ssid, psk } => {
+                                app.set_wifi_status(Some(WifiJoinStatus::Joining {
+                                    ssid: ssid.clone(),
+                                }))
+                                .await;
+                                let res = crate::wifi::connect(ssid, psk.as_deref()).await;
+                                app.set_wifi_status(Some(match &res {
+                                    Ok(()) => WifiJoinStatus::Joined { ssid: ssid.clone() },
+                                    Err(err) => WifiJoinStatus::Failed {
+                                        ssid: ssid.clone(),
+                                        reason: err.to_string(),
+                                    },
+                                }))
+                                .await;
+                                res
+                            }
                             W::Rejoin { ssid } => crate::wifi::connect(ssid, None).await,
                             W::Disconnect => crate::wifi::disconnect().await,
                             W::Forget { ssid } => crate::wifi::forget(ssid).await,
+                            W::Radio { enabled } => crate::wifi::set_radio(*enabled).await,
                             W::Ap { enabled: true } => {
                                 crate::wifi::start_ap(&app.speaker_name().await).await
                             }
@@ -788,7 +819,35 @@ impl App {
                     use boompi_proto::WifiAction as W;
                     let mut wifi = self.shared.read().await.wifi.clone();
                     match action {
-                        W::Rejoin { ssid } => {
+                        W::Scan => {
+                            self.broadcast(ServerMessage::WifiNetworks {
+                                networks: vec![
+                                    boompi_proto::WifiNetwork {
+                                        ssid: "Simnet".into(),
+                                        signal: 82,
+                                        security: "WPA2".into(),
+                                        in_use: wifi.connected.as_deref() == Some("Simnet"),
+                                        saved: true,
+                                    },
+                                    boompi_proto::WifiNetwork {
+                                        ssid: "Coffee Shop".into(),
+                                        signal: 47,
+                                        security: "".into(),
+                                        in_use: false,
+                                        saved: false,
+                                    },
+                                    boompi_proto::WifiNetwork {
+                                        ssid: "Neighbor 5G".into(),
+                                        signal: 23,
+                                        security: "WPA3".into(),
+                                        in_use: false,
+                                        saved: false,
+                                    },
+                                ],
+                            });
+                            return;
+                        }
+                        W::Connect { ssid, .. } | W::Rejoin { ssid } => {
                             wifi.connected = Some(ssid);
                             wifi.ip = Some("192.168.1.42/24".into());
                             wifi.ap_active = false;
@@ -797,6 +856,13 @@ impl App {
                         W::Disconnect => {
                             wifi.connected = None;
                             wifi.ip = None;
+                        }
+                        W::Radio { enabled } => {
+                            wifi.enabled = enabled;
+                            if !enabled {
+                                wifi.connected = None;
+                                wifi.ip = None;
+                            }
                         }
                         W::Forget { ssid } => {
                             wifi.saved.retain(|s| s != &ssid);

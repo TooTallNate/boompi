@@ -77,7 +77,13 @@ byte 1..: payload   raw JSON bytes
    same snapshot so multi-request reads never tear.
 4. Send commands as chunked JSON `ClientMessage` writes to `control`
    (`{"type":"set_volume","level":0.5}`, `{"type":"next"}`,
-   `{"type":"wifi","action":"ap","enabled":true}`, ...).
+   `{"type":"wifi","action":"ap","enabled":true}`, ...). Wi-Fi is
+   fully manageable over BLE: `{"type":"wifi","action":"scan"}`
+   answers with a `wifi_networks` broadcast, and
+   `{"type":"wifi","action":"connect","ssid":"...","psk":"..."}`
+   joins a new network (join progress arrives via the `setup`
+   broadcast's `wifi_status`, and the link survives the Wi-Fi change -
+   it's a different radio protocol).
 
 A neat trick for a native app: send the hotspot-on command over BLE,
 join the speaker's AP with `NEHotspotConfigurationManager`, and switch

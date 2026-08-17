@@ -11,15 +11,11 @@ import type {
   SettingsPatch,
 } from "./proto";
 
-// --- REST-only shapes (unavailable over BLE) -------------------------------
+// --- REST-only shapes -------------------------------------------------------
 
-export interface WifiNetwork {
-  ssid: string;
-  signal: number;
-  security: string;
-  in_use: boolean;
-  saved: boolean;
-}
+// (Scan results are shared with the protocol - the type lives in proto.ts.)
+export type { WifiNetwork } from "./proto";
+import type { WifiNetwork } from "./proto";
 
 export interface WifiStatus {
   supported: boolean;
@@ -133,6 +129,8 @@ export function applyServerMessage(
       return { ...s, games: body as never };
     case "wifi":
       return { ...s, wifi: body as never };
+    case "wifi_networks":
+      return { ...s, wifi_networks: body["networks"] as never };
     case "emoji_fonts":
       return { ...s, emoji_fonts: body as never };
     case "update":
