@@ -77,6 +77,7 @@ export interface WifiStatus {
 export type WifiAction =
   | { action: "connect"; ssid: string; psk?: string }
   | { action: "forget"; name: string }
+  | { action: "disconnect" }
   | { action: "radio"; enabled: boolean }
   | { action: "ap"; enabled: boolean };
 

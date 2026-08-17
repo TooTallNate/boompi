@@ -152,7 +152,8 @@ async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
     Json(serde_json::json!({ "hello": hello, "state": state }))
 }
 
-async fn hello(app: &SharedApp) -> Hello {
+/// Greeting payload (WebSocket connect + the BLE events subscription).
+pub(crate) async fn hello(app: &SharedApp) -> Hello {
     Hello {
         proto_version: PROTO_VERSION,
         name: app.speaker_name().await,
@@ -173,10 +174,14 @@ enum WifiAction {
     Forget {
         name: String,
     },
+    /// Drop the current connection without forgetting it (suppresses
+    /// autoconnect until a manual rejoin).
+    Disconnect,
     Radio {
         enabled: bool,
     },
-    /// Onboarding hotspot; `ssid` defaults to the speaker name.
+    /// The speaker's own hotspot (onboarding + camping mode); the SSID
+    /// is the speaker name.
     Ap {
         enabled: bool,
     },
@@ -319,12 +324,15 @@ async fn api_wifi_action(
                 res
             }
             WifiAction::Forget { name } => crate::wifi::forget(name).await,
+            WifiAction::Disconnect => crate::wifi::disconnect().await,
             WifiAction::Radio { enabled } => crate::wifi::set_radio(*enabled).await,
             WifiAction::Ap { enabled: true } => {
                 crate::wifi::start_ap(&app.speaker_name().await).await
             }
             WifiAction::Ap { enabled: false } => crate::wifi::stop_ap().await,
         };
+        // Push the change to WebSocket clients too (panel Wi-Fi card).
+        app.refresh_wifi().await;
         return match result {
             Ok(()) => api_wifi().await,
             Err(err) => {

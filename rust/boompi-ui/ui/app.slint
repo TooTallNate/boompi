@@ -114,6 +114,17 @@ export component AppWindow inherits Window {
     in property <string> stat-time: "-";
     in property <bool> battery-full: false;
 
+    // --- wifi ---
+    in property <bool> wifi-supported: false;
+    in property <string> wifi-connected: "";
+    in property <string> wifi-ip: "";
+    in-out property <bool> wifi-ap-active: false;
+    in property <string> wifi-ap-ssid: "";
+    in property <[string]> wifi-saved: [];
+    callback wifi-rejoin(string);
+    callback wifi-disconnect();
+    callback wifi-ap-toggled(bool);
+
     // --- pairing / settings ---
     in property <string> pairing-state: "idle";
     in property <string> pairing-device: "";
@@ -344,6 +355,21 @@ export component AppWindow inherits Window {
         pairing-state: root.pairing-state;
         settings-url: root.settings-url;
         settings-qr: root.settings-qr;
+        wifi-supported: root.wifi-supported;
+        wifi-connected: root.wifi-connected;
+        wifi-ip: root.wifi-ip;
+        wifi-ap-active <=> root.wifi-ap-active;
+        wifi-ap-ssid: root.wifi-ap-ssid;
+        wifi-saved: root.wifi-saved;
+        wifi-rejoin(ssid) => {
+            root.wifi-rejoin(ssid);
+        }
+        wifi-disconnect => {
+            root.wifi-disconnect();
+        }
+        wifi-ap-toggled(enabled) => {
+            root.wifi-ap-toggled(enabled);
+        }
         close => {
             root.screen = "main";
             root.screen-changed();
