@@ -1,4 +1,10 @@
-import type { Settings, SettingsPatch, StateResponse } from "./proto";
+import type { Settings, SettingsPatch, StateResponse } from "@boompi/ui/proto";
+import type {
+  ClockStatus,
+  RestApis,
+  WifiRestAction,
+  WifiStatus,
+} from "@boompi/ui/transport";
 
 export async function fetchState(): Promise<StateResponse> {
   const r = await fetch("/api/state");
@@ -56,39 +62,14 @@ export async function putBoxProfile(p: BoxProfile): Promise<BoxWriteOutcome> {
   return body;
 }
 
-export interface WifiNetwork {
-  ssid: string;
-  signal: number;
-  security: string;
-  in_use: boolean;
-  saved: boolean;
-}
-
-export interface WifiStatus {
-  supported: boolean;
-  enabled: boolean;
-  connected: string | null;
-  ip: string | null;
-  ap_active: boolean;
-  networks: WifiNetwork[];
-  saved: string[];
-}
-
-export type WifiAction =
-  | { action: "connect"; ssid: string; psk?: string }
-  | { action: "forget"; name: string }
-  | { action: "disconnect" }
-  | { action: "radio"; enabled: boolean }
-  | { action: "ap"; enabled: boolean };
-
-export async function fetchWifi(): Promise<WifiStatus> {
+async function fetchWifi(): Promise<WifiStatus> {
   const r = await fetch("/api/wifi");
   const body = await r.json();
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
   return body;
 }
 
-export async function wifiAction(action: WifiAction): Promise<WifiStatus> {
+async function wifiAction(action: WifiRestAction): Promise<WifiStatus> {
   const r = await fetch("/api/wifi", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -99,22 +80,14 @@ export async function wifiAction(action: WifiAction): Promise<WifiStatus> {
   return body;
 }
 
-export interface ClockStatus {
-  timezone: string;
-  ntp: boolean;
-  synchronized: boolean;
-  now_ms: number;
-  timezones: string[];
-}
-
-export async function fetchClock(): Promise<ClockStatus> {
+async function fetchClock(): Promise<ClockStatus> {
   const r = await fetch("/api/clock");
   const body = await r.json();
   if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
   return body;
 }
 
-export async function patchClock(patch: {
+async function patchClock(patch: {
   timezone?: string;
   ntp?: boolean;
 }): Promise<ClockStatus> {
@@ -137,3 +110,35 @@ export async function patchSettings(patch: SettingsPatch): Promise<Settings> {
   if (!r.ok) throw new Error(`settings update failed: HTTP ${r.status}`);
   return r.json();
 }
+
+async function uploadGames(system: string, files: FileList): Promise<void> {
+  const form = new FormData();
+  for (const f of Array.from(files)) form.append("file", f);
+  const r = await fetch(`/api/games/upload?system=${system}`, {
+    method: "POST",
+    body: form,
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error ?? `HTTP ${r.status}`);
+  }
+}
+
+async function deleteGame(system: string, file: string): Promise<void> {
+  await fetch("/api/games/delete", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ system, file }),
+  });
+}
+
+/** The full REST surface, for the shared sections (IP path available). */
+export const restApis: RestApis = {
+  fetchWifi,
+  wifiAction,
+  fetchClock,
+  patchClock,
+  uploadGames,
+  deleteGame,
+  host: window.location.hostname,
+};

@@ -1,18 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchState } from "./api";
-import type {
-  AppState,
-  ClientMessage,
-  Hello,
-  ServerMessage,
-  Settings,
-} from "./proto";
+import type { AppState, ClientMessage, Hello, ServerMessage, Settings, SettingsPatch } from "@boompi/ui/proto";
+import type { BoompiConnection } from "@boompi/ui/transport";
+import { fetchState, patchSettings, restApis } from "./api";
 
-/**
- * Live connection to boompid: initial REST snapshot + WebSocket updates
- * (settings, pairing state, device list). Reconnects with a fixed backoff.
- */
-export function useBoompi() {
+/** The box-app transport: WebSocket for live state, REST for the
+ *  IP-only extras. Implements the shared BoompiConnection interface. */
+export function useBoompi(): BoompiConnection {
   const [hello, setHello] = useState<Hello | null>(null);
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +56,11 @@ export function useBoompi() {
           case "games":
             setState((s) => s && { ...s, games: msg as never });
             break;
+          case "wifi": {
+            const { type: _t, ...wifi } = msg as never as Record<string, unknown>;
+            setState((s) => s && { ...s, wifi: wifi as never });
+            break;
+          }
           case "emoji_fonts": {
             const { type: _t, ...emoji } = msg as never as Record<string, unknown>;
             setState((s) => s && { ...s, emoji_fonts: emoji as never });
@@ -114,9 +112,11 @@ export function useBoompi() {
     }
   }, []);
 
-  const applySettings = useCallback((settings: Settings) => {
+  const saveSettings = useCallback(async (patch: SettingsPatch) => {
+    const settings = await patchSettings(patch);
     setState((s) => s && { ...s, settings });
+    return settings;
   }, []);
 
-  return { hello, state, error, send, applySettings };
+  return { hello, state, error, send, saveSettings, rest: restApis };
 }

@@ -1,17 +1,2 @@
 @import "tailwindcss";
-
-@theme {
-  --color-bg: #0d0e12;
-  --color-panel: #16181f;
-  --color-fg: #f2f3f5;
-  --color-dim: #8b8f98;
-  --color-accent: #4cb3ff;
-  --color-accent-ink: #04121f;
-  --color-ok: #37c26f;
-  --color-err: #ff5d5d;
-  --color-line: #262933;
-}
-
-body {
-  @apply bg-bg text-fg antialiased;
-}
+@import "@boompi/ui/globals.css";

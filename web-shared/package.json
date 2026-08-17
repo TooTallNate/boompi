@@ -1,0 +1,38 @@
+{
+  "name": "@boompi/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared Boompi web UI: shadcn components, settings sections, protocol types. Consumed as TypeScript source by web/ (shipped on the box) and web-remote/ (hosted).",
+  "exports": {
+    "./globals.css": "./src/globals.css",
+    "./components/*": "./src/components/*.tsx",
+    "./sections/*": "./src/sections/*.tsx",
+    "./lib/*": "./src/lib/*.ts",
+    "./hooks/*": "./src/hooks/*.ts",
+    "./proto": "./src/proto.ts",
+    "./transport": "./src/transport.ts",
+    "./shell": "./src/shell.tsx"
+  },
+  "scripts": {
+    "lint": "oxlint src"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.545.0",
+    "radix-ui": "^1.6.7",
+    "tailwind-merge": "^3.3.1"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "oxlint": "^1.75.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2"
+  }
+}
