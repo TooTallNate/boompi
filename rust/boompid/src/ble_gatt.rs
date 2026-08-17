@@ -86,6 +86,11 @@ enum GattError {
 #[derive(Default)]
 struct BleShared {
     mtu: AtomicUsize,
+    /// Serializes whole-message notification sends: the greeting task
+    /// and the broadcast pump both call [`notify_events`], and chunks
+    /// from two messages must never interleave (the reassembler would
+    /// drop both).
+    send_lock: tokio::sync::Mutex<()>,
 }
 
 impl BleShared {
@@ -317,19 +322,23 @@ impl Advertisement {
 }
 
 /// Push one protocol message to subscribed BLE clients, chunked to the
-/// negotiated MTU. No-op while nobody is subscribed.
+/// negotiated MTU. No-op while nobody is subscribed. Whole messages are
+/// sent atomically (send_lock): concurrent callers (greeting task vs.
+/// the broadcast pump) must not interleave their chunk sequences.
 async fn notify_events(conn: &zbus::Connection, payload: &[u8]) -> anyhow::Result<()> {
     let iface = conn
         .object_server()
         .interface::<_, EventsChar>(EVENTS_PATH)
         .await?;
-    let chunk_size = {
+    let shared = {
         let guard = iface.get().await;
         if !guard.notifying {
             return Ok(());
         }
-        guard.shared.chunk_size()
+        guard.shared.clone()
     };
+    let _sending = shared.send_lock.lock().await;
+    let chunk_size = shared.chunk_size();
     for chunk in ble::chunk_message(payload, chunk_size) {
         iface.get_mut().await.value = chunk;
         iface

@@ -392,8 +392,11 @@ fn apply_wifi(ctx: &NetCtx, wifi: boompi_proto::WifiState) {
         ui.set_wifi_saved(ModelRc::new(VecModel::from(saved)));
         if let Some(url) = wifi.settings_url {
             ui.set_settings_url(url.into());
-            if let Some(buf) = qr {
-                ui.set_settings_qr(slint::Image::from_rgba8(buf));
+            match qr {
+                Some(buf) => ui.set_settings_qr(slint::Image::from_rgba8(buf)),
+                // Never leave a QR pointing at the previous URL: a wrong
+                // code is worse than none (the URL text still shows).
+                None => ui.set_settings_qr(slint::Image::default()),
             }
         }
     });

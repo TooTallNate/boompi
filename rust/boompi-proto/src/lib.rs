@@ -780,11 +780,13 @@ pub mod ble {
     /// Write / write-without-response: client → server chunked JSON
     /// [`super::ClientMessage`].
     pub const CONTROL_CHAR_UUID: &str = "a5e90002-9c60-4b2a-a6ca-0d0a2b5f0e1f";
-    /// Notify: server → client chunked JSON [`super::ServerMessage`]
-    /// deltas (subscribe, then read STATE for the initial snapshot).
+    /// Notify: server → client chunked JSON [`super::ServerMessage`].
+    /// Subscribing greets the client with `hello` + a full `state`
+    /// snapshot (like a WebSocket connect), then streams deltas.
     pub const EVENTS_CHAR_UUID: &str = "a5e90003-9c60-4b2a-a6ca-0d0a2b5f0e1f";
     /// Read: full JSON [`super::State`] snapshot (GATT long-read;
-    /// offset reads continue the snapshot taken at offset 0).
+    /// offset reads continue the snapshot taken at offset 0). An
+    /// alternative to the subscription greeting for on-demand polls.
     pub const STATE_CHAR_UUID: &str = "a5e90004-9c60-4b2a-a6ca-0d0a2b5f0e1f";
 
     /// Chunk header flag: first chunk of a message (resets reassembly).
@@ -802,9 +804,11 @@ pub mod ble {
     pub const DEFAULT_CHUNK: usize = 176;
 
     /// Split a message into tagged chunks of at most `max_chunk` bytes
-    /// (header byte included; `max_chunk` must be ≥ 2).
+    /// (header byte included). `max_chunk` values below 2 (header +
+    /// one payload byte) are clamped to 2 so the output never violates
+    /// the size bound.
     pub fn chunk_message(payload: &[u8], max_chunk: usize) -> Vec<Vec<u8>> {
-        let body = max_chunk.saturating_sub(1).max(1);
+        let body = max_chunk.max(2) - 1;
         let mut chunks: Vec<Vec<u8>> = payload
             .chunks(body)
             .map(|c| {
@@ -996,6 +1000,18 @@ mod tests {
         assert_eq!(ble::Reassembler::default().push(&one[0]).unwrap(), b"hi");
         let empty = ble::chunk_message(b"", 100);
         assert_eq!(empty, vec![vec![ble::CHUNK_FIRST | ble::CHUNK_LAST]]);
+
+        // Degenerate max_chunk is clamped to 2, never exceeded.
+        for max in [0, 1, 2] {
+            let tiny = ble::chunk_message(b"abc", max);
+            assert!(tiny.iter().all(|c| c.len() <= 2), "max_chunk={max}");
+            let mut r = ble::Reassembler::default();
+            let mut out = None;
+            for c in &tiny {
+                out = r.push(c);
+            }
+            assert_eq!(out.unwrap(), b"abc", "max_chunk={max}");
+        }
 
         // Continuation without a start is dropped; resync on next FIRST.
         let mut r = ble::Reassembler::default();
