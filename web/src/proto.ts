@@ -218,4 +218,7 @@ export type ClientMessage =
   | { type: "game"; action: "stop" }
   | { type: "pairing"; action: PairingAction }
   | { type: "bt_device"; address: string; action: BtDeviceAction }
-  | ({ type: "wifi" } & WifiAction);
+  | ({ type: "wifi" } & WifiAction)
+  /** Offer this device's clock as a fallback time source (no-op when
+   * the box is NTP-synchronized). */
+  | { type: "set_time"; epoch_ms: number };

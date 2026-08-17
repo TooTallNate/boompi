@@ -27,6 +27,11 @@ export function useBoompi() {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       ws = new WebSocket(`${proto}//${location.host}/ws`);
       wsRef.current = ws;
+      ws.onopen = () => {
+        // The box has no RTC; offer our clock as a fallback time
+        // source. Ignored server-side whenever NTP is synchronized.
+        ws?.send(JSON.stringify({ type: "set_time", epoch_ms: Date.now() }));
+      };
       ws.onmessage = (ev) => {
         if (typeof ev.data !== "string") return; // binary frames: art/visualizer
         const msg = JSON.parse(ev.data) as ServerMessage;

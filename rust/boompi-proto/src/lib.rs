@@ -721,6 +721,16 @@ pub enum ClientMessage {
     Reboot,
     /// Games (launch/stop).
     Game(GameAction),
+    /// Offer the client's wall-clock time as a fallback sync source.
+    ///
+    /// The boxes have no RTC, so without internet (NTP) the clock is
+    /// wildly wrong. Clients that know the time (browsers, phone apps)
+    /// send this on connect; the server applies it only when NTP has
+    /// not synchronized, so a reachable NTP server always wins.
+    SetTime {
+        /// Unix time in milliseconds (`Date.now()`).
+        epoch_ms: u64,
+    },
 }
 
 // ---------------------------------------------------------------------------

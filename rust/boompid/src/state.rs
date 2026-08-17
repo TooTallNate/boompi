@@ -587,6 +587,16 @@ impl App {
                 // Handled per-connection in server.rs so a client's fast-poll
                 // request is released when it disconnects.
             }
+            ClientMessage::SetTime { epoch_ms } => {
+                #[cfg(target_os = "linux")]
+                match crate::clock::offer_time(epoch_ms).await {
+                    Ok(true) => {}
+                    Ok(false) => tracing::debug!(epoch_ms, "client time offer not needed"),
+                    Err(err) => tracing::warn!(%err, epoch_ms, "client time offer rejected"),
+                }
+                #[cfg(not(target_os = "linux"))]
+                tracing::debug!(epoch_ms, "client time offer ignored (non-linux)");
+            }
             ClientMessage::Pairing { action } => {
                 if !self.forward_bt(BtCommand::Pairing(action)) {
                     // No bluetooth task (--sim / non-Linux): mirror state so

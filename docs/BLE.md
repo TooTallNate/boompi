@@ -84,6 +84,24 @@ join the speaker's AP with `NEHotspotConfigurationManager`, and switch
 to the WebSocket for the heavy assets - BLE is the always-works
 bootstrap, IP is the fast path.
 
+## Time sync
+
+The boxes have no RTC, so without internet the clock can be off by
+months. Native apps should write a time offer to the control
+characteristic right after subscribing:
+
+```json
+{"type":"set_time","epoch_ms":1755400000000}
+```
+
+`epoch_ms` is Unix time in milliseconds (`Date.now()` /
+`Date().timeIntervalSince1970 * 1000`). The speaker applies it only
+when systemd-timesyncd reports NTP *not* synchronized, ignores offers
+within 5 s of its current clock, and rejects implausible values -
+sending it unconditionally on every connect is the intended usage.
+NTP remains authoritative and overwrites client-set time whenever it
+becomes reachable.
+
 ## Not carried over BLE
 
 - **Binary frames** (visualizer bars at ~30 fps, artwork bytes): they

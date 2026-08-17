@@ -67,6 +67,65 @@ pub async fn restore(app: &crate::state::SharedApp) {
     }
 }
 
+/// Fallback clock sync from a connected client (browser `Date.now()`,
+/// phone app over BLE). The boxes have no RTC, so when NTP is
+/// unreachable the clock is off by months; any client that connects
+/// knows the time better than we do.
+///
+/// NTP stays authoritative: if timesyncd reports a successful sync the
+/// offer is ignored, and if NTP comes back later it simply overwrites
+/// whatever a client set. Steps the clock directly via
+/// `clock_settime(2)` because timedate1's `SetTime` refuses while NTP
+/// is *enabled*, and we want NTP left enabled so it can win later.
+///
+/// Returns `true` if the clock was stepped.
+pub async fn offer_time(epoch_ms: u64) -> anyhow::Result<bool> {
+    // Plausibility window: rejects zero/garbage and 32-bit-ish
+    // overflow artifacts from buggy clients.
+    const MIN_MS: u64 = 1_704_067_200_000; // 2024-01-01
+    const MAX_MS: u64 = 4_102_444_800_000; // 2100-01-01
+    if !(MIN_MS..MAX_MS).contains(&epoch_ms) {
+        anyhow::bail!("implausible epoch_ms {epoch_ms}");
+    }
+
+    // NTP synced -> the system clock is already better than any client's.
+    let synchronized = async {
+        let conn = zbus::Connection::system().await.ok()?;
+        let td = TimeDate1Proxy::new(&conn).await.ok()?;
+        td.ntp_synchronized().await.ok()
+    }
+    .await
+    .unwrap_or(false);
+    if synchronized {
+        return Ok(false);
+    }
+
+    // Already close enough (e.g. a second client reconnecting moments
+    // after the first synced us): don't churn the clock.
+    let now = crate::state::now_ms();
+    let delta_ms = epoch_ms.abs_diff(now);
+    if delta_ms < 5_000 {
+        return Ok(false);
+    }
+
+    let ts = libc::timespec {
+        tv_sec: (epoch_ms / 1000) as libc::time_t,
+        tv_nsec: ((epoch_ms % 1000) * 1_000_000) as libc::c_long,
+    };
+    // SAFETY: plain syscall with a valid timespec; needs CAP_SYS_TIME
+    // (root on the appliance) - EPERM on the dev box surfaces as Err.
+    if unsafe { libc::clock_settime(libc::CLOCK_REALTIME, &ts) } != 0 {
+        return Err(anyhow::anyhow!(std::io::Error::last_os_error()).context("clock_settime"));
+    }
+    tracing::info!(
+        from_ms = now,
+        to_ms = epoch_ms,
+        delta_ms,
+        "clock stepped from client-offered time (NTP not synchronized)"
+    );
+    Ok(true)
+}
+
 pub async fn set(timezone: Option<&str>, ntp: Option<bool>) -> anyhow::Result<()> {
     let conn = zbus::Connection::system().await?;
     let td = TimeDate1Proxy::new(&conn).await?;
