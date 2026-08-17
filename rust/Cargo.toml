@@ -18,3 +18,11 @@ tokio = "1"
 [profile.release]
 lto = "thin"
 strip = true
+
+# hyper-proxy2 0.1.0 (librespot's proxy support) is the last thing
+# holding EOL rustls 0.22 / rustls-webpki 0.102 in the tree (dependabot
+# 22-25; no patched 0.102.x exists). Upstream bumped to hyper-rustls
+# 0.27 on main but never released - pin that rev until 0.1.1 ships,
+# then drop this patch.
+[patch.crates-io]
+hyper-proxy2 = { git = "https://github.com/siketyan/hyper-proxy2", rev = "2a1a9845f4c9a100c45bf3dc0f1222773d5a33b7" }

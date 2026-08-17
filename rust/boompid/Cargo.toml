@@ -20,7 +20,10 @@ libc = "0.2"
 rust-embed = { version = "8", features = ["mime-guess"] }
 realfft = "3"
 # Home Assistant integration (MQTT discovery).
-rumqttc = "0.24"
+# default-features off: MQTT speaks plaintext to a LAN broker (Home
+# Assistant); the TLS feature dragged in an EOL rustls 0.22/webpki
+# 0.102 that collected CVEs (dependabot 22-25).
+rumqttc = { version = "0.25", default-features = false }
 clap = { workspace = true }
 serde = { workspace = true }
 # Unknown config keys warn instead of failing the boot (config.rs).
