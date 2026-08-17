@@ -7,7 +7,9 @@
 //! how the AirPlay picker already shows the emoji. This module gives
 //! the SMB (games share) advert the same treatment: the avahi service
 //! file's instance name follows the speaker name, so the Finder
-//! sidebar shows "George's \u{1f50a}" instead of "boompi-57fe".
+//! sidebar shows "George's" instead of "boompi-57fe". (Not the emoji,
+//! though - see [`smb_safe_name`] for the macOS SMB bug that forbids
+//! non-BMP characters here.)
 //!
 //! avahi-daemon watches /etc/avahi/services with inotify and reloads
 //! changed files on its own - no restarts, renames go live in
@@ -40,12 +42,35 @@ pub fn spawn(app: SharedApp) {
     });
 }
 
+/// The advertised SMB instance name, minus characters macOS chokes on.
+///
+/// Empirically (macOS 26, smbutil + Finder both): an SMB DNS-SD
+/// instance name containing any character outside the Basic
+/// Multilingual Plane resolves fine but *fails session setup* -
+/// "server rejected the authentication" - while BMP names (spaces,
+/// curly quotes, ♪) connect happily. Something in Apple's SMB client
+/// mangles UTF-16 surrogate pairs in the name it derives the
+/// connection from. Emoji live above U+FFFF, so "George's 🔊"
+/// becomes an entry that can be seen but never opened.
+///
+/// Workaround: advertise a BMP-only instance name. Emoji plumbing
+/// characters (variation selector-16, ZWJ) are dropped too - they're
+/// invisible orphans once their emoji is gone. The AirPlay/Bluetooth
+/// names keep the full emoji; only the SMB advert is filtered.
+fn smb_safe_name(name: &str) -> String {
+    let filtered: String = name
+        .chars()
+        .filter(|&c| (c as u32) <= 0xFFFF && c != '\u{FE0F}' && c != '\u{200D}')
+        .collect();
+    filtered.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn write_service(name: &str) -> std::io::Result<()> {
-    let trimmed = name.trim();
-    let (instance, wildcards) = if trimmed.is_empty() {
+    let safe = smb_safe_name(name);
+    let (instance, wildcards) = if safe.is_empty() {
         ("%h".to_string(), "yes")
     } else {
-        (xml_escape(trimmed), "no")
+        (xml_escape(&safe), "no")
     };
     let xml = format!(
         r#"<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
@@ -81,4 +106,18 @@ fn xml_escape(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::smb_safe_name;
+
+    #[test]
+    fn strips_astral_keeps_bmp() {
+        assert_eq!(smb_safe_name("George’s 🔊"), "George’s");
+        assert_eq!(smb_safe_name("Nate's ♪ Box"), "Nate's ♪ Box");
+        assert_eq!(smb_safe_name("🔊"), "");
+        // VS16 + ZWJ orphans are dropped, whitespace collapsed.
+        assert_eq!(smb_safe_name("A \u{FE0F}\u{200D} B 😀"), "A B");
+    }
 }
