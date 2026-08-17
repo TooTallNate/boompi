@@ -183,6 +183,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
             let saver_kind = screensaver_kind_str(state.settings.screensaver);
             let saver_min = state.settings.screensaver_min.min(240) as i32;
             let clock_24h = state.settings.clock_24h;
+            let vis_opacity = state.settings.visualizer_opacity;
             apply_wifi(ctx, state.wifi.clone());
             let _ = ctx.weak.upgrade_in_event_loop(move |ui| {
                 apply_emoji_fonts(&ui, &emoji);
@@ -192,6 +193,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_saver_kind(saver_kind.into());
                 ui.set_saver_timeout_min(saver_min);
                 ui.set_clock_24h(clock_24h);
+                ui.set_vis_opacity(vis_opacity);
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
                 ui.set_online_art(online_art);
@@ -244,6 +246,7 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_saver_kind(screensaver_kind_str(settings.screensaver).into());
                 ui.set_saver_timeout_min(settings.screensaver_min.min(240) as i32);
                 ui.set_clock_24h(settings.clock_24h);
+                ui.set_vis_opacity(settings.visualizer_opacity);
                 ui.set_update_channel_edge(
                     settings.update_channel == boompi_proto::UpdateChannel::Edge,
                 );

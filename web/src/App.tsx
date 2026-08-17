@@ -1178,6 +1178,19 @@ function AppearanceSection({ settings, onSaved }: SectionProps) {
           ))}
         </select>
       </div>
+      <label className="mt-3 block text-[13px] text-dim">
+        Visualizer opacity: {Math.round(settings.visualizer_opacity * 100)}%
+        <input
+          type="range"
+          min={10}
+          max={100}
+          className="mt-1 block w-full"
+          value={Math.round(settings.visualizer_opacity * 100)}
+          onChange={(e) =>
+            save({ visualizer_opacity: Number(e.target.value) / 100 })
+          }
+        />
+      </label>
       <StatusText status={status} />
     </Section>
   );

@@ -272,6 +272,9 @@ pub struct Settings {
     /// its own level and the system sink stays at reference.
     #[serde(default = "default_game_volume")]
     pub game_volume: f32,
+    /// Background visualizer opacity on the panel (0.1-1.0).
+    #[serde(default = "default_visualizer_opacity")]
+    pub visualizer_opacity: f32,
     /// MQTT broker for Home Assistant integration ("host" or
     /// "host:port"; empty = disabled). Entities appear in HA via MQTT
     /// discovery.
@@ -302,6 +305,7 @@ impl Default for Settings {
             airplay_classic: false,
             clock_24h: false,
             game_volume: default_game_volume(),
+            visualizer_opacity: default_visualizer_opacity(),
             mqtt_broker: String::new(),
             mqtt_username: String::new(),
             mqtt_password: String::new(),
@@ -343,6 +347,8 @@ pub struct SettingsPatch {
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver_min: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visualizer_opacity: Option<f32>,
 }
 
 /// Wi-Fi link + hotspot state, mirrored to all clients (panel Wi-Fi
@@ -588,6 +594,10 @@ pub struct State {
     pub emoji_fonts: EmojiFontsState,
     #[serde(default)]
     pub updates: UpdateState,
+}
+
+fn default_visualizer_opacity() -> f32 {
+    1.0
 }
 
 fn default_game_volume() -> f32 {

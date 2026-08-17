@@ -7,6 +7,7 @@ config BR2_PACKAGE_LIBRETRO_CORES
 	select BR2_PACKAGE_LIBRETRO_MGBA
 	select BR2_PACKAGE_LIBRETRO_PCSX_REARMED
 	select BR2_PACKAGE_LIBRETRO_MUPEN64PLUS_NEXT
+	select BR2_PACKAGE_LIBRETRO_MUPEN64PLUS_NEXT_PI4
 	help
 	  The libretro cores boompi ships: fceumm (NES), snes9x (SNES),
 	  gambatte (GB/GBC), mgba (GBA), pcsx_rearmed (PSX, NEON/ari64

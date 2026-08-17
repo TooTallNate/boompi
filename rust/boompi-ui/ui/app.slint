@@ -83,6 +83,8 @@ export component AppWindow inherits Window {
     // only ever draw the tweened values.
     in-out property <[float]> bar-targets: [];
     in property <[float]> bars: [];
+    /// Visualizer opacity (settings.visualizer_opacity).
+    in property <float> vis-opacity: 1.0;
     // Peak-hold caps: the classic analyzer effect where a thin slice
     // lingers at the recent maximum, then falls with gravity, fading
     // towards transparent on the way down.
@@ -184,32 +186,38 @@ export component AppWindow inherits Window {
     // a blur per bar per frame (and the blur area grows with bar height)
     // collapses the frame rate even on the Pi 4's GPU; the gradient fakes
     // the same look for free.
-    HorizontalLayout {
-        // Scale-invariant: the layout divides the screen into equal
-        // slots (spacing 0 - any width-derived spacing binds through
-        // the layout's own size negotiation and loops); each slot
-        // carves its gap internally with width fractions.
-        for level[bar-idx] in root.bars: Rectangle {
-            Rectangle {
-                x: parent.width * 0.09;
-                width: parent.width * 0.82;
-                y: parent.height - self.height;
-                height: parent.height * level;
-                border-radius: 0.1667rem;
-                background: @linear-gradient(180deg,
-                    Theme.accent.transparentize(0.05) 0%,
-                    Theme.accent.transparentize(0.45) 14%,
-                    Theme.bar 60%);
-            }
-            // Peak-hold cap: brightness alone sells the glow.
-            if root.peaks[bar-idx] > 0.015: Rectangle {
-                x: parent.width * 0.09;
-                width: parent.width * 0.82;
-                y: parent.height * (1 - root.peaks[bar-idx]) - self.height;
-                height: 0.1667rem;
-                border-radius: 0.0833rem;
-                opacity: root.peak-fades[bar-idx];
-                background: Theme.accent.transparentize(0.05);
+    // Bars draw in the art palette's SECONDARY hue (accent2) so they
+    // never drown the volume/position tracks, which keep the primary
+    // accent; overall opacity is a user setting.
+    Rectangle {
+        opacity: root.vis-opacity;
+        HorizontalLayout {
+            // Scale-invariant: the layout divides the screen into equal
+            // slots (spacing 0 - any width-derived spacing binds through
+            // the layout's own size negotiation and loops); each slot
+            // carves its gap internally with width fractions.
+            for level[bar-idx] in root.bars: Rectangle {
+                Rectangle {
+                    x: parent.width * 0.09;
+                    width: parent.width * 0.82;
+                    y: parent.height - self.height;
+                    height: parent.height * level;
+                    border-radius: 0.1667rem;
+                    background: @linear-gradient(180deg,
+                        Theme.accent2.transparentize(0.05) 0%,
+                        Theme.accent2.transparentize(0.45) 14%,
+                        Theme.bar 60%);
+                }
+                // Peak-hold cap: brightness alone sells the glow.
+                if root.peaks[bar-idx] > 0.015: Rectangle {
+                    x: parent.width * 0.09;
+                    width: parent.width * 0.82;
+                    y: parent.height * (1 - root.peaks[bar-idx]) - self.height;
+                    height: 0.1667rem;
+                    border-radius: 0.0833rem;
+                    opacity: root.peak-fades[bar-idx];
+                    background: Theme.accent2.transparentize(0.05);
+                }
             }
         }
     }

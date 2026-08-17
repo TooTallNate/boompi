@@ -123,6 +123,7 @@ struct Session {
     obex_port: Option<u16>,
     img_handle: Option<String>,
     art_requested_for: Option<String>,
+    art_requested_at: Option<std::time::Instant>,
 }
 
 impl Session {
@@ -656,6 +657,23 @@ async fn handle_command(ctx: &Ctx, session: &Session, cmd: SourceCommand) -> any
 /// source holds the display, the phone's AVRCP chatter must not clobber
 /// the track/source state. Session bookkeeping still runs; only the
 /// shared-state writes are gated.
+/// Claim the display for Bluetooth when no source owns it and a BT
+/// session is actively publishing.
+async fn reclaim_display_if_unowned(ctx: &Ctx, session: &Session) {
+    if ctx.app.shared.read().await.source.active.is_some() {
+        return;
+    }
+    let source = SourceInfo {
+        active: Some(SourceKind::Bluetooth),
+        device_name: session.device_alias.clone(),
+        controllable: true,
+    };
+    tracing::info!("bluetooth reclaims the display (no active source)");
+    ctx.app.shared.write().await.source = source.clone();
+    ctx.app.broadcast(ServerMessage::Source(source));
+    sync_transport_volume(ctx, session).await;
+}
+
 async fn bt_owns_display(app: &SharedApp) -> bool {
     matches!(
         app.shared.read().await.source.active,
@@ -777,17 +795,31 @@ async fn handle_bt_command(
                 // disconnected. Only hunt for pads when nothing is
                 // connected; pairing a second pad requires disconnecting
                 // the first (rare, documented trade).
-                let any_connected = ctx
-                    .app
-                    .shared
-                    .read()
-                    .await
-                    .bt_devices
-                    .iter()
-                    .any(|d| d.connected);
+                //
+                // The disconnects issued above land asynchronously, so
+                // poll LIVE state briefly instead of trusting the
+                // bt_devices snapshot (bench: the snapshot still showed
+                // the just-released phone, discovery got skipped, and a
+                // DualSense waiting to be discovered never was).
+                let mut any_connected = true;
+                for _ in 0..10 {
+                    refresh_devices(ctx).await;
+                    any_connected = ctx
+                        .app
+                        .shared
+                        .read()
+                        .await
+                        .bt_devices
+                        .iter()
+                        .any(|d| d.connected);
+                    if !any_connected {
+                        break;
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                }
                 if any_connected {
                     tracing::info!(
-                        "pairing window open; skipping gamepad discovery (device connected)"
+                        "pairing window open; skipping gamepad discovery (gamepad still connected)"
                     );
                 } else {
                     set_discovery(ctx, session, true).await;
@@ -1412,6 +1444,13 @@ async fn publish_track(ctx: &Ctx, session: &mut Session) {
     if !bt_owns_display(&ctx.app).await {
         return;
     }
+    // Publishing while nobody owns the display means (re)claiming it.
+    // Covers returning to Bluetooth after another source releases:
+    // the MediaPlayer1 whose appearance normally triggers adoption
+    // already exists, so no InterfacesAdded ever fires again (bench:
+    // fetched art rejected with active=None while the panel happily
+    // showed the track).
+    reclaim_display_if_unowned(ctx, session).await;
     maybe_request_art(ctx, session);
     let track = session.to_track(&ctx.resolved);
     ctx.app.shared.write().await.track = Some(track.clone());
@@ -1424,8 +1463,17 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
     let (Some(port), Some(handle)) = (session.obex_port, session.img_handle.clone()) else {
         return;
     };
+    if ctx.resolved.lock().unwrap().contains_key(&handle) {
+        return;
+    }
+    // In-flight guard with a retry window: a failed fetch (phone
+    // refused the OBEX connect - iOS closes the port around session
+    // churn) used to poison the handle forever; now the next AVRCP
+    // event after 10s re-requests it.
     if session.art_requested_for.as_ref() == Some(&handle)
-        || ctx.resolved.lock().unwrap().contains_key(&handle)
+        && session
+            .art_requested_at
+            .is_some_and(|t| t.elapsed() < std::time::Duration::from_secs(10))
     {
         return;
     }
@@ -1433,6 +1481,7 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
         return;
     };
     session.art_requested_for = Some(handle.clone());
+    session.art_requested_at = Some(std::time::Instant::now());
     let _ = ctx.art_tx.send(crate::artwork::ArtRequest {
         address,
         psm: port,

@@ -19,6 +19,7 @@ export interface Settings {
   airplay_classic: boolean;
   clock_24h: boolean;
   game_volume: number;
+  visualizer_opacity: number;
   mqtt_broker: string;
   mqtt_username: string;
   mqtt_password: string;
@@ -28,6 +29,7 @@ export interface Settings {
 
 export interface SettingsPatch {
   ui_scale?: number;
+  visualizer_opacity?: number;
   airplay_model?: string;
   name?: string;
   theme?: Theme;

@@ -1,0 +1,107 @@
+From 9d3a13ad2be69ffabc06e56f5cc7e4b02d27487a Mon Sep 17 00:00:00 2001
+From: Nathan Rajlich <n@n8.io>
+Date: Sat, 15 Aug 2026 14:39:50 -0700
+Subject: [PATCH] avrcp: add [AVRCP] AbsoluteVolume main.conf option
+
+AbsoluteVolume=false removes the category-2 feature bit from both
+AVRCP SDP records and makes avrcp_volume_supported() return false -
+the single choke point behind SetAbsoluteVolume handling, the
+VOLUME_CHANGED event, and outbound volume notifications - so senders
+never negotiate absolute volume and fall back to source-side volume
+handling they fully own.
+
+Motivation: a speaker whose volume pipeline is entirely sink-side
+(per-stream mixing) wants senders to stream full-scale PCM. iOS in
+particular renders attenuated PCM when absolute volume is negotiated
+but the host side does not complete the notification loop (e.g.
+PipeWire's hw-volume disabled): the phone freezes at the volume it
+learned at registration regardless of slider or SetAbsoluteVolume
+traffic. Default true preserves stock behavior.
+---
+ profiles/audio/avrcp.c | 12 ++++++++++++
+ src/btd.h              |  1 +
+ src/main.c             |  5 +++++
+ 3 files changed, 18 insertions(+)
+
+diff --git a/profiles/audio/avrcp.c b/profiles/audio/avrcp.c
+index 2194a91..ce21552 100644
+--- a/profiles/audio/avrcp.c
++++ b/profiles/audio/avrcp.c
+@@ -423,6 +423,9 @@ static sdp_record_t *avrcp_ct_record(bool browsing)
+ 					AVRCP_FEATURE_CT_GET_IMAGE |
+ 					AVRCP_FEATURE_CT_GET_THUMBNAIL);
+ 
++	if (!btd_opts.avrcp.absolute_volume)
++		feat &= ~AVRCP_FEATURE_CATEGORY_2;
++
+ 	record = sdp_record_alloc();
+ 	if (!record)
+ 		return NULL;
+@@ -500,6 +503,9 @@ static sdp_record_t *avrcp_tg_record(bool browsing)
+ 					AVRCP_FEATURE_CATEGORY_4 |
+ 					AVRCP_FEATURE_TG_PLAYER_SETTINGS);
+ 
++	if (!btd_opts.avrcp.absolute_volume)
++		feat &= ~AVRCP_FEATURE_CATEGORY_2;
++
+ 	record = sdp_record_alloc();
+ 	if (!record)
+ 		return NULL;
+@@ -1775,6 +1781,12 @@ err:
+ /* SetAbsoluteVolume requires at least version 1.4 and a category-2 */
+ static bool avrcp_volume_supported(struct avrcp_data *data)
+ {
++	/* Absolute volume disabled by configuration: never advertise or
++	 * accept it, so senders fall back to source-side volume handling
++	 * they fully own (classic mode). */
++	if (!btd_opts.avrcp.absolute_volume)
++		return false;
++
+ 	if (!data || data->version < 0x0104)
+ 		return false;
+ 
+diff --git a/src/btd.h b/src/btd.h
+index db2e812..5ae1bbe 100644
+--- a/src/btd.h
++++ b/src/btd.h
+@@ -123,6 +123,7 @@ struct btd_avdtp_opts {
+ struct btd_avrcp_opts {
+ 	bool		volume_without_target;
+ 	bool		volume_category;
++	bool		absolute_volume;
+ };
+ 
+ struct btd_advmon_opts {
+diff --git a/src/main.c b/src/main.c
+index 8aa19a3..59922da 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -180,6 +180,7 @@ static const char *avdtp_options[] = {
+ static const char *avrcp_options[] = {
+ 	"VolumeWithoutTarget",
+ 	"VolumeCategory",
++	"AbsoluteVolume",
+ 	NULL
+ };
+ 
+@@ -1355,6 +1356,9 @@ static void parse_avrcp(GKeyFile *config)
+ 	parse_config_bool(config, "AVRCP",
+ 		"VolumeCategory",
+ 		&btd_opts.avrcp.volume_category);
++	parse_config_bool(config, "AVRCP",
++		"AbsoluteVolume",
++		&btd_opts.avrcp.absolute_volume);
+ }
+ 
+ static void parse_advmon(GKeyFile *config)
+@@ -1430,6 +1434,7 @@ static void init_defaults(void)
+ 
+ 	btd_opts.avrcp.volume_without_target = false;
+ 	btd_opts.avrcp.volume_category = true;
++	btd_opts.avrcp.absolute_volume = true;
+ 
+ 	btd_opts.advmon.rssi_sampling_period = 0xFF;
+ 	btd_opts.csis.encrypt = true;
+-- 
+2.50.1 (Apple Git-155)
+
