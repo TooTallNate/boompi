@@ -2,6 +2,14 @@
 # not committed - run `xcodegen` in this directory (brew install
 # xcodegen) on a machine with Xcode, then open Boompi.xcodeproj.
 name: Boompi
+# Per-developer signing lives in local.yml (gitignored) so it survives
+# regeneration - e.g.:
+#   settings:
+#     DEVELOPMENT_TEAM: ABCDE12345
+include:
+  - path: local.yml
+    relativePaths: false
+    enable: true
 options:
   bundleIdPrefix: io.n8
   deploymentTarget:

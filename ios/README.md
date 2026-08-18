@@ -35,8 +35,16 @@ swift-testing only ship with Xcode.)
 Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
     brew install xcodegen
-    cd ios && xcodegen
+    cd ios
+    echo "settings: {}" > local.yml   # or with your DEVELOPMENT_TEAM (see below)
+    xcodegen
     open Boompi.xcodeproj
+
+`local.yml` is gitignored per-developer state; putting your team there
+means regenerating the project never loses signing:
+
+    settings:
+      DEVELOPMENT_TEAM: ABCDE12345
 
 Bluetooth needs real hardware - the iOS Simulator has no CoreBluetooth
 radio. Build to a device.

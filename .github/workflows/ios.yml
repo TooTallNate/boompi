@@ -32,6 +32,7 @@ jobs:
         working-directory: ios
         run: |
           brew install xcodegen
+          printf "settings: {}\n" > local.yml  # per-dev signing stub
           xcodegen
 
       - name: Build the app (unsigned, iOS SDK)
