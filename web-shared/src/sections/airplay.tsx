@@ -4,6 +4,7 @@ import { Separator } from "@boompi/ui/components/separator";
 import { Switch } from "@boompi/ui/components/switch";
 import { ToggleGroup, ToggleGroupItem } from "@boompi/ui/components/toggle-group";
 import { StatusText } from "@boompi/ui/components/status-text";
+import { capsOf } from "@boompi/ui/proto";
 import { useBoompi, useSave } from "@boompi/ui/transport";
 
 // Values are mDNS `model=` strings. Senders resolve Apple model strings
@@ -74,10 +75,10 @@ function AirplayModelIcon({ model }: { model: string }) {
 }
 
 export function AirplaySection() {
-  const { state } = useBoompi();
+  const { state, hello } = useBoompi();
   const { status, save } = useSave();
   const settings = state?.settings;
-  if (!settings) return null;
+  if (!settings || !capsOf(hello).has("airplay")) return null;
   const preset = AIRPLAY_MODELS.some((m) => m.value === settings.airplay_model);
 
   return (

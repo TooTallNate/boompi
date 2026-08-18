@@ -8,7 +8,7 @@ import { Input } from "@boompi/ui/components/input";
 import { Separator } from "@boompi/ui/components/separator";
 import { Switch } from "@boompi/ui/components/switch";
 import { cn } from "@boompi/ui/lib/utils";
-import type { WifiNetwork } from "@boompi/ui/proto";
+import { capsOf, type WifiNetwork } from "@boompi/ui/proto";
 import { useBoompi, type WifiRestAction } from "@boompi/ui/transport";
 import { Lock } from "lucide-react";
 
@@ -43,12 +43,15 @@ interface WifiView {
  *  the protocol (WifiAction::Scan / Connect), so the BLE-only remote
  *  manages Wi-Fi the same as the box's own web app. */
 export function WifiSection() {
-  const { rest, send, state } = useBoompi();
+  const { rest, send, state, hello } = useBoompi();
   const [restView, setRestView] = useState<WifiView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joining, setJoining] = useState<string | null>(null); // ssid with open psk prompt
   const [psk, setPsk] = useState("");
   const [busy, setBusy] = useState(false);
+  // Old boxes don't answer protocol scans (capability gate): without
+  // an IP path they get the limited hotspot-only card below.
+  const canScan = rest != null || capsOf(hello).has("wifi_scan");
 
   // REST: poll the status+scan endpoint (returns fresh scan results).
   // Protocol: request a scan; results arrive as wifi_networks
@@ -61,10 +64,10 @@ export function WifiSection() {
       } catch (e) {
         setError(String(e));
       }
-    } else {
+    } else if (canScan) {
       send({ type: "wifi", action: "scan" });
     }
-  }, [rest, send]);
+  }, [rest, send, canScan]);
 
   useEffect(() => {
     refresh();
@@ -84,6 +87,50 @@ export function WifiSection() {
           networks: state.wifi_networks ?? [],
         }
       : null;
+
+  // BLE link to a box whose software predates protocol Wi-Fi: live
+  // status + the hotspot escape hatch, nothing that needs a scan.
+  if (!canScan) {
+    const w = state?.wifi;
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Wi-Fi</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {w?.connected ? (
+            <p className="text-sm">
+              Connected to <strong>{w.connected}</strong>
+              {w.ip ? ` (${w.ip})` : ""}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Not connected to Wi-Fi.</p>
+          )}
+          <Field orientation="horizontal">
+            <div className="flex flex-col gap-1">
+              <FieldLabel htmlFor="wifi-hotspot-legacy">Hotspot</FieldLabel>
+              <FieldDescription>
+                Speaker broadcasts its own network - join it to reach the full
+                settings page ({w?.settings_url ?? "shown on the speaker"}).
+              </FieldDescription>
+            </div>
+            <Switch
+              id="wifi-hotspot-legacy"
+              checked={w?.ap_active ?? false}
+              onCheckedChange={(v) => send({ type: "wifi", action: "ap", enabled: v })}
+            />
+          </Field>
+          <Alert>
+            <AlertDescription>
+              This speaker's software predates Wi-Fi management over
+              Bluetooth - update it (Software page over Wi-Fi) to scan and
+              join networks from here.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
 
   async function act(a: WifiRestAction) {
     setBusy(true);

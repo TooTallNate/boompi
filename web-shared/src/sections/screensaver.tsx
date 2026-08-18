@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@boom
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@boompi/ui/components/select";
 import { ToggleGroup, ToggleGroupItem } from "@boompi/ui/components/toggle-group";
 import { StatusText } from "@boompi/ui/components/status-text";
+import { capsOf } from "@boompi/ui/proto";
 import { useBoompi, useSave } from "@boompi/ui/transport";
 import type { ScreensaverKind } from "@boompi/ui/proto";
 
@@ -14,10 +15,10 @@ const KINDS: { label: string; value: ScreensaverKind }[] = [
 ];
 
 export function ScreensaverSection() {
-  const { state, send } = useBoompi();
+  const { state, send, hello } = useBoompi();
   const { status, save } = useSave();
   const settings = state?.settings;
-  if (!settings) return null;
+  if (!settings || !capsOf(hello).has("screensaver")) return null;
 
   return (
     <Card>

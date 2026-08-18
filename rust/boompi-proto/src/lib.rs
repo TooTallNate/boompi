@@ -501,6 +501,51 @@ pub struct Hello {
     /// The panel renders this as a QR code.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings_url: Option<String>,
+    /// Feature flags for UIs that outlive any given box's software
+    /// (hosted remote, phone apps): what this box can actually do.
+    /// Clients hide features whose capability is absent. Unknown
+    /// strings must be ignored (future boxes will grow more). An old
+    /// box that predates this field sends nothing - clients fall back
+    /// to the legacy feature set (see [`caps::LEGACY`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub capabilities: Vec<String>,
+}
+
+/// Capability names carried in [`Hello::capabilities`].
+pub mod caps {
+    /// Wi-Fi hardware exists (scan/join/hotspot make sense at all).
+    pub const WIFI: &str = "wifi";
+    /// Wi-Fi scans + password joins ride the protocol
+    /// ([`crate::WifiAction::Scan`]/`Connect`) - absent on boxes that
+    /// predate them, where Wi-Fi management needs the REST API.
+    pub const WIFI_SCAN: &str = "wifi_scan";
+    /// A battery monitor is configured (hard-wired boxes drop this).
+    pub const BATTERY: &str = "battery";
+    /// A Bluetooth adapter is present (pairing/devices UI).
+    pub const BLUETOOTH: &str = "bluetooth";
+    /// Game library + emulator.
+    pub const GAMES: &str = "games";
+    pub const EMOJI_FONTS: &str = "emoji_fonts";
+    pub const UPDATES: &str = "updates";
+    pub const SCREENSAVER: &str = "screensaver";
+    pub const HOME_ASSISTANT: &str = "home_assistant";
+    pub const AIRPLAY: &str = "airplay";
+
+    /// What a box that predates the capabilities field supports:
+    /// everything except the protocol Wi-Fi lifecycle (its Wi-Fi
+    /// management was REST-only). Clients use this when
+    /// `Hello.capabilities` is empty.
+    pub const LEGACY: &[&str] = &[
+        WIFI,
+        BATTERY,
+        BLUETOOTH,
+        GAMES,
+        EMOJI_FONTS,
+        UPDATES,
+        SCREENSAVER,
+        HOME_ASSISTANT,
+        AIRPLAY,
+    ];
 }
 
 /// One emoji font in the selection catalog (see boompid's fonts.rs).

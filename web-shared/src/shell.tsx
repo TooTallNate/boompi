@@ -32,6 +32,7 @@ import {
   Volume2,
   Wifi,
 } from "lucide-react";
+import { capsOf } from "@boompi/ui/proto";
 import { useBoompi } from "@boompi/ui/transport";
 
 import { AirplaySection } from "@boompi/ui/sections/airplay";
@@ -54,6 +55,9 @@ export interface SettingsPage {
   label: string;
   icon: ComponentType;
   content: ComponentType;
+  /** Capability required for this page to appear (Hello.capabilities;
+   *  a hard-wired box without a battery drops its Battery page). */
+  requires?: string;
 }
 
 function GeneralPage() {
@@ -91,12 +95,12 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   { id: "general", label: "General", icon: Settings2, content: GeneralPage },
   { id: "audio", label: "Audio & AirPlay", icon: Volume2, content: AudioPage },
   { id: "display", label: "Display", icon: Monitor, content: DisplayPage },
-  { id: "bluetooth", label: "Bluetooth", icon: Bluetooth, content: BluetoothSection },
-  { id: "wifi", label: "Wi-Fi", icon: Wifi, content: WifiSection },
-  { id: "games", label: "Games", icon: Gamepad2, content: GamesSection },
-  { id: "battery", label: "Battery", icon: BatteryMedium, content: BatterySection },
-  { id: "home-assistant", label: "Home Assistant", icon: Home, content: HomeAssistantSection },
-  { id: "software", label: "Software", icon: CloudDownload, content: SoftwareSection },
+  { id: "bluetooth", label: "Bluetooth", icon: Bluetooth, content: BluetoothSection, requires: "bluetooth" },
+  { id: "wifi", label: "Wi-Fi", icon: Wifi, content: WifiSection, requires: "wifi" },
+  { id: "games", label: "Games", icon: Gamepad2, content: GamesSection, requires: "games" },
+  { id: "battery", label: "Battery", icon: BatteryMedium, content: BatterySection, requires: "battery" },
+  { id: "home-assistant", label: "Home Assistant", icon: Home, content: HomeAssistantSection, requires: "home_assistant" },
+  { id: "software", label: "Software", icon: CloudDownload, content: SoftwareSection, requires: "updates" },
 ];
 
 export function SettingsShell({
@@ -115,7 +119,12 @@ export function SettingsShell({
   headerExtra?: ReactNode;
 }) {
   const { hello, state, error } = useBoompi();
-  const page = pages.find((p) => p.id === active) ?? pages[0];
+  // Capability gating: the hosted remote and phone apps outlive any
+  // box's software, so the box declares what it can do and the UI
+  // hides the rest (old boxes get the legacy set).
+  const caps = capsOf(hello);
+  const shown = pages.filter((p) => !p.requires || caps.has(p.requires));
+  const page = shown.find((p) => p.id === active) ?? shown[0];
   const Content = page.content;
 
   return (
@@ -141,7 +150,7 @@ export function SettingsShell({
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {pages.map((p) => (
+                {shown.map((p) => (
                   <SidebarMenuItem key={p.id}>
                     <SidebarMenuButton
                       isActive={p.id === page.id}

@@ -3,6 +3,7 @@ import { Button } from "@boompi/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Separator } from "@boompi/ui/components/separator";
 import { Spinner } from "@boompi/ui/components/spinner";
+import { capsOf } from "@boompi/ui/proto";
 import { useBoompi } from "@boompi/ui/transport";
 import { Fragment } from "react";
 
@@ -10,9 +11,9 @@ import { Fragment } from "react";
  *  every change (downloads incl. progress, selection) arrives as an
  *  emoji_fonts broadcast - no REST polling. */
 export function EmojiFontsSection() {
-  const { state, send } = useBoompi();
+  const { state, send, hello } = useBoompi();
   const emoji = state?.emoji_fonts;
-  if (!emoji) return null;
+  if (!emoji || !capsOf(hello).has("emoji_fonts")) return null;
 
   return (
     <Card>

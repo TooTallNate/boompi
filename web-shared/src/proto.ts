@@ -150,6 +150,28 @@ export interface Hello {
   model?: string;
   version: string;
   uptime_secs: number;
+  /** Feature flags (see rust caps module). Absent on old boxes. */
+  capabilities?: string[];
+}
+
+/** What a box that predates the capabilities field supports:
+ *  everything except the protocol Wi-Fi lifecycle. */
+export const LEGACY_CAPS = [
+  "wifi",
+  "battery",
+  "bluetooth",
+  "games",
+  "emoji_fonts",
+  "updates",
+  "screensaver",
+  "home_assistant",
+  "airplay",
+] as const;
+
+/** The box's capability set, with the legacy fallback applied. */
+export function capsOf(hello: Hello | null): Set<string> {
+  const list = hello?.capabilities;
+  return new Set(list && list.length > 0 ? list : LEGACY_CAPS);
 }
 
 export interface AppState {

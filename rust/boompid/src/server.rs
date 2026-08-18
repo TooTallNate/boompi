@@ -161,7 +161,38 @@ pub(crate) async fn hello(app: &SharedApp) -> Hello {
         version: crate::state::VERSION.into(),
         uptime_secs: app.started.elapsed().as_secs(),
         settings_url: app.settings_url(),
+        capabilities: capabilities(app).await,
     }
+}
+
+/// What this box can do, for UIs that outlive its software (hosted
+/// remote, phone apps). Hardware-dependent flags read live state;
+/// software flags are static facts about this build.
+async fn capabilities(app: &SharedApp) -> Vec<String> {
+    use boompi_proto::caps;
+    let s = app.shared.read().await;
+    let mut out: Vec<String> = [
+        caps::WIFI_SCAN,
+        caps::GAMES,
+        caps::EMOJI_FONTS,
+        caps::UPDATES,
+        caps::SCREENSAVER,
+        caps::HOME_ASSISTANT,
+        caps::AIRPLAY,
+    ]
+    .iter()
+    .map(|c| c.to_string())
+    .collect();
+    if s.wifi.supported {
+        out.push(caps::WIFI.into());
+    }
+    if s.battery_status != boompi_proto::BatteryStatus::Unconfigured {
+        out.push(caps::BATTERY.into());
+    }
+    if s.pairing.state != boompi_proto::PairingState::Unavailable {
+        out.push(caps::BLUETOOTH.into());
+    }
+    out
 }
 
 #[derive(serde::Deserialize)]
