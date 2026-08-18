@@ -59,13 +59,48 @@ public struct Settings: Decodable, Equatable {
     public var screensaver: String
     public var screensaverMin: Int
     public var updateChannel: String
+    public var uiScale: Double
+    public var visualizerOpacity: Double
+    public var onlineArtFallback: Bool
+    public var airplayModel: String
+    public var airplayClassic: Bool
+    public var gameVolume: Double
+    public var mqttBroker: String
+    public var mqttUsername: String
+    public var mqttPassword: String
 
     enum CodingKeys: String, CodingKey {
         case name, theme, screensaver
         case clock24h = "clock_24h"
         case screensaverMin = "screensaver_min"
         case updateChannel = "update_channel"
+        case uiScale = "ui_scale"
+        case visualizerOpacity = "visualizer_opacity"
+        case onlineArtFallback = "online_art_fallback"
+        case airplayModel = "airplay_model"
+        case airplayClassic = "airplay_classic"
+        case gameVolume = "game_volume"
+        case mqttBroker = "mqtt_broker"
+        case mqttUsername = "mqtt_username"
+        case mqttPassword = "mqtt_password"
     }
+}
+
+public struct EmojiFontInfo: Decodable, Equatable, Identifiable {
+    public var id: String
+    public var label: String
+    public var license: String
+    public var installed: Bool
+    public var active: Bool
+    public var builtin: Bool
+    public var size: Int
+}
+
+public struct EmojiFontsState: Decodable, Equatable {
+    public var fonts: [EmojiFontInfo]
+    public var downloading: String?
+    public var progress: Double?
+    public var error: String?
 }
 
 public struct Battery: Decodable, Equatable {
@@ -180,10 +215,12 @@ public struct BoxState: Decodable, Equatable {
     public var games: GamesState?
     public var pairing: Pairing?
     public var btDevices: [BtDevice]?
+    public var emojiFonts: EmojiFontsState?
 
     enum CodingKeys: String, CodingKey {
         case settings, volume, battery, wifi, updates, track, games, pairing
         case btDevices = "bt_devices"
+        case emojiFonts = "emoji_fonts"
     }
 }
 
@@ -203,6 +240,7 @@ public enum ServerMessage {
     case games(GamesState)
     case pairing(Pairing)
     case btDevices([BtDevice])
+    case emojiFonts(EmojiFontsState)
     case other(String)
 
     public static func decode(_ data: Data) throws -> ServerMessage {
@@ -227,6 +265,8 @@ public enum ServerMessage {
         case "bt_devices":
             struct DevicesBody: Decodable { let devices: [BtDevice] }
             return .btDevices(try dec.decode(DevicesBody.self, from: data).devices)
+        case "emoji_fonts":
+            return .emojiFonts(try dec.decode(EmojiFontsState.self, from: data))
         default: return .other(tag.type)
         }
     }
@@ -255,6 +295,9 @@ public enum ClientMessage {
     case btDevice(address: String, action: String) // connect | disconnect | remove
     case gameStop
     case gameLaunch(system: String, file: String)
+    case emojiFont(action: String, id: String) // download | select | remove
+    case previewScreensaver
+    case wifiRadio(enabled: Bool)
 
     public func encode() throws -> Data {
         var dict: [String: Any]
@@ -282,6 +325,10 @@ public enum ClientMessage {
         case .gameStop: dict = ["type": "game", "action": "stop"]
         case .gameLaunch(let system, let file):
             dict = ["type": "game", "action": "launch", "system": system, "file": file]
+        case .emojiFont(let action, let id):
+            dict = ["type": "emoji_font", "action": action, "id": id]
+        case .previewScreensaver: dict = ["type": "preview_screensaver"]
+        case .wifiRadio(let enabled): dict = ["type": "wifi", "action": "radio", "enabled": enabled]
         }
         return try JSONSerialization.data(withJSONObject: dict)
     }

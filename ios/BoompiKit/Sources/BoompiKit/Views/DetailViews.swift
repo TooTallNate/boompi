@@ -30,6 +30,14 @@ struct WifiDetailView: View {
             }
 
             Section {
+                // No radio toggle while the hotspot is up: killing the
+                // radio kills the hotspot (mirrors the web UI's guard).
+                if wifi?.apActive != true {
+                    Toggle("Wi-Fi", isOn: Binding(
+                        get: { wifi?.enabled ?? false },
+                        set: { client.send(.wifiRadio(enabled: $0)) }
+                    ))
+                }
                 Toggle(isOn: Binding(
                     get: { wifi?.apActive ?? false },
                     set: { client.send(.wifiAp(enabled: $0)) }
@@ -257,6 +265,7 @@ struct BatteryDetailView: View {
 
 struct DisplayDetailView: View {
     @ObservedObject var client: BoompiClient
+    @State private var visualizerDrag: Double?
 
     private var settings: Settings? { client.state?.settings }
 
@@ -271,10 +280,55 @@ struct DisplayDetailView: View {
                         Text("Dark").tag("dark")
                         Text("Light").tag("light")
                     }
+                    Picker("Text size", selection: Binding(
+                        get: { settings.uiScale },
+                        set: { client.send(.setSettings(["ui_scale": $0])) }
+                    )) {
+                        ForEach([1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5], id: \.self) { sc in
+                            Text("\(Int(sc * 100))%").tag(sc)
+                        }
+                    }
                     Toggle("24-hour clock", isOn: Binding(
                         get: { settings.clock24h },
                         set: { client.send(.setSettings(["clock_24h": $0])) }
                     ))
+                }
+
+                Section {
+                    VStack(alignment: .leading) {
+                        Text("Visualizer opacity: \(Int((visualizerDrag ?? settings.visualizerOpacity) * 100))%")
+                        Slider(
+                            value: Binding(
+                                get: { visualizerDrag ?? settings.visualizerOpacity },
+                                set: { visualizerDrag = $0 }
+                            ),
+                            in: 0.1...1.0
+                        ) { editing in
+                            if !editing, let v = visualizerDrag {
+                                client.send(.setSettings(["visualizer_opacity": v]))
+                                visualizerDrag = nil
+                            }
+                        }
+                    }
+                    Toggle(isOn: Binding(
+                        get: { settings.onlineArtFallback },
+                        set: { client.send(.setSettings(["online_art_fallback": $0])) }
+                    )) {
+                        VStack(alignment: .leading) {
+                            Text("Fetch album art online")
+                            Text("When a source sends no artwork (needs Wi-Fi)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+
+                if client.caps.contains(Caps.emojiFonts), client.state?.emojiFonts != nil {
+                    Section {
+                        NavigationLink("Emoji Style") {
+                            EmojiFontsView(client: client)
+                        }
+                    }
                 }
                 if client.caps.contains(Caps.screensaver) {
                     Section("Screensaver") {
@@ -296,6 +350,9 @@ struct DisplayDetailView: View {
                                     Text("\(m) min").tag(m)
                                 }
                             }
+                            Button("Preview on speaker") {
+                                client.send(.previewScreensaver)
+                            }
                         }
                     }
                 }
@@ -309,6 +366,7 @@ struct DisplayDetailView: View {
 
 struct GamesDetailView: View {
     @ObservedObject var client: BoompiClient
+    @State private var gameVolumeDrag: Double?
 
     var body: some View {
         List {
@@ -331,6 +389,28 @@ struct GamesDetailView: View {
                 }
             } footer: {
                 Text("Upload ROMs from the speaker's settings page over Wi-Fi.")
+            }
+
+            if let settings = client.state?.settings {
+                Section {
+                    VStack(alignment: .leading) {
+                        Text("Game volume: \(Int((gameVolumeDrag ?? settings.gameVolume) * 100))%")
+                        Slider(
+                            value: Binding(
+                                get: { gameVolumeDrag ?? settings.gameVolume },
+                                set: { gameVolumeDrag = $0 }
+                            ),
+                            in: 0...1
+                        ) { editing in
+                            if !editing, let v = gameVolumeDrag {
+                                client.send(.setSettings(["game_volume": v]))
+                                gameVolumeDrag = nil
+                            }
+                        }
+                    }
+                } footer: {
+                    Text("Music ducks the game volume while both play.")
+                }
             }
 
             if let games = client.state?.games?.games, !games.isEmpty {
@@ -467,5 +547,174 @@ struct SoftwareUpdateView: View {
             }
         }
         .navigationTitle("Software Update")
+    }
+}
+
+
+// MARK: - Emoji style
+
+struct EmojiFontsView: View {
+    @ObservedObject var client: BoompiClient
+
+    private var emoji: EmojiFontsState? { client.state?.emojiFonts }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(emoji?.fonts ?? []) { f in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(f.label)
+                            Text(f.license + (f.size > 0 && !f.installed ? " · \(f.size / 1_048_576) MB" : ""))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if f.active {
+                            Image(systemName: "checkmark").foregroundStyle(.blue)
+                        } else if f.installed {
+                            Button("Use") {
+                                client.send(.emojiFont(action: "select", id: f.id))
+                            }
+                            .font(.caption)
+                            if !f.builtin {
+                                Button(role: .destructive) {
+                                    client.send(.emojiFont(action: "remove", id: f.id))
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .font(.caption)
+                            }
+                        } else if emoji?.downloading == f.id {
+                            ProgressView(value: emoji?.progress ?? 0)
+                                .frame(width: 60)
+                        } else {
+                            Button("Download") {
+                                client.send(.emojiFont(action: "download", id: f.id))
+                            }
+                            .font(.caption)
+                            .disabled(emoji?.downloading != nil)
+                        }
+                    }
+                }
+            } footer: {
+                Text("The font used for emoji on the speaker's screen. Switching restarts the panel briefly.")
+            }
+            if let error = emoji?.error {
+                Text(error).font(.caption).foregroundStyle(.red)
+            }
+        }
+        .navigationTitle("Emoji Style")
+    }
+}
+
+// MARK: - AirPlay
+
+struct AirPlayDetailView: View {
+    @ObservedObject var client: BoompiClient
+
+    private var settings: Settings? { client.state?.settings }
+
+    private static let models: [(String, String, String)] = [
+        ("Generic speaker", "", "hifispeaker"),
+        ("HomePod mini", "AudioAccessory5,1", "homepodmini"),
+        ("HomePod", "AudioAccessory1,1", "homepod"),
+        ("Apple TV", "AppleTV14,1", "appletv"),
+    ]
+
+    var body: some View {
+        List {
+            if let settings {
+                Section {
+                    ForEach(Self.models, id: \.1) { label, value, symbol in
+                        Button {
+                            client.send(.setSettings(["airplay_model": value]))
+                        } label: {
+                            HStack {
+                                Image(systemName: symbol)
+                                    .frame(width: 28)
+                                Text(label)
+                                Spacer()
+                                if settings.airplayModel == value {
+                                    Image(systemName: "checkmark").foregroundStyle(.blue)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("Device icon")
+                } footer: {
+                    Text("Phones pick the icon in their AirPlay list from the advertised model. Senders may need to rediscover the speaker after changing this.")
+                }
+
+                Section {
+                    Toggle("Classic AirPlay only", isOn: Binding(
+                        get: { settings.airplayClassic },
+                        set: { client.send(.setSettings(["airplay_classic": $0])) }
+                    ))
+                } footer: {
+                    Text("The speaker's play/pause/next buttons only work over classic AirPlay. Trade: no multi-speaker audio while enabled.")
+                }
+            }
+        }
+        .navigationTitle("AirPlay")
+    }
+}
+
+// MARK: - Home Assistant
+
+struct HomeAssistantDetailView: View {
+    @ObservedObject var client: BoompiClient
+    @State private var broker: String?
+    @State private var username: String?
+    @State private var password: String?
+
+    private var settings: Settings? { client.state?.settings }
+
+    var body: some View {
+        List {
+            if let settings {
+                Section {
+                    LabeledContent("Broker") {
+                        TextField("192.168.1.89:1883", text: Binding(
+                            get: { broker ?? settings.mqttBroker },
+                            set: { broker = $0 }
+                        ))
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                    }
+                    LabeledContent("Username") {
+                        TextField("", text: Binding(
+                            get: { username ?? settings.mqttUsername },
+                            set: { username = $0 }
+                        ))
+                        .multilineTextAlignment(.trailing)
+                        .autocorrectionDisabled()
+                    }
+                    LabeledContent("Password") {
+                        SecureField("", text: Binding(
+                            get: { password ?? settings.mqttPassword },
+                            set: { password = $0 }
+                        ))
+                        .multilineTextAlignment(.trailing)
+                    }
+                    Button("Save") {
+                        client.send(.setSettings([
+                            "mqtt_broker": broker ?? settings.mqttBroker,
+                            "mqtt_username": username ?? settings.mqttUsername,
+                            "mqtt_password": password ?? settings.mqttPassword,
+                        ]))
+                        broker = nil
+                        username = nil
+                        password = nil
+                    }
+                    .disabled(broker == nil && username == nil && password == nil)
+                } footer: {
+                    Text("Point the speaker at your MQTT broker and it appears in Home Assistant automatically: playback, volume, battery, pairing, and OS updates. Leave the broker empty to disable.")
+                }
+            }
+        }
+        .navigationTitle("Home Assistant")
     }
 }

@@ -53,6 +53,24 @@ struct RemoteView: View {
                 } label: {
                     SettingsRow(icon: "sun.max.fill", color: .indigo, title: "Display")
                 }
+                if client.caps.contains(Caps.airplay) {
+                    NavigationLink {
+                        AirPlayDetailView(client: client)
+                    } label: {
+                        SettingsRow(icon: "airplay.audio", color: .teal, title: "AirPlay")
+                    }
+                }
+                if client.caps.contains(Caps.homeAssistant) {
+                    NavigationLink {
+                        HomeAssistantDetailView(client: client)
+                    } label: {
+                        SettingsRow(icon: "house.fill", color: .orange, title: "Home Assistant") {
+                            if client.state?.settings.mqttBroker.isEmpty == false {
+                                Text("On").foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
                 if client.caps.contains(Caps.games) {
                     NavigationLink {
                         GamesDetailView(client: client)

@@ -140,6 +140,24 @@ do {
     )
 } catch { expect(false, "client message encoding: \(error)") }
 
+do {
+    let msg = try decode(
+        #"{"type":"emoji_fonts","fonts":[{"id":"noto","label":"Noto Color","license":"OFL","installed":true,"active":true,"builtin":true,"size":0}],"downloading":null,"progress":null,"error":null}"#
+    )
+    if case .emojiFonts(let e) = msg {
+        expect(e.fonts.count == 1 && e.fonts[0].active, "emoji_fonts decodes")
+    } else {
+        expect(false, "emoji_fonts decodes as .emojiFonts")
+    }
+} catch { expect(false, "emoji_fonts decodes: \(error)") }
+
+do {
+    let json = #"{"settings":{"name":"X","theme":"dark","clock_24h":false,"screensaver":"clock","screensaver_min":10,"update_channel":"edge","ui_scale":1.5,"visualizer_opacity":0.6,"online_art_fallback":true,"airplay_model":"","airplay_classic":false,"game_volume":0.8,"mqtt_broker":"","mqtt_username":"","mqtt_password":""},"volume":0.4}"#
+    let state = try JSONDecoder().decode(BoxState.self, from: Data(json.utf8))
+    expect(state.settings.uiScale == 1.5, "settings ui_scale decodes")
+    expect(state.settings.gameVolume == 0.8, "settings game_volume decodes")
+} catch { expect(false, "full settings decode: \(error)") }
+
 if failures > 0 {
     print("\n\(failures) check(s) FAILED")
     exit(1)
