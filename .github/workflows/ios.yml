@@ -1,0 +1,42 @@
+# iOS app validation. The BoompiKit package (all logic + views) builds
+# with the bare Swift toolchain; the app target needs full Xcode, which
+# the macOS runners ship - including the iOS SDK. Repo is public, so
+# macOS runner minutes are free.
+#
+# This builds unsigned (simulator destination): it proves the whole app
+# compiles against the real iOS SDK. Producing installable builds
+# (TestFlight) needs Apple Developer Program signing secrets - add an
+# archive job when that exists.
+name: ios
+
+on:
+  push:
+    branches: [main]
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+  pull_request:
+    paths: ["ios/**", ".github/workflows/ios.yml"]
+
+jobs:
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: BoompiKit build + checks
+        working-directory: ios/BoompiKit
+        run: |
+          swift build
+          swift run BoompiKitChecks
+
+      - name: Generate the app project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen
+
+      - name: Build the app (unsigned, iOS SDK)
+        working-directory: ios
+        run: |
+          xcodebuild -project Boompi.xcodeproj -scheme Boompi \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -20
