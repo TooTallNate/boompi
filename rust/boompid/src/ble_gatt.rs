@@ -43,6 +43,15 @@ const SERVICE_PATH: &str = "/com/boompi/ble/service0";
 const CONTROL_PATH: &str = "/com/boompi/ble/service0/control";
 const EVENTS_PATH: &str = "/com/boompi/ble/service0/events";
 const STATE_PATH: &str = "/com/boompi/ble/service0/state";
+/// The GATT advert's name is distinct from the speaker name so phones
+/// store two tellable-apart Bluetooth entries - "George's 🔊" is the
+/// A2DP audio device, "Boompi Remote - George's 🔊" is the control
+/// channel (the Tesla key-vs-car pattern). Discovery UIs we control
+/// strip the prefix for display.
+fn remote_advert_name(speaker: &str) -> String {
+    format!("Boompi Remote - {speaker}")
+}
+
 const ADV_PATH: &str = "/com/boompi/ble/advertisement0";
 /// Spare advertisement, registered while a client is connected: a
 /// connection consumes the broadcasting advert on the RTL8761B (and
@@ -427,7 +436,7 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
         .at(
             ADV_PATH,
             Advertisement {
-                local_name: app.speaker_name().await,
+                local_name: remote_advert_name(&app.speaker_name().await),
             },
         )
         .await?;
@@ -435,7 +444,7 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
         .at(
             ADV1_PATH,
             Advertisement {
-                local_name: app.speaker_name().await,
+                local_name: remote_advert_name(&app.speaker_name().await),
             },
         )
         .await?;
@@ -555,7 +564,7 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
                 }
             },
             _ = cfg_watch.changed() => {
-                let name = app.speaker_name().await;
+                let name = remote_advert_name(&app.speaker_name().await);
                 for path in [ADV_PATH, ADV1_PATH] {
                     if let Ok(iface) = conn
                         .object_server()
