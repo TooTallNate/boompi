@@ -177,6 +177,11 @@ pub struct BtDevice {
     pub address: String,
     pub name: String,
     pub connected: bool,
+    /// Coarse device class for grouping in UIs, from BlueZ's Icon
+    /// classification: "phone" | "controller" | "computer" | "audio"
+    /// | "other". Old boxes omit it.
+    #[serde(default)]
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -364,7 +369,7 @@ pub struct WifiState {
     /// SSID of the active connection, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connected: Option<String>,
-    /// wlan IP (CIDR form) when connected or in AP mode.
+    /// wlan IP when connected or in AP mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip: Option<String>,
     /// The speaker's own hotspot (open AP) is broadcasting.
@@ -994,6 +999,7 @@ mod tests {
                 address: "AA:BB:CC:DD:EE:FF".into(),
                 name: "Phone".into(),
                 connected: true,
+                kind: "phone".into(),
             }],
         };
         let json = serde_json::to_value(&msg).unwrap();

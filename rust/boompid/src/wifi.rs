@@ -32,7 +32,7 @@ pub struct WifiStatus {
     pub enabled: bool,
     /// SSID of the active connection, if any.
     pub connected: Option<String>,
-    /// wlan IP (CIDR form) when connected or in AP mode.
+    /// wlan IP when connected or in AP mode.
     pub ip: Option<String>,
     /// True while the boompi-ap profile is active (onboarding hotspot).
     pub ap_active: bool,
@@ -82,11 +82,15 @@ pub async fn status(scan: bool) -> anyhow::Result<WifiStatus> {
     }
     if state.starts_with("connected") {
         if let Ok(out) = nmcli(&["-t", "-f", "IP4.ADDRESS", "dev", "show", &dev]).await {
+            // Bare address: nmcli reports CIDR ("192.168.1.42/24"),
+            // but the prefix length is noise to everyone reading a
+            // settings page.
             st.ip = out
                 .lines()
                 .next()
                 .and_then(|l| split_terse(l).get(1).cloned())
-                .filter(|s| !s.is_empty());
+                .filter(|s| !s.is_empty())
+                .and_then(|s| s.split('/').next().map(str::to_string));
         }
     }
 
