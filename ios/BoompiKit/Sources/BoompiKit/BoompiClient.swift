@@ -229,11 +229,15 @@ extension BoompiClient: CBCentralManagerDelegate {
     ) {
         var name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? peripheral.name ?? "Boompi"
-        // The GATT advert carries a distinct name ("Boompi Remote -
-        // George's") so iOS Settings can tell it from the A2DP entry;
-        // in our own list the speaker name alone reads better.
-        if name.hasPrefix("Boompi Remote - ") {
-            name = String(name.dropFirst("Boompi Remote - ".count))
+        // The GATT advert carries a distinct name ("🎛️ George's") so
+        // iOS Settings can tell it from the A2DP entry; in our own
+        // list the speaker name alone reads better. Old boxes used a
+        // longer text prefix.
+        for prefix in ["\u{1F39B}\u{FE0F} ", "\u{1F39B} ", "Boompi Remote - "] {
+            if name.hasPrefix(prefix) {
+                name = String(name.dropFirst(prefix.count))
+                break
+            }
         }
         MainActor.assumeIsolated {
             let id = peripheral.identifier

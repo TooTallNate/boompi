@@ -366,7 +366,10 @@ impl App {
     /// the name actually changed (caller persists + bumps the config
     /// generation so sources re-announce).
     async fn apply_rename(&self, name: String) -> bool {
-        let name = name.trim().chars().take(48).collect::<String>();
+        // Byte-capped so every advertised identity fits - most
+        // restrictively the BLE advert with its emoji prefix
+        // (21 bytes; see boompi_proto::ble::SPEAKER_NAME_MAX_BYTES).
+        let name = boompi_proto::ble::clamp_speaker_name(&name);
         if name.is_empty() {
             return false;
         }

@@ -893,6 +893,32 @@ pub mod ble {
     /// alternative to the subscription greeting for on-demand polls.
     pub const STATE_CHAR_UUID: &str = "a5e90004-9c60-4b2a-a6ca-0d0a2b5f0e1f";
 
+    /// The GATT advert's name prefix: distinguishes the control
+    /// channel from the A2DP entry in phones' Bluetooth lists (the
+    /// car-key pattern). U+1F39B needs VS16 to reliably render as
+    /// emoji rather than a monochrome dial.
+    pub const ADVERT_PREFIX: &str = "\u{1F39B}\u{FE0F} ";
+    /// Legacy advertising caps the scan-response name at 29 bytes;
+    /// BlueZ rejects oversized registrations outright.
+    pub const ADVERT_NAME_MAX: usize = 29;
+    /// Max speaker-name bytes such that the advert always fits.
+    pub const SPEAKER_NAME_MAX_BYTES: usize = ADVERT_NAME_MAX - ADVERT_PREFIX.len();
+
+    /// Trim + byte-cap a speaker name so every advertised identity
+    /// (BLE advert incl. prefix, BT alias, mDNS instance) fits.
+    /// Char-boundary safe: a multi-byte emoji never gets split.
+    pub fn clamp_speaker_name(name: &str) -> String {
+        let trimmed = name.trim();
+        if trimmed.len() <= SPEAKER_NAME_MAX_BYTES {
+            return trimmed.to_string();
+        }
+        let mut end = SPEAKER_NAME_MAX_BYTES;
+        while !trimmed.is_char_boundary(end) {
+            end -= 1;
+        }
+        trimmed[..end].trim_end().to_string()
+    }
+
     /// Chunk header flag: first chunk of a message (resets reassembly).
     pub const CHUNK_FIRST: u8 = 0x01;
     /// Chunk header flag: last chunk of a message (message complete).
@@ -988,6 +1014,19 @@ mod tests {
         assert!(json.get("artwork_id").is_none());
         let back: ServerMessage = serde_json::from_value(json).unwrap();
         assert_eq!(back, msg);
+    }
+
+    #[test]
+    fn speaker_name_clamp() {
+        use super::ble;
+        assert_eq!(ble::SPEAKER_NAME_MAX_BYTES, 21);
+        assert_eq!(ble::clamp_speaker_name("George\u{2019}s \u{1F50A}"), "George\u{2019}s \u{1F50A}"); // 15 bytes
+        // 20 ASCII + a 4-byte emoji would be 24: emoji dropped whole.
+        assert_eq!(ble::clamp_speaker_name("aaaaaaaaaaaaaaaaaaaa\u{1F50A}"), "aaaaaaaaaaaaaaaaaaaa");
+        assert_eq!(
+            format!("{}{}", ble::ADVERT_PREFIX, ble::clamp_speaker_name("a very long speaker name indeed")).len() <= ble::ADVERT_NAME_MAX,
+            true
+        );
     }
 
     #[test]

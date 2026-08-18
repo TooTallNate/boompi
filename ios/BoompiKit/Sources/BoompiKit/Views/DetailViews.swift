@@ -449,18 +449,35 @@ struct GeneralDetailView: View {
     var body: some View {
         List {
             Section("About") {
-                HStack {
-                    Text("Name")
-                    Spacer()
-                    TextField("Speaker name", text: $name)
-                        .multilineTextAlignment(.trailing)
-                        .autocorrectionDisabled()
-                        .onSubmit {
-                            let trimmed = name.trimmingCharacters(in: .whitespaces)
-                            if !trimmed.isEmpty, trimmed != client.state?.settings.name {
-                                client.send(.setSettings(["name": trimmed]))
+                VStack(alignment: .trailing, spacing: 2) {
+                    HStack {
+                        Text("Name")
+                        Spacer()
+                        TextField("Speaker name", text: $name)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .onChange(of: name) { _, v in
+                                // Byte-capped: the Bluetooth advert has a
+                                // hard budget (emoji are 4 bytes each).
+                                var v = v
+                                while v.trimmingCharacters(in: .whitespaces).utf8.count > Limits.speakerNameMaxBytes {
+                                    v.removeLast()
+                                }
+                                if v != name { name = v }
                             }
-                        }
+                            .onSubmit {
+                                let trimmed = name.trimmingCharacters(in: .whitespaces)
+                                if !trimmed.isEmpty, trimmed != client.state?.settings.name {
+                                    client.send(.setSettings(["name": trimmed]))
+                                }
+                            }
+                    }
+                    Text("\(name.trimmingCharacters(in: .whitespaces).utf8.count)/\(Limits.speakerNameMaxBytes) bytes")
+                        .font(.caption2)
+                        .foregroundStyle(
+                            name.trimmingCharacters(in: .whitespaces).utf8.count >= Limits.speakerNameMaxBytes
+                                ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary)
+                        )
                 }
                 if let model = client.hello?.model {
                     LabeledContent("Model", value: model)

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@boompi/ui/components/field";
 import { Input } from "@boompi/ui/components/input";
 import { WifiSection } from "@boompi/ui/sections/wifi";
+import { SPEAKER_NAME_MAX_BYTES, utf8Bytes } from "@boompi/ui/proto";
 import { sendCommand } from "./api";
 
 export function SetupWizard({ currentName }: { currentName: string }) {
@@ -69,18 +70,24 @@ export function SetupWizard({ currentName }: { currentName: string }) {
                   <FieldLabel htmlFor="setup-name">Name</FieldLabel>
                   <Input
                     id="setup-name"
-                    maxLength={48}
                     autoFocus
                     autoComplete="off"
                     placeholder="e.g. Porch Box"
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => {
+                      if (utf8Bytes(e.target.value.trim()) <= SPEAKER_NAME_MAX_BYTES) {
+                        setName(e.target.value);
+                      }
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && trimmed) submitName();
                     }}
                   />
                   <FieldDescription>
-                    Shown for Bluetooth, AirPlay, and Spotify Connect
+                    Shown for Bluetooth, AirPlay, and Spotify Connect ·{" "}
+                    <span className={utf8Bytes(trimmed) >= SPEAKER_NAME_MAX_BYTES ? "text-destructive" : ""}>
+                      {utf8Bytes(trimmed)}/{SPEAKER_NAME_MAX_BYTES} bytes
+                    </span>
                   </FieldDescription>
                 </Field>
                 <div className="flex items-center gap-3">

@@ -171,6 +171,16 @@ export const LEGACY_CAPS = [
   "airplay",
 ] as const;
 
+/** Max speaker-name bytes: the BLE advert ("🎛️ " prefix + name)
+ *  must fit legacy advertising's 29-byte name field. Mirrors
+ *  boompi_proto::ble::SPEAKER_NAME_MAX_BYTES. */
+export const SPEAKER_NAME_MAX_BYTES = 21;
+
+/** UTF-8 byte length (what the BLE advert budget counts). */
+export function utf8Bytes(s: string): number {
+  return new TextEncoder().encode(s).length;
+}
+
 /** The box's capability set, with the legacy fallback applied. */
 export function capsOf(hello: Hello | null): Set<string> {
   const list = hello?.capabilities;

@@ -6,6 +6,12 @@ import Foundation
 
 // MARK: - Capabilities
 
+public enum Limits {
+    /// Max speaker-name UTF-8 bytes: the BLE advert ("🎛️ " prefix +
+    /// name) must fit legacy advertising's 29-byte name field.
+    public static let speakerNameMaxBytes = 21
+}
+
 public enum Caps {
     public static let wifi = "wifi"
     public static let wifiScan = "wifi_scan"
