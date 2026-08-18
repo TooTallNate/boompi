@@ -49,7 +49,22 @@ const STATE_PATH: &str = "/com/boompi/ble/service0/state";
 /// channel (the Tesla key-vs-car pattern). Discovery UIs we control
 /// strip the prefix for display.
 fn remote_advert_name(speaker: &str) -> String {
-    format!("Boompi Remote - {speaker}")
+    // Legacy advertising caps the scan-response name at 29 bytes;
+    // BlueZ *rejects* oversized registrations rather than truncating
+    // (field-diagnosed: "George's 🔊" made a 31-byte name and the box
+    // silently stopped advertising, while "Nate's 🔊" fit at exactly
+    // 29). Trim on a char boundary so a multi-byte emoji never gets
+    // split.
+    const MAX_BYTES: usize = 29;
+    let full = format!("Boompi Remote - {speaker}");
+    if full.len() <= MAX_BYTES {
+        return full;
+    }
+    let mut end = MAX_BYTES;
+    while !full.is_char_boundary(end) {
+        end -= 1;
+    }
+    full[..end].trim_end().to_string()
 }
 
 const ADV_PATH: &str = "/com/boompi/ble/advertisement0";
