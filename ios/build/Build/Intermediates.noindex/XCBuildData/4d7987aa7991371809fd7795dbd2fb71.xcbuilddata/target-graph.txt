@@ -1,6 +1,0 @@
-Target dependency graph (3 targets)
-Target 'Boompi' in project 'Boompi'
-➜ Explicit dependency on target 'BoompiKit' in project 'BoompiKit'
-Target 'BoompiKit' in project 'BoompiKit'
-➜ Explicit dependency on target 'BoompiKit' in project 'BoompiKit'
-Target 'BoompiKit' in project 'BoompiKit' (no dependencies)
