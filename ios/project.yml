@@ -33,6 +33,10 @@ targets:
         NSBluetoothAlwaysUsageDescription: >-
           Boompi uses Bluetooth to find and control your speaker -
           no Wi-Fi or account needed.
+        # Keep the GATT link alive while backgrounded/locked - without
+        # this iOS tears the connection down on suspend, which shows
+        # up as constant 'connection lost' churn.
+        UIBackgroundModes: [bluetooth-central]
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1"

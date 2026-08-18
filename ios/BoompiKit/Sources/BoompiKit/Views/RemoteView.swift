@@ -7,6 +7,8 @@ import SwiftUI
 struct RemoteView: View {
     @ObservedObject var client: BoompiClient
     @State private var dragVolume: Double?
+    @State private var lastVolumeSend = Date.distantPast
+    @State private var trailingVolume: Task<Void, Never>?
 
     var body: some View {
         List {
@@ -36,7 +38,24 @@ struct RemoteView: View {
                             get: { dragVolume ?? client.state?.volume ?? 0 },
                             set: { v in
                                 dragVolume = v
-                                client.send(.setVolume(v))
+                                // Leading-edge immediate, then at most
+                                // ~10/s with a trailing flush - mirrors
+                                // the web/panel sliders. BLE writes are
+                                // with-response; an unthrottled drag
+                                // floods the queue.
+                                let now = Date()
+                                if now.timeIntervalSince(lastVolumeSend) >= 0.1 {
+                                    lastVolumeSend = now
+                                    client.send(.setVolume(v))
+                                } else {
+                                    trailingVolume?.cancel()
+                                    trailingVolume = Task {
+                                        try? await Task.sleep(nanoseconds: 100_000_000)
+                                        guard !Task.isCancelled else { return }
+                                        lastVolumeSend = Date()
+                                        client.send(.setVolume(v))
+                                    }
+                                }
                             }
                         ),
                         in: 0...1
