@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
         cli.config_seed.as_deref(),
         cli.hardware_profile.as_deref(),
     )?;
-    tracing::info!(name = %cfg.name, "starting boompid v{}", state::VERSION);
+    tracing::info!(name = %cfg.name, version = state::os_version(), "starting boompid");
 
     let app = state::App::new(cfg, cli.config.clone());
 

@@ -10,8 +10,6 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify, RwLock};
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 /// The OS image version stamp: "vX.Y.Z" for release builds,
 /// "vX.Y.Z-<sha>" for untagged CI builds (written by the image
 /// workflow to /etc/boompi-version), "dev" when absent (local builds,

@@ -158,7 +158,11 @@ pub(crate) async fn hello(app: &SharedApp) -> Hello {
         proto_version: PROTO_VERSION,
         name: app.speaker_name().await,
         model: crate::state::board_model(),
-        version: crate::state::VERSION.into(),
+        // The OS image stamp, not the crate version: changesets bump
+        // the image version (web/package.json) while the Rust crates
+        // stay at a workspace placeholder - Hello.version showing
+        // "2.0.0-dev" forever was the tell.
+        version: crate::state::os_version().into(),
         uptime_secs: app.started.elapsed().as_secs(),
         settings_url: app.settings_url(),
         capabilities: capabilities(app).await,
