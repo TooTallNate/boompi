@@ -126,6 +126,30 @@ public struct UpdateState: Decodable, Equatable {
     public var error: String?
 }
 
+public struct Pairing: Decodable, Equatable {
+    public var state: String // idle | discoverable | confirm | pairing | unavailable
+    public var deviceName: String?
+    public var passkey: UInt32?
+
+    enum CodingKeys: String, CodingKey {
+        case state, passkey
+        case deviceName = "device_name"
+    }
+}
+
+public struct BtDevice: Decodable, Equatable, Identifiable {
+    public var address: String
+    public var name: String
+    public var connected: Bool
+
+    public var id: String { address }
+}
+
+public struct GamesState: Decodable, Equatable {
+    public var running: String?
+    public var gamepad: Bool
+}
+
 public struct TrackInfo: Decodable, Equatable {
     public var title: String?
     public var artist: String?
@@ -141,6 +165,14 @@ public struct BoxState: Decodable, Equatable {
     public var wifi: WifiState?
     public var updates: UpdateState?
     public var track: TrackInfo?
+    public var games: GamesState?
+    public var pairing: Pairing?
+    public var btDevices: [BtDevice]?
+
+    enum CodingKeys: String, CodingKey {
+        case settings, volume, battery, wifi, updates, track, games, pairing
+        case btDevices = "bt_devices"
+    }
 }
 
 /// One incoming protocol message, decoded by its `type` tag. Unknown
@@ -156,6 +188,9 @@ public enum ServerMessage {
     case wifiNetworks([WifiNetwork])
     case update(UpdateState)
     case track(TrackInfo)
+    case games(GamesState)
+    case pairing(Pairing)
+    case btDevices([BtDevice])
     case other(String)
 
     public static func decode(_ data: Data) throws -> ServerMessage {
@@ -175,6 +210,11 @@ public enum ServerMessage {
             return .wifiNetworks(try dec.decode(NetworksBody.self, from: data).networks)
         case "update": return .update(try dec.decode(UpdateState.self, from: data))
         case "track": return .track(try dec.decode(TrackInfo.self, from: data))
+        case "games": return .games(try dec.decode(GamesState.self, from: data))
+        case "pairing": return .pairing(try dec.decode(Pairing.self, from: data))
+        case "bt_devices":
+            struct DevicesBody: Decodable { let devices: [BtDevice] }
+            return .btDevices(try dec.decode(DevicesBody.self, from: data).devices)
         default: return .other(tag.type)
         }
     }
@@ -199,6 +239,9 @@ public enum ClientMessage {
     case wifiForget(ssid: String)
     case wifiAp(enabled: Bool)
     case update(action: String)
+    case pairing(action: String)  // enable | cancel | confirm | reject
+    case btDevice(address: String, action: String) // connect | disconnect | remove
+    case gameStop
 
     public func encode() throws -> Data {
         var dict: [String: Any]
@@ -220,6 +263,10 @@ public enum ClientMessage {
         case .wifiForget(let ssid): dict = ["type": "wifi", "action": "forget", "ssid": ssid]
         case .wifiAp(let enabled): dict = ["type": "wifi", "action": "ap", "enabled": enabled]
         case .update(let action): dict = ["type": "update", "action": action]
+        case .pairing(let action): dict = ["type": "pairing", "action": action]
+        case .btDevice(let address, let action):
+            dict = ["type": "bt_device", "address": address, "action": action]
+        case .gameStop: dict = ["type": "game", "action": "stop"]
         }
         return try JSONSerialization.data(withJSONObject: dict)
     }

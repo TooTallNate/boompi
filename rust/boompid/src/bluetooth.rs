@@ -391,6 +391,29 @@ async fn handle_interface_added(
                     if crate::clock::ntp_synchronized().await {
                         return;
                     }
+                    // Reading iOS's CTS requires an encrypted link;
+                    // on an unbonded device BlueZ would initiate SMP
+                    // pairing and pop a pairing dialog on the phone -
+                    // exactly what a JustWorks app connection (the
+                    // remote/iOS app) must never trigger. Only read
+                    // from devices that are already bonded (A2DP
+                    // phones): everyone else offers set_time in-app.
+                    let bonded = async {
+                        let dev = device_prefix(char_path.as_str())?;
+                        let proxy = Device1Proxy::builder(&conn)
+                            .path(dev)
+                            .ok()?
+                            .build()
+                            .await
+                            .ok()?;
+                        proxy.paired().await.ok()
+                    }
+                    .await
+                    .unwrap_or(false);
+                    if !bonded {
+                        tracing::debug!(%char_path, "skipping CTS read on unbonded device");
+                        return;
+                    }
                     if let Err(err) = sync_from_cts(&conn, &char_path).await {
                         tracing::warn!(%err, %char_path, "CTS time sync failed");
                     }

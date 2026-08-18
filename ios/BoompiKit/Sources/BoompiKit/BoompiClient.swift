@@ -2,6 +2,12 @@
 // (docs/BLE.md). Discovery is a scan filtered on the boompi service
 // UUID; the connection speaks the same JSON protocol as the WebSocket,
 // chunk-framed to the ATT MTU.
+//
+// Ordering matters everywhere here: chunk order IS the framing, so the
+// central runs on the main queue and delegate callbacks use
+// MainActor.assumeIsolated - a Task hop per notification could reorder
+// chunks and permanently wedge reassembly (the multi-chunk state
+// greeting would never complete, which looks like "stuck connecting").
 
 import CoreBluetooth
 import Foundation
@@ -15,9 +21,10 @@ public struct DiscoveredBox: Identifiable, Equatable {
 public enum ConnectionPhase: Equatable {
     case idle
     case scanning
-    case connecting(String)
+    case connecting(UUID)
     case connected
-    case lost(String)
+    /// Connection dropped; auto-reconnect pending for this box.
+    case lost(UUID)
     case unavailable(String) // BT off / unauthorized
 }
 
@@ -28,6 +35,8 @@ public final class BoompiClient: NSObject, ObservableObject {
     @Published public private(set) var hello: Hello?
     @Published public private(set) var state: BoxState?
     @Published public private(set) var wifiNetworks: [WifiNetwork] = []
+    @Published public private(set) var pairing: Pairing?
+    @Published public private(set) var btDevices: [BtDevice] = []
 
     /// Most recently connected box - auto-connected when seen again
     /// (the common case: a person has exactly one boompi).
@@ -39,26 +48,36 @@ public final class BoompiClient: NSObject, ObservableObject {
     private var reassembler = Reassembler()
     private var writeQueue: [Data] = []
     private var writeInFlight = false
+    private var connectTimeout: Task<Void, Never>?
     /// Set while the user explicitly disconnected: suppresses the
     /// auto-reconnect until they pick a box again.
     private var userDisconnected = false
 
     private static let lastBoxKey = "boompi.lastBox"
+    /// CB connect attempts pend forever; give up and rescan after this.
+    private static let connectTimeoutSecs: UInt64 = 12
 
     public override init() {
         super.init()
         lastBoxID = UserDefaults.standard.string(forKey: Self.lastBoxKey).flatMap(UUID.init)
+        // Main queue: delegate callbacks arrive on the main actor's
+        // executor, so assumeIsolated below is sound and in-order.
         central = CBCentralManager(delegate: self, queue: .main)
     }
 
     public var caps: Set<String> { hello?.caps ?? [] }
 
+    /// The name of a box, for status lines ("Reconnecting to X").
+    public func boxName(_ id: UUID) -> String {
+        discovered.first(where: { $0.id == id })?.name ?? "Boompi"
+    }
+
     // MARK: - Public API
 
     public func startScanning() {
-        userDisconnected = false
         guard central.state == .poweredOn else { return }
-        phase = .scanning
+        if case .connected = phase { return }
+        if case .idle = phase { phase = .scanning }
         central.scanForPeripherals(
             withServices: [CBUUID(string: BLE.serviceUUID)],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
@@ -67,26 +86,31 @@ public final class BoompiClient: NSObject, ObservableObject {
 
     public func connect(to id: UUID) {
         guard let p = central.retrievePeripherals(withIdentifiers: [id]).first else { return }
+        // Only one attempt at a time: drop any previous one cleanly.
+        if let old = peripheral, old.identifier != id {
+            central.cancelPeripheralConnection(old)
+        }
         userDisconnected = false
         lastBoxID = id
         UserDefaults.standard.set(id.uuidString, forKey: Self.lastBoxKey)
-        central.stopScan()
-        phase = .connecting(p.name ?? "Boompi")
+        resetLink()
+        phase = .connecting(id)
         peripheral = p
         p.delegate = self
         central.connect(p)
+        armConnectTimeout(for: id)
     }
 
     public func disconnect() {
         userDisconnected = true
+        connectTimeout?.cancel()
         if let p = peripheral {
             central.cancelPeripheralConnection(p)
         }
         peripheral = nil
-        control = nil
+        resetLink()
         hello = nil
         state = nil
-        wifiNetworks = []
         phase = .idle
         startScanning()
     }
@@ -107,6 +131,37 @@ public final class BoompiClient: NSObject, ObservableObject {
 
     // MARK: - Internals
 
+    /// Per-connection transport state. Chunk framing carries no
+    /// message ids: stale half-reassembled bytes or queued writes from
+    /// a previous link must never leak into a new one.
+    private func resetLink() {
+        reassembler = Reassembler()
+        writeQueue.removeAll()
+        writeInFlight = false
+        control = nil
+        wifiNetworks = []
+        pairing = nil
+        btDevices = []
+    }
+
+    private func armConnectTimeout(for id: UUID) {
+        connectTimeout?.cancel()
+        connectTimeout = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.connectTimeoutSecs * 1_000_000_000)
+            guard !Task.isCancelled, let self else { return }
+            if case .connecting(let pending) = self.phase, pending == id {
+                if let p = self.peripheral {
+                    self.central.cancelPeripheralConnection(p)
+                }
+                self.peripheral = nil
+                self.resetLink()
+                self.phase = .lost(id)
+                self.startScanning()
+                // Retry when the box advertises again (didDiscover).
+            }
+        }
+    }
+
     private func pumpWrites() {
         guard !writeInFlight, let p = peripheral, let c = control,
               !writeQueue.isEmpty else { return }
@@ -121,6 +176,7 @@ public final class BoompiClient: NSObject, ObservableObject {
         case .hello(let h): hello = h
         case .state(let s):
             state = s
+            connectTimeout?.cancel()
             phase = .connected
         case .settings(let s): state?.settings = s
         case .volume(let v): state?.volume = v
@@ -129,6 +185,9 @@ public final class BoompiClient: NSObject, ObservableObject {
         case .wifiNetworks(let n): wifiNetworks = n
         case .update(let u): state?.updates = u
         case .track(let t): state?.track = t
+        case .games(let g): state?.games = g
+        case .pairing(let p): pairing = p
+        case .btDevices(let d): btDevices = d
         case .other: break
         }
     }
@@ -138,7 +197,7 @@ public final class BoompiClient: NSObject, ObservableObject {
 
 extension BoompiClient: CBCentralManagerDelegate {
     public nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             switch central.state {
             case .poweredOn:
                 self.startScanning()
@@ -160,24 +219,30 @@ extension BoompiClient: CBCentralManagerDelegate {
     ) {
         let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? peripheral.name ?? "Boompi"
-        let id = peripheral.identifier
-        let rssi = RSSI.intValue
-        Task { @MainActor in
+        MainActor.assumeIsolated {
+            let id = peripheral.identifier
             if let i = self.discovered.firstIndex(where: { $0.id == id }) {
                 self.discovered[i].name = name
-                self.discovered[i].rssi = rssi
+                self.discovered[i].rssi = RSSI.intValue
             } else {
-                self.discovered.append(DiscoveredBox(id: id, name: name, rssi: rssi))
+                self.discovered.append(DiscoveredBox(id: id, name: name, rssi: RSSI.intValue))
             }
+            guard !self.userDisconnected, self.peripheral == nil else { return }
+            switch self.phase {
             // The common case: one boompi, seen before - just connect.
-            if !self.userDisconnected, self.peripheral == nil, id == self.lastBoxID {
+            case .scanning, .idle where id == self.lastBoxID:
+                if id == self.lastBoxID { self.connect(to: id) }
+            // A lost box is advertising again: reconnect.
+            case .lost(let lostID) where lostID == id:
                 self.connect(to: id)
+            default:
+                break
             }
         }
     }
 
     public nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             peripheral.discoverServices([CBUUID(string: BLE.serviceUUID)])
         }
     }
@@ -187,15 +252,18 @@ extension BoompiClient: CBCentralManagerDelegate {
         didDisconnectPeripheral peripheral: CBPeripheral,
         error: Error?
     ) {
-        Task { @MainActor in
-            self.control = nil
-            guard !self.userDisconnected else { return }
-            self.phase = .lost(peripheral.name ?? "Boompi")
-            self.state = nil
+        MainActor.assumeIsolated {
+            let id = peripheral.identifier
+            self.resetLink()
             self.hello = nil
-            // Auto-reconnect: a pending connect survives out-of-range
-            // and completes when the box is back.
-            self.central.connect(peripheral)
+            self.state = nil
+            guard !self.userDisconnected else { return }
+            self.phase = .lost(id)
+            self.peripheral = nil
+            // Rescan; reconnect fires from didDiscover when the box
+            // advertises again (more reliable than a blind pending
+            // connect against a box that may be rebooting).
+            self.startScanning()
         }
     }
 
@@ -204,8 +272,10 @@ extension BoompiClient: CBCentralManagerDelegate {
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
     ) {
-        Task { @MainActor in
-            self.phase = .lost(peripheral.name ?? "Boompi")
+        MainActor.assumeIsolated {
+            self.phase = .lost(peripheral.identifier)
+            self.peripheral = nil
+            self.resetLink()
             self.startScanning()
         }
     }
@@ -231,7 +301,7 @@ extension BoompiClient: CBPeripheralDelegate {
         let chars = service.characteristics ?? []
         let control = chars.first { $0.uuid == CBUUID(string: BLE.controlCharUUID) }
         let events = chars.first { $0.uuid == CBUUID(string: BLE.eventsCharUUID) }
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             self.control = control
             if let events {
                 // Subscribing triggers the hello + state greeting.
@@ -249,7 +319,7 @@ extension BoompiClient: CBPeripheralDelegate {
         error: Error?
     ) {
         guard let value = characteristic.value else { return }
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             if let message = self.reassembler.push(value) {
                 self.handle(message)
             }
@@ -261,7 +331,7 @@ extension BoompiClient: CBPeripheralDelegate {
         didWriteValueFor characteristic: CBCharacteristic,
         error: Error?
     ) {
-        Task { @MainActor in
+        MainActor.assumeIsolated {
             self.writeInFlight = false
             self.pumpWrites()
         }

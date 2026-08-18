@@ -1,57 +1,24 @@
 import SwiftUI
 
 /// Nearby boompis (scan filtered on the control service, so only real
-/// boxes appear). The most recently used box auto-connects the moment
-/// it's seen - the list is really for first-run and multi-box homes.
+/// boxes appear). Connection state lives on each speaker's own row -
+/// no banner. The most recently used box auto-connects the moment
+/// it's seen; the list is really for first-run and multi-box homes.
 struct DiscoveryView: View {
     @ObservedObject var client: BoompiClient
 
     var body: some View {
         List {
-            switch client.phase {
-            case .unavailable(let why):
-                Label(why, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
-            case .connecting(let name):
-                HStack(spacing: 12) {
-                    ProgressView()
-                    Text("Connecting to \(name)…")
+            if case .unavailable(let why) = client.phase {
+                Section {
+                    Label(why, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.secondary)
                 }
-            case .lost(let name):
-                HStack(spacing: 12) {
-                    ProgressView()
-                    VStack(alignment: .leading) {
-                        Text("\(name) is out of reach")
-                        Text("Reconnecting automatically when it's back.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            default:
-                EmptyView()
             }
 
             Section {
                 ForEach(client.discovered) { box in
-                    Button {
-                        client.connect(to: box.id)
-                    } label: {
-                        HStack {
-                            Image(systemName: "hifispeaker.fill")
-                                .foregroundStyle(.tint)
-                            VStack(alignment: .leading) {
-                                Text(box.name)
-                                if box.id == client.lastBoxID {
-                                    Text("Last used")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            SignalIcon(rssi: box.rssi)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                    SpeakerRow(client: client, box: box)
                 }
                 if client.discovered.isEmpty {
                     HStack(spacing: 12) {
@@ -67,6 +34,60 @@ struct DiscoveryView: View {
             }
         }
         .navigationTitle("Boompi")
+    }
+}
+
+private struct SpeakerRow: View {
+    @ObservedObject var client: BoompiClient
+    let box: DiscoveredBox
+
+    private enum RowState {
+        case none, connecting, reconnecting
+    }
+
+    private var rowState: RowState {
+        switch client.phase {
+        case .connecting(let id) where id == box.id: return .connecting
+        case .lost(let id) where id == box.id: return .reconnecting
+        default: return .none
+        }
+    }
+
+    var body: some View {
+        Button {
+            client.connect(to: box.id)
+        } label: {
+            HStack {
+                Image(systemName: "hifispeaker.fill")
+                    .foregroundStyle(.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(box.name)
+                    switch rowState {
+                    case .connecting:
+                        Text("Connecting…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    case .reconnecting:
+                        Text("Connection lost - retrying when in range")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    case .none:
+                        if box.id == client.lastBoxID {
+                            Text("Last used")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Spacer()
+                if rowState == .none {
+                    SignalIcon(rssi: box.rssi)
+                } else {
+                    ProgressView()
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

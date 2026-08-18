@@ -56,6 +56,16 @@ struct RemoteView: View {
                 WifiSection(client: client)
             }
 
+            if client.caps.contains(Caps.bluetooth) {
+                BluetoothSection(client: client)
+            }
+
+            if client.caps.contains(Caps.games), let games = client.state?.games {
+                GamesSection(client: client, games: games)
+            }
+
+            SpeakerSettingsSection(client: client)
+
             if client.caps.contains(Caps.updates), let updates = client.state?.updates {
                 SoftwareSection(client: client, updates: updates)
             }
@@ -256,5 +266,126 @@ struct SoftwareSection: View {
         if updates.checking { return "Checking…" }
         if let available = updates.available { return "\(available) is available" }
         return "Up to date"
+    }
+}
+
+
+struct BluetoothSection: View {
+    @ObservedObject var client: BoompiClient
+
+    private var pairing: Pairing? { client.pairing ?? client.state?.pairing }
+
+    var body: some View {
+        Section("Bluetooth") {
+            switch pairing?.state {
+            case "discoverable":
+                HStack {
+                    Label("Discoverable - pick the speaker on your device", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.caption)
+                    Spacer()
+                    Button("Cancel") { client.send(.pairing(action: "cancel")) }
+                }
+            case "confirm":
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Pair with \(pairing?.deviceName ?? "device")?")
+                    if let passkey = pairing?.passkey {
+                        Text(String(format: "%06u", passkey))
+                            .font(.title2.monospaced())
+                    }
+                    HStack {
+                        Button("Pair") { client.send(.pairing(action: "confirm")) }
+                            .buttonStyle(.borderedProminent)
+                        Button("Reject") { client.send(.pairing(action: "reject")) }
+                    }
+                }
+            default:
+                Button {
+                    client.send(.pairing(action: "enable"))
+                } label: {
+                    Label("Pair a device", systemImage: "plus.circle")
+                }
+            }
+
+            ForEach(client.btDevices.isEmpty ? (client.state?.btDevices ?? []) : client.btDevices) { d in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(d.name)
+                        Text(d.connected ? "Connected" : "Not connected")
+                            .font(.caption)
+                            .foregroundStyle(d.connected ? .green : .secondary)
+                    }
+                    Spacer()
+                    Button(d.connected ? "Disconnect" : "Connect") {
+                        client.send(.btDevice(
+                            address: d.address,
+                            action: d.connected ? "disconnect" : "connect"
+                        ))
+                    }
+                    .font(.caption)
+                }
+            }
+        }
+    }
+}
+
+struct GamesSection: View {
+    @ObservedObject var client: BoompiClient
+    let games: GamesState
+
+    var body: some View {
+        Section("Games") {
+            if let running = games.running {
+                HStack {
+                    Label(running, systemImage: "gamecontroller.fill")
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Stop", role: .destructive) { client.send(.gameStop) }
+                }
+            } else {
+                Label(
+                    games.gamepad ? "Gamepad connected - launch from the speaker's panel" : "No game running",
+                    systemImage: "gamecontroller"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+struct SpeakerSettingsSection: View {
+    @ObservedObject var client: BoompiClient
+
+    private var settings: Settings? { client.state?.settings }
+
+    var body: some View {
+        Section("Speaker") {
+            if let settings {
+                Picker("Panel theme", selection: Binding(
+                    get: { settings.theme },
+                    set: { client.send(.setSettings(["theme": $0])) }
+                )) {
+                    Text("Dark").tag("dark")
+                    Text("Light").tag("light")
+                }
+
+                if client.caps.contains(Caps.screensaver) {
+                    Picker("Screensaver", selection: Binding(
+                        get: { settings.screensaver },
+                        set: { client.send(.setSettings(["screensaver": $0])) }
+                    )) {
+                        Text("Off").tag("off")
+                        Text("Clock").tag("clock")
+                        Text("Matrix rain").tag("matrix")
+                        Text("Album art").tag("art")
+                    }
+                }
+
+                Toggle("24-hour clock", isOn: Binding(
+                    get: { settings.clock24h },
+                    set: { client.send(.setSettings(["clock_24h": $0])) }
+                ))
+            }
+        }
     }
 }
