@@ -65,6 +65,9 @@ export interface BtDevice {
   address: string;
   name: string;
   connected: boolean;
+  /** "phone" | "controller" | "computer" | "audio" | "other" -
+   *  absent on old boxes. */
+  kind?: string;
 }
 
 export interface EmojiFontInfo {

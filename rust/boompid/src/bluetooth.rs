@@ -1313,10 +1313,27 @@ async fn enumerate_devices(conn: &zbus::Connection) -> anyhow::Result<Vec<BtDevi
                 .get("Connected")
                 .and_then(bool_from_value)
                 .unwrap_or(false);
+            // Coarse class from BlueZ's Icon (derived from CoD /
+            // appearance): lets UIs group phones, gamepads, and the
+            // rest instead of one flat everything-list.
+            let kind = match props
+                .get("Icon")
+                .and_then(str_from_value)
+                .unwrap_or_default()
+                .as_str()
+            {
+                "phone" => "phone",
+                "input-gaming" | "input-keyboard" | "input-mouse" | "input-tablet" => "controller",
+                "computer" => "computer",
+                "audio-card" | "audio-headset" | "audio-headphones" => "audio",
+                _ => "other",
+            }
+            .to_string();
             out.push(BtDevice {
                 address,
                 name,
                 connected,
+                kind,
             });
         }
     }

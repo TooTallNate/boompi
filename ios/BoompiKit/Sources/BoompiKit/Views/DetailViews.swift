@@ -121,6 +121,22 @@ struct BluetoothDetailView: View {
         client.btDevices.isEmpty ? (client.state?.btDevices ?? []) : client.btDevices
     }
 
+    /// Grouped by what the device is - phones stream music,
+    /// controllers play games, the rest just control.
+    private var groupedDevices: [(String, [BtDevice])] {
+        let buckets: [(String, (String) -> Bool)] = [
+            ("Phones & Audio", { $0 == "phone" || $0 == "audio" }),
+            ("Game Controllers", { $0 == "controller" }),
+            ("Other Devices", { _ in true }),
+        ]
+        var seen = Set<String>()
+        return buckets.compactMap { label, match in
+            let group = devices.filter { !seen.contains($0.address) && match($0.kind ?? "other") }
+            group.forEach { seen.insert($0.address) }
+            return group.isEmpty ? nil : (label, group)
+        }
+    }
+
     var body: some View {
         List {
             Section {
@@ -158,26 +174,30 @@ struct BluetoothDetailView: View {
                 }
             }
 
-            Section("My Devices") {
-                if devices.isEmpty {
+            if devices.isEmpty {
+                Section("My Devices") {
                     Text("No paired devices").foregroundStyle(.secondary)
                 }
-                ForEach(devices) { d in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(d.name)
-                            Text(d.connected ? "Connected" : "Not Connected")
-                                .font(.caption)
-                                .foregroundStyle(d.connected ? .green : .secondary)
+            }
+            ForEach(groupedDevices, id: \.0) { label, group in
+                Section(label) {
+                    ForEach(group) { d in
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(d.name)
+                                Text(d.connected ? "Connected" : "Not Connected")
+                                    .font(.caption)
+                                    .foregroundStyle(d.connected ? .green : .secondary)
+                            }
+                            Spacer()
+                            Button(d.connected ? "Disconnect" : "Connect") {
+                                client.send(.btDevice(
+                                    address: d.address,
+                                    action: d.connected ? "disconnect" : "connect"
+                                ))
+                            }
+                            .font(.caption)
                         }
-                        Spacer()
-                        Button(d.connected ? "Disconnect" : "Connect") {
-                            client.send(.btDevice(
-                                address: d.address,
-                                action: d.connected ? "disconnect" : "connect"
-                            ))
-                        }
-                        .font(.caption)
                     }
                 }
             }
@@ -311,6 +331,29 @@ struct GamesDetailView: View {
                 }
             } footer: {
                 Text("Upload ROMs from the speaker's settings page over Wi-Fi.")
+            }
+
+            if let games = client.state?.games?.games, !games.isEmpty {
+                Section("Library") {
+                    ForEach(games.filter { $0.system != "bios" }) { g in
+                        Button {
+                            client.send(.gameLaunch(system: g.system, file: g.file))
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(g.name).lineLimit(1)
+                                    Text(g.system.uppercased())
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "play.circle")
+                                    .foregroundStyle(.tint)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
         }
         .navigationTitle("Games")

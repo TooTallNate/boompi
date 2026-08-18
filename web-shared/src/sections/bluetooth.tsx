@@ -4,6 +4,7 @@ import { Button } from "@boompi/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@boompi/ui/components/empty";
 import { Separator } from "@boompi/ui/components/separator";
+import type { BtDevice } from "@boompi/ui/proto";
 import { useBoompi } from "@boompi/ui/transport";
 import { Bluetooth } from "lucide-react";
 import { Fragment } from "react";
@@ -92,6 +93,8 @@ export function BluetoothSection() {
           </Alert>
         )}
 
+        {/* Grouped by what the device is - phones stream music,
+            controllers play games, computers/remotes just control. */}
         {devices.length === 0 ? (
           <Empty>
             <EmptyHeader>
@@ -105,7 +108,12 @@ export function BluetoothSection() {
             </EmptyHeader>
           </Empty>
         ) : (
-          devices.map((d, i) => (
+          groupDevices(devices).map(([label, group]) => (
+            <Fragment key={label}>
+              <p className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                {label}
+              </p>
+              {group.map((d, i) => (
             <Fragment key={d.address}>
               {i > 0 && <Separator />}
               <div className="flex items-center justify-between gap-3">
@@ -150,9 +158,28 @@ export function BluetoothSection() {
                 </div>
               </div>
             </Fragment>
+              ))}
+            </Fragment>
           ))
         )}
       </CardContent>
     </Card>
   );
+}
+
+const KIND_LABELS: [string, (k: string) => boolean][] = [
+  ["Phones & audio", (k) => k === "phone" || k === "audio"],
+  ["Game controllers", (k) => k === "controller"],
+  ["Other devices", () => true],
+];
+
+function groupDevices(devices: BtDevice[]): [string, BtDevice[]][] {
+  const seen = new Set<string>();
+  return KIND_LABELS.map(([label, match]) => {
+    const group = devices.filter(
+      (d) => !seen.has(d.address) && match(d.kind ?? "other"),
+    );
+    for (const d of group) seen.add(d.address);
+    return [label, group] as [string, BtDevice[]];
+  }).filter(([, group]) => group.length > 0);
 }

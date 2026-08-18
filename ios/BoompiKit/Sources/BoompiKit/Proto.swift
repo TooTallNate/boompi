@@ -141,13 +141,25 @@ public struct BtDevice: Decodable, Equatable, Identifiable {
     public var address: String
     public var name: String
     public var connected: Bool
+    /// "phone" | "controller" | "computer" | "audio" | "other";
+    /// absent on old boxes.
+    public var kind: String?
 
     public var id: String { address }
+}
+
+public struct GameEntry: Decodable, Equatable, Identifiable {
+    public var system: String
+    public var file: String
+    public var name: String
+
+    public var id: String { "\(system)/\(file)" }
 }
 
 public struct GamesState: Decodable, Equatable {
     public var running: String?
     public var gamepad: Bool
+    public var games: [GameEntry]?
 }
 
 public struct TrackInfo: Decodable, Equatable {
@@ -242,6 +254,7 @@ public enum ClientMessage {
     case pairing(action: String)  // enable | cancel | confirm | reject
     case btDevice(address: String, action: String) // connect | disconnect | remove
     case gameStop
+    case gameLaunch(system: String, file: String)
 
     public func encode() throws -> Data {
         var dict: [String: Any]
@@ -267,6 +280,8 @@ public enum ClientMessage {
         case .btDevice(let address, let action):
             dict = ["type": "bt_device", "address": address, "action": action]
         case .gameStop: dict = ["type": "game", "action": "stop"]
+        case .gameLaunch(let system, let file):
+            dict = ["type": "game", "action": "launch", "system": system, "file": file]
         }
         return try JSONSerialization.data(withJSONObject: dict)
     }
