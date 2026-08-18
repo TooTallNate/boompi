@@ -49,6 +49,11 @@ public final class BoompiClient: NSObject, ObservableObject {
     private var writeQueue: [Data] = []
     private var writeInFlight = false
     private var connectTimeout: Task<Void, Never>?
+    /// After cancelPeripheralConnection, CB silently eats connect
+    /// attempts issued before the cancel settles - retrying instantly
+    /// on the next advert loops "Connecting/lost" forever. Cooldown
+    /// before re-attempting the same box.
+    private var retryNotBefore: [UUID: Date] = [:]
     /// Set while the user explicitly disconnected: suppresses the
     /// auto-reconnect until they pick a box again.
     private var userDisconnected = false
@@ -85,6 +90,7 @@ public final class BoompiClient: NSObject, ObservableObject {
     }
 
     public func connect(to id: UUID) {
+        guard Date() >= retryNotBefore[id, default: .distantPast] else { return }
         guard let p = central.retrievePeripherals(withIdentifiers: [id]).first else { return }
         // Only one attempt at a time: drop any previous one cleanly.
         if let old = peripheral, old.identifier != id {
@@ -155,6 +161,9 @@ public final class BoompiClient: NSObject, ObservableObject {
                 }
                 self.peripheral = nil
                 self.resetLink()
+                // Give the async cancel time to settle before any
+                // retry - connects issued mid-cancel vanish silently.
+                self.retryNotBefore[id] = Date().addingTimeInterval(3)
                 self.phase = .lost(id)
                 self.startScanning()
                 // Retry when the box advertises again (didDiscover).
@@ -232,9 +241,19 @@ extension BoompiClient: CBCentralManagerDelegate {
             // The common case: one boompi, seen before - just connect.
             case .scanning, .idle where id == self.lastBoxID:
                 if id == self.lastBoxID { self.connect(to: id) }
-            // A lost box is advertising again: reconnect.
+            // A lost box is advertising again: reconnect (or after
+            // the post-cancel cooldown expires).
             case .lost(let lostID) where lostID == id:
-                self.connect(to: id)
+                let wait = self.retryNotBefore[id, default: .distantPast].timeIntervalSinceNow
+                if wait <= 0 {
+                    self.connect(to: id)
+                } else {
+                    Task { [weak self] in
+                        try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+                        guard let self, case .lost(let l) = self.phase, l == id else { return }
+                        self.connect(to: id)
+                    }
+                }
             default:
                 break
             }
