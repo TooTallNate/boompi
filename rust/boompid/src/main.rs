@@ -90,6 +90,12 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Both ring and aws-lc-rs exist in the dependency graph (librespot
+    // vs hyper-proxy2's hyper-rustls), so rustls cannot auto-select a
+    // provider and panics at the first TLS connection - which killed
+    // Spotify Connect in the field. Pick ring, once, for the process.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

@@ -24,6 +24,11 @@ realfft = "3"
 # Assistant); the TLS feature dragged in an EOL rustls 0.22/webpki
 # 0.102 that collected CVEs (dependabot 22-25).
 rumqttc = { version = "0.25", default-features = false }
+# Direct dep only to pin the process-level CryptoProvider: the graph
+# contains both ring (librespot, reqwest) and aws-lc-rs (hyper-proxy2's
+# hyper-rustls), and rustls panics at first TLS use when it can't
+# auto-pick. main() installs ring explicitly.
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 clap = { workspace = true }
 serde = { workspace = true }
 # Unknown config keys warn instead of failing the boot (config.rs).

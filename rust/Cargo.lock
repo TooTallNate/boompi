@@ -849,6 +849,7 @@ dependencies = [
  "reqwest",
  "rumqttc",
  "rust-embed",
+ "rustls",
  "serde",
  "serde_ignored",
  "serde_json",
