@@ -1,0 +1,31 @@
+# XcodeGen spec for the Boompi iOS app. The generated .xcodeproj is
+# not committed - run `xcodegen` in this directory (brew install
+# xcodegen) on a machine with Xcode, then open Boompi.xcodeproj.
+name: Boompi
+options:
+  bundleIdPrefix: io.n8
+  deploymentTarget:
+    iOS: "17.0"
+packages:
+  BoompiKit:
+    path: BoompiKit
+targets:
+  Boompi:
+    type: application
+    platform: iOS
+    sources: [Boompi]
+    dependencies:
+      - package: BoompiKit
+    info:
+      path: Boompi/Info.plist
+      properties:
+        UILaunchScreen: {}
+        CFBundleDisplayName: Boompi
+        # Required for CoreBluetooth; shown in the permission prompt.
+        NSBluetoothAlwaysUsageDescription: >-
+          Boompi uses Bluetooth to find and control your speaker -
+          no Wi-Fi or account needed.
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
