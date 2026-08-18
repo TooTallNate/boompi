@@ -62,9 +62,11 @@ component Row inherits Rectangle {
 component RailTab inherits Rectangle {
     in property <bool> active;
     callback tapped();
-    width: 2.44rem;
-    height: 2.44rem;
-    border-radius: 0.44rem;
+    // Sized by the parent so the rail can shrink to fit short panels
+    // (HyperPixel at large text scales).
+    in property <length> size: 2.44rem;
+    height: self.size;
+    border-radius: min(self.width, self.height) * 0.18;
     background: root.active ? Theme.bar : transparent;
     border-width: root.active ? 0.09rem : 0;
     border-color: Theme.accent;
@@ -124,6 +126,18 @@ export component SettingsPanel inherits Rectangle {
     // Active rail tab: appearance | media | wifi | bluetooth | software.
     in-out property <string> tab: "appearance";
 
+    // The rail must never outgrow the content area (at 150% scale the
+    // HyperPixel's logical height is ~320px and five full-size tabs
+    // would run past the footer): shrink tabs to fit the available
+    // height, capped at the comfortable touch size.
+    property <int> rail-count: root.wifi-supported ? 5 : 4;
+    // Solve n*size + (n-1)*spacing = height with spacing = 0.18*size:
+    // tabs and their gaps shrink together, so the rail fits exactly at
+    // any scale. The floor only engages at extreme scales, where a rem
+    // is huge in physical pixels - touch targets stay usable.
+    property <length> rail-tab-size: max(0.67rem, min(2.44rem,
+        railbox.height / (root.rail-count + 0.18 * (root.rail-count - 1))));
+
     background: Theme.bg;
 
     VerticalLayout {
@@ -159,10 +173,16 @@ export component SettingsPanel inherits Rectangle {
 
             // Icon rail: settings split into focused tabs instead of one
             // endless scroll - same grouping as the web sidebar.
-            VerticalLayout {
-                spacing: 0.44rem;
-                alignment: start;
-                RailTab {
+            railbox := Rectangle {
+                width: 2.44rem;
+                VerticalLayout {
+                    y: 0;
+                    width: parent.width;
+                    height: parent.height;
+                    spacing: root.rail-tab-size * 0.18;
+                    alignment: start;
+                    RailTab {
+                    size: root.rail-tab-size;
                     active: root.tab == "appearance";
                     tapped => {
                         root.tab = "appearance";
@@ -170,12 +190,13 @@ export component SettingsPanel inherits Rectangle {
                     IconSun {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 1.33rem;
-                        height: 1.33rem;
+                        width: root.rail-tab-size * 0.55;
+                        height: root.rail-tab-size * 0.55;
                         icon-color: root.tab == "appearance" ? Theme.accent : Theme.dim;
                     }
                 }
                 RailTab {
+                    size: root.rail-tab-size;
                     active: root.tab == "media";
                     tapped => {
                         root.tab = "media";
@@ -183,12 +204,13 @@ export component SettingsPanel inherits Rectangle {
                     IconNote {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 1.33rem;
-                        height: 1.33rem;
+                        width: root.rail-tab-size * 0.55;
+                        height: root.rail-tab-size * 0.55;
                         icon-color: root.tab == "media" ? Theme.accent : Theme.dim;
                     }
                 }
                 if root.wifi-supported: RailTab {
+                    size: root.rail-tab-size;
                     active: root.tab == "wifi";
                     tapped => {
                         root.tab = "wifi";
@@ -196,12 +218,13 @@ export component SettingsPanel inherits Rectangle {
                     IconWifi {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 1.33rem;
-                        height: 1.33rem;
+                        width: root.rail-tab-size * 0.55;
+                        height: root.rail-tab-size * 0.55;
                         icon-color: root.tab == "wifi" ? Theme.accent : Theme.dim;
                     }
                 }
                 RailTab {
+                    size: root.rail-tab-size;
                     active: root.tab == "bluetooth";
                     tapped => {
                         root.tab = "bluetooth";
@@ -209,12 +232,13 @@ export component SettingsPanel inherits Rectangle {
                     IconBluetooth {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 1.33rem;
-                        height: 1.33rem;
+                        width: root.rail-tab-size * 0.55;
+                        height: root.rail-tab-size * 0.55;
                         icon-color: root.tab == "bluetooth" ? Theme.accent : Theme.dim;
                     }
                 }
                 RailTab {
+                    size: root.rail-tab-size;
                     active: root.tab == "software";
                     tapped => {
                         root.tab = "software";
@@ -222,10 +246,11 @@ export component SettingsPanel inherits Rectangle {
                     IconDownload {
                         x: (parent.width - self.width) / 2;
                         y: (parent.height - self.height) / 2;
-                        width: 1.33rem;
-                        height: 1.33rem;
+                        width: root.rail-tab-size * 0.55;
+                        height: root.rail-tab-size * 0.55;
                         icon-color: root.tab == "software" ? Theme.accent : Theme.dim;
                     }
+                }
                 }
             }
 
