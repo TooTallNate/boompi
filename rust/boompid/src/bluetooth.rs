@@ -388,16 +388,27 @@ async fn handle_interface_added(
                 let conn = ctx.conn.clone();
                 let char_path = path.clone();
                 tokio::spawn(async move {
+                    // CTS is the *last resort* time source: reading it
+                    // needs an encrypted link, and against a device
+                    // whose LE side isn't bonded (a classically-paired
+                    // iPhone running the app included - BR/EDR keys
+                    // don't cover the LE link) BlueZ initiates SMP and
+                    // a pairing dialog pops on the phone. So give every
+                    // gentler source the first shot: app/web clients
+                    // send set_time within moments of connecting.
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
                     if crate::clock::ntp_synchronized().await {
                         return;
                     }
-                    // Reading iOS's CTS requires an encrypted link;
-                    // on an unbonded device BlueZ would initiate SMP
-                    // pairing and pop a pairing dialog on the phone -
-                    // exactly what a JustWorks app connection (the
-                    // remote/iOS app) must never trigger. Only read
-                    // from devices that are already bonded (A2DP
-                    // phones): everyone else offers set_time in-app.
+                    if crate::clock::recently_verified() {
+                        tracing::debug!("skipping CTS read - clock recently set by a client");
+                        return;
+                    }
+                    // Even then, only read from devices that are
+                    // already bonded (A2DP phones, offline, with no
+                    // controlling client - the camping case, where a
+                    // one-time pairing confirmation is a fair price
+                    // for a correct clock).
                     let bonded = async {
                         let dev = device_prefix(char_path.as_str())?;
                         let proxy = Device1Proxy::builder(&conn)

@@ -67,6 +67,18 @@ pub async fn restore(app: &crate::state::SharedApp) {
     }
 }
 
+/// Unix seconds of the last moment the clock was verified good by a
+/// client offer (stepped, or already within tolerance). 0 = never.
+static LAST_VERIFIED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// The clock was stepped or confirmed accurate recently - fallback
+/// time sources (the CTS read, which can prompt for pairing) should
+/// stand down.
+pub fn recently_verified() -> bool {
+    let last = LAST_VERIFIED.load(std::sync::atomic::Ordering::Relaxed);
+    last != 0 && crate::state::now_ms() / 1000 - last < 600
+}
+
 /// Whether the kernel clock has been NTP-disciplined this boot
 /// (timesyncd via timedate1). Errors read as "not synchronized" so
 /// fallback time sources stay available when D-Bus is unhappy.
@@ -111,6 +123,7 @@ pub async fn offer_time(epoch_ms: u64) -> anyhow::Result<bool> {
     let now = crate::state::now_ms();
     let delta_ms = epoch_ms.abs_diff(now);
     if delta_ms < 5_000 {
+        mark_verified();
         return Ok(false);
     }
 
@@ -129,7 +142,15 @@ pub async fn offer_time(epoch_ms: u64) -> anyhow::Result<bool> {
         delta_ms,
         "clock stepped from client-offered time (NTP not synchronized)"
     );
+    mark_verified();
     Ok(true)
+}
+
+fn mark_verified() {
+    LAST_VERIFIED.store(
+        crate::state::now_ms() / 1000,
+        std::sync::atomic::Ordering::Relaxed,
+    );
 }
 
 pub async fn set(timezone: Option<&str>, ntp: Option<bool>) -> anyhow::Result<()> {
