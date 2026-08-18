@@ -2,13 +2,15 @@
 "boompi": patch
 ---
 
-The speaker no longer vanishes from the Bluetooth choosers. The
-fleet's TP-Link UB500 dongle (RTL8761B) silently stops broadcasting
-its LE advertisement after enough connect/disconnect activity, while
-BlueZ still reports it active - so the box would drop out of the
-hosted remote's and iOS app's discovery until something re-registered
-the advert (diagnosed live: an A2DP-connected box with an "active"
-advert that no scanner could see, cured instantly by re-registering).
-boompid now re-asserts the advertisement every minute; the cycle is
-cheap and harmless to connected clients, and a dead broadcast heals
-within a minute instead of never.
+The speaker stays visible in the Bluetooth choosers - including while
+a remote is already connected. Two quirks of the fleet's TP-Link
+UB500 dongle (RTL8761B) shaped this: it silently stops broadcasting
+its LE advertisement after connect/disconnect churn while BlueZ still
+reports it active, and cycling the advertisement registration while a
+client is connected drops that client's connection. So boompid now
+re-asserts the advertisement on a timer only while idle (healing the
+silent death), and the moment a remote connects it registers a spare
+advertising instance instead - the controller runs three, so a second
+remote can still discover and connect. Verified live: the iOS app and
+the web remote controlling the same speaker simultaneously, changes
+reflecting in both directions, while the box stays discoverable.

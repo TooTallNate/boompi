@@ -44,6 +44,12 @@ const CONTROL_PATH: &str = "/com/boompi/ble/service0/control";
 const EVENTS_PATH: &str = "/com/boompi/ble/service0/events";
 const STATE_PATH: &str = "/com/boompi/ble/service0/state";
 const ADV_PATH: &str = "/com/boompi/ble/advertisement0";
+/// Spare advertisement, registered while a client is connected: a
+/// connection consumes the broadcasting advert on the RTL8761B (and
+/// the controller never resumes it), which would make the box
+/// undiscoverable to a second remote. The spare keeps it visible -
+/// verified: two centrals + the spare broadcasting coexist fine.
+const ADV1_PATH: &str = "/com/boompi/ble/advertisement1";
 
 #[zbus::proxy(interface = "org.bluez.GattManager1", default_service = "org.bluez")]
 trait GattManager1 {
@@ -425,6 +431,14 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
             },
         )
         .await?;
+    server
+        .at(
+            ADV1_PATH,
+            Advertisement {
+                local_name: app.speaker_name().await,
+            },
+        )
+        .await?;
 
     // Wait for a GATT-capable adapter (dongle may be unplugged, or
     // bluetoothd still starting). A bluetoothd restart later is caught
@@ -467,15 +481,19 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     let mut cfg_watch = app.subscribe_cfg();
     cfg_watch.mark_unchanged();
 
-    // Advertising re-assertion: the RTL8761B (TP-Link UB500, the fleet
-    // dongle) silently stops broadcasting adverts after connect/
-    // disconnect churn while BlueZ still reports the instance active -
-    // observed in the field as "the box vanished from the app/web
-    // chooser until something re-registered". No D-Bus signal reports
-    // the dead broadcast, so re-assert on a timer: unregister +
-    // register is cheap, quick, and harmless while clients are
-    // connected (multi-central is supported).
-    let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(60));
+    // Advertising maintenance. Two RTL8761B (TP-Link UB500) facts rule
+    // this design, both observed in the field:
+    // - the controller silently stops broadcasting after connect/
+    //   disconnect churn while BlueZ reports the instance active, so
+    //   idle boxes must re-assert (unregister+register) on a timer;
+    // - cycling a registration while a client is connected DROPS that
+    //   connection, so the primary is never touched while subscribed -
+    //   instead a spare instance keeps the box discoverable for the
+    //   next remote (the controller supports 3 instances; two remotes
+    //   plus a live spare verified working simultaneously).
+    let adv1_path = ObjectPath::try_from(ADV1_PATH)?;
+    let mut spare_registered = false;
+    let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(15));
     readvertise.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     readvertise.reset(); // skip the immediate first tick; we just registered
 
@@ -483,12 +501,42 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     loop {
         tokio::select! {
             _ = readvertise.tick() => {
-                let _ = advm.unregister_advertisement(&adv_path).await;
-                if let Err(err) = advm
-                    .register_advertisement(&adv_path, HashMap::new())
+                let subscribed = match conn
+                    .object_server()
+                    .interface::<_, EventsChar>(EVENTS_PATH)
                     .await
                 {
-                    tracing::debug!(%err, "periodic BLE advert re-assert failed");
+                    Ok(iface) => iface.get().await.notifying,
+                    Err(_) => false,
+                };
+                if subscribed {
+                    // A connection consumed the primary's broadcast:
+                    // register the spare so the next remote can still
+                    // find the box. Never cycle the primary here - that
+                    // drops the live connection.
+                    if !spare_registered {
+                        match advm.register_advertisement(&adv1_path, HashMap::new()).await {
+                            Ok(()) => {
+                                tracing::debug!("spare BLE advert registered (client connected)");
+                                spare_registered = true;
+                            }
+                            Err(err) => tracing::debug!(%err, "spare BLE advert registration failed"),
+                        }
+                    }
+                } else {
+                    // Idle: retire the spare and re-assert the primary
+                    // (heals the silently-dead broadcast).
+                    if spare_registered {
+                        let _ = advm.unregister_advertisement(&adv1_path).await;
+                        spare_registered = false;
+                    }
+                    let _ = advm.unregister_advertisement(&adv_path).await;
+                    if let Err(err) = advm
+                        .register_advertisement(&adv_path, HashMap::new())
+                        .await
+                    {
+                        tracing::debug!(%err, "periodic BLE advert re-assert failed");
+                    }
                 }
             }
             out = rx.recv() => match out {
@@ -508,12 +556,29 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
             },
             _ = cfg_watch.changed() => {
                 let name = app.speaker_name().await;
-                if let Ok(iface) = conn
-                    .object_server()
-                    .interface::<_, Advertisement>(ADV_PATH)
-                    .await
-                {
-                    iface.get_mut().await.local_name = name;
+                for path in [ADV_PATH, ADV1_PATH] {
+                    if let Ok(iface) = conn
+                        .object_server()
+                        .interface::<_, Advertisement>(path)
+                        .await
+                    {
+                        iface.get_mut().await.local_name = name.clone();
+                    }
+                }
+                // Re-registration picks the new name up: the primary
+                // cycles on the next idle tick; while subscribed the
+                // spare is cycled instead (never the primary - that
+                // drops the live connection).
+                if spare_registered {
+                    let _ = advm.unregister_advertisement(&adv1_path).await;
+                    if let Err(err) = advm
+                        .register_advertisement(&adv1_path, HashMap::new())
+                        .await
+                    {
+                        tracing::warn!(%err, "BLE spare advert re-registration failed");
+                        spare_registered = false;
+                    }
+                } else {
                     let _ = advm.unregister_advertisement(&adv_path).await;
                     if let Err(err) = advm
                         .register_advertisement(&adv_path, HashMap::new())
