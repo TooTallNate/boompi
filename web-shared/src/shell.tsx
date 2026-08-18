@@ -19,6 +19,7 @@ import {
   SidebarRail,
   SidebarTrigger,
 } from "@boompi/ui/components/sidebar";
+import { GithubIcon } from "@boompi/ui/components/github-icon";
 import { Separator } from "@boompi/ui/components/separator";
 import {
   BatteryMedium,
@@ -165,7 +166,19 @@ export function SettingsShell({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        {footer && <SidebarFooter>{footer}</SidebarFooter>}
+        <SidebarFooter>
+          {footer}
+          <a
+            href="https://github.com/TooTallNate/boompi"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground group-data-[collapsible=icon]:justify-center"
+            title="Boompi on GitHub"
+          >
+            <GithubIcon className="size-4 flex-none" />
+            <span className="group-data-[collapsible=icon]:hidden">GitHub</span>
+          </a>
+        </SidebarFooter>
         <SidebarRail />
       </Sidebar>
       <SidebarInset>

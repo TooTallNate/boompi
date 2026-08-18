@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@boompi/ui/components/alert";
 import { Button } from "@boompi/ui/components/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@boompi/ui/components/card";
+import { GithubIcon } from "@boompi/ui/components/github-icon";
 import { Spinner } from "@boompi/ui/components/spinner";
 import { SETTINGS_PAGES, SettingsShell } from "@boompi/ui/shell";
 import { BoompiContext } from "@boompi/ui/transport";
@@ -108,6 +109,15 @@ function Landing({
             Wi-Fi setup. A couple of things (ROM uploads, timezone) need an
             IP connection and unlock on the speaker's own settings page.
           </p>
+          <a
+            href="https://github.com/TooTallNate/boompi"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <GithubIcon className="size-4" />
+            Boompi is open source
+          </a>
         </CardContent>
       </Card>
     </div>
