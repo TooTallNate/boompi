@@ -133,6 +133,17 @@ export function GamesSection() {
                 <span className="text-[11px] text-muted-foreground">
                   {(g.size / 1e6).toFixed(1)}MB
                 </span>
+                {g.system !== "bios" && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      send({ type: "game", action: "launch", system: g.system, file: g.file })
+                    }
+                  >
+                    Play
+                  </Button>
+                )}
                 {rest && (
                   <Button
                     variant="ghost"

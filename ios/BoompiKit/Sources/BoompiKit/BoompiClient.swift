@@ -226,8 +226,14 @@ extension BoompiClient: CBCentralManagerDelegate {
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
-        let name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
+        var name = (advertisementData[CBAdvertisementDataLocalNameKey] as? String)
             ?? peripheral.name ?? "Boompi"
+        // The GATT advert carries a distinct name ("Boompi Remote -
+        // George's") so iOS Settings can tell it from the A2DP entry;
+        // in our own list the speaker name alone reads better.
+        if name.hasPrefix("Boompi Remote - ") {
+            name = String(name.dropFirst("Boompi Remote - ".count))
+        }
         MainActor.assumeIsolated {
             let id = peripheral.identifier
             if let i = self.discovered.firstIndex(where: { $0.id == id }) {
