@@ -1,0 +1,7 @@
+# Extra busybox applets on top of Buildroot's default config.
+#
+# pgrep/pkill: every bench-debugging session wants them (finding and
+# stopping dev daemon binaries) and scripts written against a normal
+# Linux keep assuming they exist.
+CONFIG_PGREP=y
+CONFIG_PKILL=y

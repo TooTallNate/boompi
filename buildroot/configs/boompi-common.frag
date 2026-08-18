@@ -75,6 +75,7 @@ BR2_PACKAGE_RPI_FIRMWARE_INSTALL_DTB_OVERLAYS=y
 
 # System bits
 BR2_PACKAGE_BUSYBOX_SHOW_OTHERS=y
+BR2_PACKAGE_BUSYBOX_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/busybox.fragment"
 # kexec(8): chain-loads the candidate slot's kernel for A/B update
 # trials (boompi-update-slot) without touching autoboot.txt.
 BR2_PACKAGE_KEXEC=y
