@@ -10,10 +10,14 @@ export function HomeAssistantSection() {
   const { state } = useBoompi();
   const { status, save } = useSave();
   const settings = state?.settings;
-  const [broker, setBroker] = useState(settings?.mqtt_broker ?? "");
-  const [username, setUsername] = useState(settings?.mqtt_username ?? "");
-  const [password, setPassword] = useState(settings?.mqtt_password ?? "");
+  // null = untouched (same greeting-races-mount fix as SpeakerName).
+  const [editedBroker, setEditedBroker] = useState<string | null>(null);
+  const [editedUsername, setEditedUsername] = useState<string | null>(null);
+  const [editedPassword, setEditedPassword] = useState<string | null>(null);
   if (!settings) return null;
+  const broker = editedBroker ?? settings.mqtt_broker;
+  const username = editedUsername ?? settings.mqtt_username;
+  const password = editedPassword ?? settings.mqtt_password;
   const dirty =
     broker !== settings.mqtt_broker ||
     username !== settings.mqtt_username ||
@@ -38,7 +42,7 @@ export function HomeAssistantSection() {
               id="mqtt-broker"
               placeholder="e.g. 192.168.1.89:1883"
               value={broker}
-              onChange={(e) => setBroker(e.target.value)}
+              onChange={(e) => setEditedBroker(e.target.value)}
             />
           </Field>
           <Field>
@@ -46,7 +50,7 @@ export function HomeAssistantSection() {
             <Input
               id="mqtt-username"
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => setEditedUsername(e.target.value)}
             />
           </Field>
           <Field>
@@ -55,7 +59,7 @@ export function HomeAssistantSection() {
               id="mqtt-password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => setEditedPassword(e.target.value)}
             />
           </Field>
           <div className="flex items-center justify-end gap-2">

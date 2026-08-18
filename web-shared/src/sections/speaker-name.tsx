@@ -9,9 +9,13 @@ import { useBoompi, useSave } from "@boompi/ui/transport";
 export function SpeakerNameSection() {
   const { state } = useBoompi();
   const { status, save } = useSave();
-  const [name, setName] = useState(state?.settings.name ?? "");
+  // null = untouched: the server value shows through, including when
+  // it arrives *after* first render (the WS greeting races the mount).
+  const [edited, setEdited] = useState<string | null>(null);
+  const serverName = state?.settings.name ?? "";
+  const name = edited ?? serverName;
   const trimmed = name.trim();
-  const dirty = trimmed.length > 0 && trimmed !== state?.settings.name;
+  const dirty = trimmed.length > 0 && trimmed !== serverName;
 
   return (
     <Card>
@@ -27,7 +31,7 @@ export function SpeakerNameSection() {
               maxLength={48}
               autoComplete="off"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setEdited(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && dirty) save({ name: trimmed });
               }}
