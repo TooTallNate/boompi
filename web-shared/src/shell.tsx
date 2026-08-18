@@ -21,7 +21,6 @@ import {
 } from "@boompi/ui/components/sidebar";
 import { Separator } from "@boompi/ui/components/separator";
 import {
-  Airplay,
   BatteryMedium,
   Bluetooth,
   CloudDownload,
@@ -132,7 +131,7 @@ export function SettingsShell({
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2 px-2 py-1.5 group-data-[collapsible=icon]:px-0">
-            <Airplay className="size-5 flex-none text-primary" aria-hidden />
+            <img src="/icon.png" alt="" aria-hidden className="size-7 flex-none" />
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-semibold">
                 {state?.settings?.name || "Boompi"}

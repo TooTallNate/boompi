@@ -41,3 +41,4 @@ targets:
       base:
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.9"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

@@ -32,6 +32,12 @@ export component SetupScreen inherits Rectangle {
         VerticalLayout {
             alignment: center;
             spacing: 0.7778rem;
+            Image {
+                source: @image-url("../images/logo.png");
+                image-fit: contain;
+                width: min(13rem, root.width * 0.38);
+                height: self.width * 0.667;
+            }
             Text {
                 text: "Hi, I'm " + root.speaker-name + ".";
                 color: Theme.fg;

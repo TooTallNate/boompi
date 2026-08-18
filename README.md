@@ -1,7 +1,27 @@
-# Boompi v2
+<p align="center">
+  <img src="assets/logo.png" alt="Boompi" width="560">
+</p>
 
-Software stack for two custom-built Raspberry Pi boomboxes, rebuilt as a
-native appliance:
+# Boompi
+
+Boompi turns a Raspberry Pi into a boombox: a complete, flashable
+appliance OS for building your own - Bluetooth/AirPlay/Spotify audio,
+a touchscreen now-playing UI, game emulation, battery awareness, and
+remote control over Wi-Fi or BLE (web + iOS). It grew out of two
+custom builds and is becoming something anyone can put in a box:
+
+- **`boompid`** - Rust backend daemon: Bluetooth (BlueZ), Spotify Connect
+  (librespot), AirPlay (shairport-sync), PipeWire volume, INA260 battery
+  telemetry, FFT visualizer, album art. Serves a WebSocket/HTTP API.
+- **`boompi-ui`** - Slint touchscreen UI: renders directly on DRM/KMS on the
+  boombox, or as a desktop app on a laptop for development.
+- **`web/`** - settings web app served by the box; **`web-remote/`** - the
+  hosted Web Bluetooth remote ([boompi.n8.io](https://boompi.n8.io));
+  **`ios/`** - the native iOS app.
+- **`buildroot/`** - flashable, pre-configured SD card images (silent boot,
+  A/B self-updates, first-boot setup). Box-specific hardware (display
+  panel, DAC, battery sensor, wiring) is described by an on-device
+  profile, not baked into the image - one image boots every build.
 
 - **`boompid`** - Rust backend daemon: Bluetooth (BlueZ), Spotify Connect
   (librespot), AirPlay (shairport-sync), PipeWire volume, INA260 battery

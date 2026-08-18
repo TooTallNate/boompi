@@ -50,7 +50,8 @@ export function SetupWizard({ currentName }: { currentName: string }) {
   return (
     <div className="flex justify-center px-4 pt-10 pb-16">
       <main className="flex w-full max-w-lg flex-col gap-4">
-        <div>
+        <div className="flex flex-col gap-2">
+          <img src="/logo.png" alt="Boompi" className="max-w-72 self-center" />
           <h1 className="text-[26px] font-semibold">Welcome 👋</h1>
           <p className="text-sm text-muted-foreground">
             Let's set up your speaker - takes about a minute.

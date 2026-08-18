@@ -48,6 +48,7 @@ function Landing({
     <div className="flex min-h-svh items-center justify-center px-4">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <img src="/logo.png" alt="Boompi" className="mx-auto w-64" />
           <CardTitle className="flex items-center gap-2">
             <Bluetooth className="size-5 text-primary" aria-hidden />
             Boompi Remote
