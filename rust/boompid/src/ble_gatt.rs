@@ -467,9 +467,30 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     let mut cfg_watch = app.subscribe_cfg();
     cfg_watch.mark_unchanged();
 
+    // Advertising re-assertion: the RTL8761B (TP-Link UB500, the fleet
+    // dongle) silently stops broadcasting adverts after connect/
+    // disconnect churn while BlueZ still reports the instance active -
+    // observed in the field as "the box vanished from the app/web
+    // chooser until something re-registered". No D-Bus signal reports
+    // the dead broadcast, so re-assert on a timer: unregister +
+    // register is cheap, quick, and harmless while clients are
+    // connected (multi-central is supported).
+    let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(60));
+    readvertise.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    readvertise.reset(); // skip the immediate first tick; we just registered
+
     let mut rx = app.tx.subscribe();
     loop {
         tokio::select! {
+            _ = readvertise.tick() => {
+                let _ = advm.unregister_advertisement(&adv_path).await;
+                if let Err(err) = advm
+                    .register_advertisement(&adv_path, HashMap::new())
+                    .await
+                {
+                    tracing::debug!(%err, "periodic BLE advert re-assert failed");
+                }
+            }
             out = rx.recv() => match out {
                 Ok(Outbound::Message(json)) => {
                     if let Err(err) = notify_events(&conn, json.as_bytes()).await {
