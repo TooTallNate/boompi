@@ -21,7 +21,13 @@ on:
     # Docs-only commits shouldn't trigger multi-hour image builds.
     paths:
       - "rust/**"
+      # The embedded web app: web/ imports @boompi/ui from web-shared/,
+      # and a lockfile-only bump changes the bundle too. (web-remote/
+      # is deliberately absent - the hosted app never ships in images.)
       - "web/**"
+      - "web-shared/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
       - "buildroot/**"
       - "scripts/**"
       - ".github/workflows/image.yml"
