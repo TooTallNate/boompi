@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.png" alt="Boompi" width="560">
+  <img src="branding/logo.png" alt="Boompi" width="560">
 </p>
 
 # Boompi
