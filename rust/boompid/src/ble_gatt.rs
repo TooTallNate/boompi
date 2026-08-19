@@ -521,6 +521,8 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     let adv1_path = ObjectPath::try_from(ADV1_PATH)?;
     let mut spare_registered = false;
     let readvertise_hint = shared_for_loop.clone();
+    let mut pairing_window = app.pairing_window.subscribe();
+    pairing_window.mark_unchanged();
     let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(300));
     readvertise.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     readvertise.reset(); // skip the immediate first tick; we just registered
@@ -528,6 +530,29 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     let mut rx = app.tx.subscribe();
     loop {
         tokio::select! {
+            _ = pairing_window.changed() => {
+                if *pairing_window.borrow() {
+                    // Pairing window open: park LE advertising so
+                    // classic inquiry/discoverable gets the radio (the
+                    // UB500 returns Busy when both contend, and
+                    // gamepads never see the box).
+                    tracing::info!("pairing window open; parking BLE advertising");
+                    let _ = advm.unregister_advertisement(&adv_path).await;
+                    if spare_registered {
+                        let _ = advm.unregister_advertisement(&adv1_path).await;
+                        spare_registered = false;
+                    }
+                } else {
+                    tracing::info!("pairing window closed; restoring BLE advertising");
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    if let Err(err) = advm
+                        .register_advertisement(&adv_path, HashMap::new())
+                        .await
+                    {
+                        tracing::debug!(%err, "advert restore failed (safety net will retry)");
+                    }
+                }
+            }
             _ = readvertise_hint.readvertise.notified() => {
                 // A client just disconnected: give the controller a
                 // beat to settle (EBUSY otherwise), then re-assert so

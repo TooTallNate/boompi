@@ -204,10 +204,15 @@ pub async fn register(
 
 /// Update shared pairing state + notify clients.
 pub async fn set_pairing(app: &SharedApp, pairing: Pairing) {
+    let open = !matches!(pairing.state, boompi_proto::PairingState::Idle
+        | boompi_proto::PairingState::Unavailable);
     let mut s = app.shared.write().await;
     if s.pairing != pairing {
         s.pairing = pairing.clone();
         drop(s);
+        // Radio room for classic inquiry: the GATT bridge watches this
+        // and parks LE advertising while the window is open.
+        app.pairing_window.send_replace(open);
         app.broadcast(ServerMessage::Pairing(pairing));
     }
 }

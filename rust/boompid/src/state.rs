@@ -73,6 +73,11 @@ pub struct App {
     /// sources to re-announce (speaker rename). Sources watch this and
     /// restart their sessions with the fresh name.
     cfg_generation: tokio::sync::watch::Sender<u64>,
+    /// True while the Bluetooth pairing window is open. The BLE GATT
+    /// bridge pauses advertising for the duration: on the UB500,
+    /// classic inquiry/discoverable and LE advertising fight over the
+    /// radio ("Failed to set mode: Busy") and gamepads can't pair.
+    pub pairing_window: tokio::sync::watch::Sender<bool>,
     pub started: Instant,
     pub shared: RwLock<Shared>,
     pub tx: broadcast::Sender<Outbound>,
@@ -191,6 +196,7 @@ impl App {
             cfg,
             config_path,
             cfg_generation: tokio::sync::watch::channel(0).0,
+            pairing_window: tokio::sync::watch::channel(false).0,
             started: Instant::now(),
             shared: RwLock::new(Shared {
                 volume: cfg2_volume,
