@@ -295,7 +295,9 @@ async fn check(app: &SharedApp) -> Result<()> {
 }
 
 /// Periodic background check (spawned from main): once shortly after
-/// boot, then every 6 hours.
+/// boot, then every 6 hours - or every 10 minutes on the edge
+/// channel, where a green build lands with most pushes and the whole
+/// point of opting in is riding the front of the wave.
 pub async fn periodic(app: SharedApp) {
     tokio::time::sleep(std::time::Duration::from_secs(120)).await;
     loop {
@@ -316,7 +318,12 @@ pub async fn periodic(app: SharedApp) {
             }
         }
         broadcast_state(&app).await;
-        tokio::time::sleep(std::time::Duration::from_secs(6 * 60 * 60)).await;
+        // Channel is a live setting: re-read each cycle so toggling
+        // "bleeding edge" takes effect at the next wakeup, no restart.
+        let edge = app.shared.read().await.settings.update_channel
+            == boompi_proto::UpdateChannel::Edge;
+        let secs = if edge { 10 * 60 } else { 6 * 60 * 60 };
+        tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
     }
 }
 
