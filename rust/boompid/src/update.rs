@@ -68,12 +68,30 @@ fn client() -> Result<reqwest::Client> {
         .build()?)
 }
 
+/// The hosted remote (boompi.n8.io) proxies + caches the release
+/// lookup: a fleet of 10-minute edge pollers costs GitHub roughly one
+/// request per cache window instead of one per box. It's a cache, not
+/// a dependency - any failure falls back to GitHub directly.
+const RELEASE_PROXY: &str = "https://boompi.n8.io/api/release";
+
 async fn fetch_release(channel: UpdateChannel) -> Result<Release> {
+    let chan = match channel {
+        UpdateChannel::Stable => "stable",
+        UpdateChannel::Edge => "edge",
+    };
+    match fetch_release_from(&format!("{RELEASE_PROXY}?channel={chan}")).await {
+        Ok(rel) => return Ok(rel),
+        Err(err) => tracing::debug!(%err, "release proxy unavailable; asking GitHub directly"),
+    }
     let url = match channel {
         UpdateChannel::Stable => format!("https://api.github.com/repos/{REPO}/releases/latest"),
         UpdateChannel::Edge => format!("https://api.github.com/repos/{REPO}/releases/tags/edge"),
     };
-    let resp = client()?.get(&url).send().await?;
+    fetch_release_from(&url).await
+}
+
+async fn fetch_release_from(url: &str) -> Result<Release> {
+    let resp = client()?.get(url).send().await?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
         bail!("no release published on this channel yet");
     }
