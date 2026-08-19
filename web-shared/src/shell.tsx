@@ -140,7 +140,9 @@ export function SettingsShell({
               <div className="truncate text-xs text-muted-foreground">
                 {error ??
                   (hello
-                    ? `v${hello.version} · up ${Math.floor(hello.uptime_secs / 60)} min`
+                    ? // The image stamp already carries its "v"
+                      // ("v2.2.0-abc"); dev builds report "dev".
+                      `${hello.version} · up ${Math.floor(hello.uptime_secs / 60)} min`
                     : "connecting…")}
               </div>
             </div>
