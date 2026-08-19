@@ -40,6 +40,7 @@ trait Adapter1 {
     #[zbus(property)]
     fn set_pairable(&self, pairable: bool) -> zbus::Result<()>;
     fn remove_device(&self, device: &ObjectPath<'_>) -> zbus::Result<()>;
+
     /// Inquiry scan: gamepads in pairing mode only advertise - the
     /// speaker must find them and initiate (the opposite of phones,
     /// which initiate toward the discoverable speaker).
@@ -50,8 +51,8 @@ trait Adapter1 {
 #[zbus::proxy(interface = "org.bluez.Device1", default_service = "org.bluez")]
 trait Device1 {
     fn connect(&self) -> zbus::Result<()>;
-    fn connect_profile(&self, uuid: &str) -> zbus::Result<()>;
     fn disconnect(&self) -> zbus::Result<()>;
+    fn connect_profile(&self, uuid: &str) -> zbus::Result<()>;
     #[zbus(property)]
     fn alias(&self) -> zbus::Result<String>;
     #[zbus(property)]
@@ -72,6 +73,10 @@ trait Device1 {
     #[zbus(property)]
     fn icon(&self) -> zbus::Result<String>;
 }
+
+/// AVRCP (remote control/metadata) profile UUID, for targeted profile
+/// reconnects when the player object vanishes mid-session.
+const AVRCP_UUID: &str = "0000110e-0000-1000-8000-00805f9b34fb";
 
 #[zbus::proxy(interface = "org.bluez.MediaPlayer1", default_service = "org.bluez")]
 trait MediaPlayer1 {
@@ -117,6 +122,8 @@ const CTS_LOCAL_TIME_INFO_UUID: &str = "00002a0f-0000-1000-8000-00805f9b34fb";
 const AVRCP_MAX: f32 = 127.0;
 
 /// Mutable view of the currently connected phone/player.
+/// (`last_avrcp_reconnect` rate-limits the resync sweep's profile
+/// recovery attempts.)
 #[derive(Default)]
 struct Session {
     /// Local controller (survives phone disconnects).
@@ -259,12 +266,26 @@ async fn run(
     // and a controller that vanishes emits exactly one event - if the
     // recovery attempt it triggers fails, nothing would ever retry.
     let mut health_tick = tokio::time::interval(std::time::Duration::from_secs(30));
+    // zbus signal queues drop silently on overflow (observed in the
+    // field: a phone's AVRCP player re-appeared and the
+    // InterfacesAdded never arrived - track + art frozen until a
+    // daemon restart). The sweep reconciles against the real object
+    // tree so any missed add/remove self-heals, and re-pulls AVRCP
+    // when a connected device lost its player (profile reconnect
+    // verified to resurrect it).
+    let mut resync_tick = tokio::time::interval(std::time::Duration::from_secs(30));
+    resync_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    resync_tick.reset();
+    let mut last_avrcp_reconnect: Option<std::time::Instant> = None;
     health_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     loop {
         tokio::select! {
             _ = health_tick.tick() => {
                 ensure_powered(&ctx, &session).await;
+            }
+            _ = resync_tick.tick() => {
+                resync(&ctx, &mut session, &mut last_avrcp_reconnect).await;
             }
             _ = cfg_watch.changed() => {
                 apply_adapter_alias(&ctx, &session, &app.speaker_name().await).await;
@@ -318,6 +339,107 @@ async fn run(
                     tracing::warn!(%err, ?cmd, "source command failed");
                 }
             }
+        }
+    }
+}
+
+/// Reconcile session state against bluez's actual object tree: adopt
+/// players whose InterfacesAdded we never saw, drop players that are
+/// gone (clearing the frozen track), and actively re-pull AVRCP for
+/// connected devices that lost it.
+async fn resync(
+    ctx: &Ctx,
+    session: &mut Session,
+    last_avrcp_reconnect: &mut Option<std::time::Instant>,
+) {
+    let om = match ObjectManagerProxy::builder(&ctx.conn)
+        .destination("org.bluez")
+        .and_then(|b| b.path("/"))
+    {
+        Ok(b) => match b.build().await {
+            Ok(om) => om,
+            Err(_) => return,
+        },
+        Err(_) => return,
+    };
+    let Ok(objects) = om.get_managed_objects().await else {
+        return;
+    };
+
+    // Session references a player that no longer exists: replay the
+    // removal we missed (clears track/transport state downstream).
+    if let Some(p) = session.player_path.clone() {
+        if !objects.contains_key(&p) {
+            tracing::info!(path = %p, "resync: adopted player vanished; replaying removal");
+            handle_interfaces_removed(
+                ctx,
+                session,
+                p.as_str(),
+                &["org.bluez.MediaPlayer1".to_string()],
+            )
+            .await;
+        }
+    }
+
+    if session.player_path.is_none() {
+        // A player exists that we never adopted: replay the add.
+        let missed = objects.iter().find_map(|(path, ifaces)| {
+            ifaces
+                .get("org.bluez.MediaPlayer1")
+                .map(|props| (path.clone(), props.clone()))
+        });
+        if let Some((path, props)) = missed {
+            tracing::info!(%path, "resync: unadopted media player found; replaying add");
+            let props: HashMap<String, OwnedValue> = props
+                .iter()
+                .filter_map(|(k, v)| v.try_to_owned().ok().map(|ov| (k.to_string(), ov)))
+                .collect();
+            handle_interface_added(ctx, session, &path, "org.bluez.MediaPlayer1", &props).await;
+            return;
+        }
+
+        // No player anywhere, but an audio device is connected: its
+        // AVRCP channel died (phones drop it while A2DP keeps
+        // streaming). Pull the profile back, gently.
+        let recently = last_avrcp_reconnect
+            .map(|t| t.elapsed() < std::time::Duration::from_secs(60))
+            .unwrap_or(false);
+        if recently {
+            return;
+        }
+        for (path, ifaces) in &objects {
+            let Some(dev) = ifaces.get("org.bluez.Device1") else {
+                continue;
+            };
+            let connected = dev
+                .get("Connected")
+                .and_then(|v| bool_from_value_ref(v))
+                .unwrap_or(false);
+            let paired = dev
+                .get("Paired")
+                .and_then(|v| bool_from_value_ref(v))
+                .unwrap_or(false);
+            if !connected || !paired {
+                continue;
+            }
+            *last_avrcp_reconnect = Some(std::time::Instant::now());
+            tracing::info!(%path, "resync: connected device without AVRCP; reconnecting profile");
+            let conn = ctx.conn.clone();
+            let path = path.clone();
+            tokio::spawn(async move {
+                let Ok(dev) = Device1Proxy::builder(&conn)
+                    .path(path.clone())
+                    .and_then(|b| Ok(b.build()))
+                else {
+                    return;
+                };
+                if let Ok(dev) = dev.await {
+                    if let Err(err) = dev.connect_profile(AVRCP_UUID).await {
+                        tracing::debug!(%err, %path, "AVRCP profile reconnect failed");
+                    }
+                }
+            });
+            break;
         }
     }
 }
