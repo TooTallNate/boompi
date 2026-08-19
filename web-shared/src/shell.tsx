@@ -36,7 +36,6 @@ import { capsOf } from "@boompi/ui/proto";
 import { useBoompi } from "@boompi/ui/transport";
 
 import { AirplaySection } from "@boompi/ui/sections/airplay";
-import { AlbumArtSection } from "@boompi/ui/sections/album-art";
 import { AppearanceSection } from "@boompi/ui/sections/appearance";
 import { BatterySection } from "@boompi/ui/sections/battery";
 import { BluetoothSection } from "@boompi/ui/sections/bluetooth";
@@ -86,7 +85,6 @@ function DisplayPage() {
       <AppearanceSection />
       <ScreensaverSection />
       <EmojiFontsSection />
-      <AlbumArtSection />
     </>
   );
 }

@@ -132,7 +132,6 @@ const fn ina260_default_address() -> u8 {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SettingsConfig {
-    pub online_art_fallback: bool,
     /// Panel UI theme ("dark" / "light").
     pub theme: boompi_proto::Theme,
     /// Advertised AirPlay device model ("" = shairport default).
@@ -202,7 +201,6 @@ fn default_ui_scale() -> f32 {
 impl Default for SettingsConfig {
     fn default() -> Self {
         Self {
-            online_art_fallback: false,
             theme: boompi_proto::Theme::default(),
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
@@ -469,13 +467,11 @@ mod tests {
             max_voltage = 24.98
 
             [settings]
-            online_art_fallback = true
             "#,
         )
         .unwrap();
         assert_eq!(cfg.name, "Kitchen Boombox");
         assert_eq!(cfg.battery.as_ref().unwrap().i2c_bus, 3);
-        assert!(cfg.settings.online_art_fallback);
     }
 
     #[test]
@@ -483,7 +479,6 @@ mod tests {
         let cfg: Config = toml::from_str("").unwrap();
         assert_eq!(cfg.name, "Boompi");
         assert!(cfg.battery.is_none());
-        assert!(!cfg.settings.online_art_fallback);
         assert_eq!(cfg.settings.theme, boompi_proto::Theme::Dark);
     }
 
@@ -495,12 +490,10 @@ mod tests {
         let mut cfg = Config::default();
         cfg.name = "Porch Box 📻".into();
         cfg.settings.theme = boompi_proto::Theme::Light;
-        cfg.settings.online_art_fallback = true;
         save(&cfg, &path).unwrap();
         let loaded = load(Some(&path)).unwrap();
         assert_eq!(loaded.name, "Porch Box 📻");
         assert_eq!(loaded.settings.theme, boompi_proto::Theme::Light);
-        assert!(loaded.settings.online_art_fallback);
         std::fs::remove_dir_all(&dir).ok();
     }
 
@@ -549,7 +542,6 @@ mod compat_tests {
 name = "Test"
 some_future_toplevel_key = true
 [settings]
-online_art_fallback = false
 theme = "dark"
 airplay_model = "WiiM Amp"
 airplay_pin = "4016"

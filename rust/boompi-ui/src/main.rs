@@ -326,15 +326,6 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
-        ui.on_online_art_toggled(move |enabled| {
-            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
-                online_art_fallback: Some(enabled),
-                ..SettingsPatch::default()
-            }));
-        });
-    }
-    {
-        let tx = tx.clone();
         ui.on_pairing_enable(move || {
             let _ = tx.send(ClientMessage::Pairing {
                 action: PairingAction::Enable,

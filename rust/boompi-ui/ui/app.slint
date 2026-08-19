@@ -129,7 +129,6 @@ export component AppWindow inherits Window {
     in property <string> pairing-state: "idle";
     in property <string> pairing-device: "";
     in property <string> pairing-passkey: "";
-    in-out property <bool> online-art: false;
     in property <string> settings-url: "";
     in property <image> settings-qr;
     in property <[EmojiFontRow]> emoji-fonts: [];
@@ -158,7 +157,6 @@ export component AppWindow inherits Window {
     callback previous();
     callback volume-edited(float);
     callback screen-changed();
-    callback online-art-toggled(bool);
     callback theme-toggled(bool);
     callback scale-changed(float);
     callback emoji-font-tapped(string, string);
@@ -351,7 +349,6 @@ export component AppWindow inherits Window {
         emoji-font-tapped(id, status) => {
             root.emoji-font-tapped(id, status);
         }
-        online-art <=> root.online-art;
         pairing-state: root.pairing-state;
         settings-url: root.settings-url;
         settings-qr: root.settings-qr;
@@ -373,9 +370,6 @@ export component AppWindow inherits Window {
         close => {
             root.screen = "main";
             root.screen-changed();
-        }
-        online-art-toggled(enabled) => {
-            root.online-art-toggled(enabled);
         }
         scale-changed(scale) => {
             // Apply locally right away (snappy feedback); boompid's

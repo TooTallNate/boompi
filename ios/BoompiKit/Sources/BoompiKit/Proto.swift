@@ -67,7 +67,6 @@ public struct Settings: Decodable, Equatable {
     public var updateChannel: String
     public var uiScale: Double
     public var visualizerOpacity: Double
-    public var onlineArtFallback: Bool
     public var airplayModel: String
     public var airplayClassic: Bool
     public var gameVolume: Double
@@ -82,7 +81,6 @@ public struct Settings: Decodable, Equatable {
         case updateChannel = "update_channel"
         case uiScale = "ui_scale"
         case visualizerOpacity = "visualizer_opacity"
-        case onlineArtFallback = "online_art_fallback"
         case airplayModel = "airplay_model"
         case airplayClassic = "airplay_classic"
         case gameVolume = "game_volume"

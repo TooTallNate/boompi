@@ -249,7 +249,6 @@ pub struct Settings {
     pub theme: Theme,
     /// When a source provides no album art, look it up online
     /// (iTunes Search / Cover Art Archive) by artist+album.
-    pub online_art_fallback: bool,
     /// Advertised AirPlay device model (mDNS `am=`/`model=`): senders pick
     /// their AirPlay-picker icon from it. Empty = shairport default
     /// (generic speaker). E.g. "AudioAccessory5,1" shows a HomePod mini.
@@ -303,7 +302,6 @@ impl Default for Settings {
         Self {
             name: String::new(),
             theme: Theme::default(),
-            online_art_fallback: false,
             airplay_model: String::new(),
             ui_scale: default_ui_scale(),
             update_channel: UpdateChannel::default(),
@@ -323,8 +321,6 @@ impl Default for Settings {
 /// Partial settings update; `None` fields are left unchanged.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SettingsPatch {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub online_art_fallback: Option<bool>,
     /// Rename the speaker (Bluetooth alias + AirPlay + Spotify Connect).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

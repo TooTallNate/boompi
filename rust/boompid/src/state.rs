@@ -185,7 +185,6 @@ impl App {
         let settings = Settings {
             name: cfg.name.clone(),
             theme: cfg.settings.theme,
-            online_art_fallback: cfg.settings.online_art_fallback,
             airplay_model: cfg.settings.airplay_model.clone(),
             ui_scale: cfg.settings.ui_scale,
             update_channel: cfg.settings.update_channel,
@@ -360,7 +359,6 @@ impl App {
             let s = self.shared.read().await;
             cfg.name = s.settings.name.clone();
             cfg.settings.theme = s.settings.theme;
-            cfg.settings.online_art_fallback = s.settings.online_art_fallback;
             cfg.settings.airplay_model = s.settings.airplay_model.clone();
             cfg.settings.ui_scale = s.settings.ui_scale;
             cfg.settings.update_channel = s.settings.update_channel;
@@ -681,9 +679,6 @@ impl App {
                 let mut channel_changed = false;
                 let settings = {
                     let mut s = self.shared.write().await;
-                    if let Some(v) = patch.online_art_fallback {
-                        s.settings.online_art_fallback = v;
-                    }
                     if let Some(theme) = patch.theme {
                         s.settings.theme = theme;
                     }

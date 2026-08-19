@@ -81,7 +81,6 @@ component RailTab inherits Rectangle {
 export component SettingsPanel inherits Rectangle {
     in property <string> speaker-name;
     in property <string> version-line;
-    in-out property <bool> online-art;
     in property <string> pairing-state; // "idle" | "discoverable" | "confirm"
     in property <string> settings-url;
     in property <image> settings-qr;
@@ -117,7 +116,6 @@ export component SettingsPanel inherits Rectangle {
     callback update-apply();
     callback update-channel-toggled(bool);
     callback close();
-    callback online-art-toggled(bool);
     callback theme-toggled(bool);
     callback scale-changed(float);
     callback pairing-enable();
@@ -444,16 +442,6 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
-                Row {
-                    label: "Fetch album art online";
-                    sublabel: "When a source sends no artwork (needs Wi-Fi)";
-                    Switch {
-                        checked <=> root.online-art;
-                        toggled => {
-                            root.online-art-toggled(self.checked);
-                        }
-                    }
-                }
 
                 // ---- AirPlay icon -----------------------------------------
                 Rectangle {

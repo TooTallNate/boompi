@@ -170,7 +170,6 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 });
             }
             let pairing = pairing_str(state.pairing.state);
-            let online_art = state.settings.online_art_fallback;
             let light = state.settings.theme == boompi_proto::Theme::Light;
             let setup_required = state.setup.required;
             let (wifi_kind, wifi_text) = wifi_status_strings(&state.setup.wifi_status);
@@ -196,7 +195,6 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 ui.set_vis_opacity(vis_opacity);
                 ui.set_volume(volume);
                 ui.set_pairing_state(pairing.into());
-                ui.set_online_art(online_art);
                 ui.set_setup_required(setup_required);
                 ui.set_setup_wifi_kind(wifi_kind.into());
                 ui.set_setup_wifi_text(wifi_text.into());
@@ -241,7 +239,6 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
                 // on (re)connect, so a rename mid-session (e.g. during
                 // OOBE) must land through this broadcast too.
                 ui.set_speaker_name(settings.name.into());
-                ui.set_online_art(settings.online_art_fallback);
                 ui.set_airplay_model(settings.airplay_model.into());
                 ui.set_saver_kind(screensaver_kind_str(settings.screensaver).into());
                 ui.set_saver_timeout_min(settings.screensaver_min.min(240) as i32);

@@ -310,17 +310,6 @@ struct DisplayDetailView: View {
                             }
                         }
                     }
-                    Toggle(isOn: Binding(
-                        get: { settings.onlineArtFallback },
-                        set: { client.send(.setSettings(["online_art_fallback": $0])) }
-                    )) {
-                        VStack(alignment: .leading) {
-                            Text("Fetch album art online")
-                            Text("When a source sends no artwork (needs Wi-Fi)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
                 }
 
                 if client.caps.contains(Caps.emojiFonts), client.state?.emojiFonts != nil {

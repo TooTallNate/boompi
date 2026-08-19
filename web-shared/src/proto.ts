@@ -14,7 +14,6 @@ export interface Settings {
   airplay_model: string;
   name: string;
   theme: Theme;
-  online_art_fallback: boolean;
   update_channel: UpdateChannel;
   airplay_classic: boolean;
   clock_24h: boolean;
@@ -33,7 +32,6 @@ export interface SettingsPatch {
   airplay_model?: string;
   name?: string;
   theme?: Theme;
-  online_art_fallback?: boolean;
   update_channel?: UpdateChannel;
   airplay_classic?: boolean;
   clock_24h?: boolean;
