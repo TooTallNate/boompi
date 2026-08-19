@@ -445,6 +445,7 @@ struct GamesDetailView: View {
 struct GeneralDetailView: View {
     @ObservedObject var client: BoompiClient
     @State private var name = ""
+    @State private var confirmRestart = false
 
     var body: some View {
         List {
@@ -514,8 +515,26 @@ struct GeneralDetailView: View {
                     }
                 }
             }
+
+            Section {
+                Button("Restart Speaker", role: .destructive) {
+                    confirmRestart = true
+                }
+                .frame(maxWidth: .infinity)
+            } footer: {
+                Text("Orderly reboot - the speaker is back in about half a minute and this app reconnects automatically.")
+            }
         }
         .navigationTitle("General")
+        .confirmationDialog(
+            "Restart the speaker?",
+            isPresented: $confirmRestart,
+            titleVisibility: .visible
+        ) {
+            Button("Restart", role: .destructive) { client.send(.reboot) }
+        } message: {
+            Text("Music stops and it's back in about 30 seconds.")
+        }
         .onAppear { name = client.state?.settings.name ?? "" }
     }
 }

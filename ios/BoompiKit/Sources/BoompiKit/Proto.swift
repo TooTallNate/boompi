@@ -318,6 +318,7 @@ public enum ClientMessage {
     case emojiFont(action: String, id: String) // download | select | remove
     case previewScreensaver
     case wifiRadio(enabled: Bool)
+    case reboot
 
     public func encode() throws -> Data {
         var dict: [String: Any]
@@ -349,6 +350,7 @@ public enum ClientMessage {
             dict = ["type": "emoji_font", "action": action, "id": id]
         case .previewScreensaver: dict = ["type": "preview_screensaver"]
         case .wifiRadio(let enabled): dict = ["type": "wifi", "action": "radio", "enabled": enabled]
+        case .reboot: dict = ["type": "reboot"]
         }
         return try JSONSerialization.data(withJSONObject: dict)
     }
