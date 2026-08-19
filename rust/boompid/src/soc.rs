@@ -55,6 +55,14 @@ const LEARN_UP_DELTA_V: f32 = 0.05;
 /// `LEARN_DOWN_EVENTS` consistent full events before adopting it.
 const LEARN_DOWN_DELTA_V: f32 = 0.10;
 const LEARN_DOWN_EVENTS: u8 = 3;
+/// Resting at a pending (lower) plateau for this long counts as one
+/// confirming full event: a box that idles on its charger may not
+/// produce discharge->charge cycles for weeks, and a pack that sits
+/// pinned at the candidate plateau with no current flowing is exactly
+/// what "the converter tops out here now" looks like. Field case: a
+/// charger's CV dropped 0.8 V and the display sat at 88% indefinitely
+/// waiting for cycles that never came.
+const PENDING_REST_CONFIRM_SECS: f32 = 6.0 * 3600.0;
 /// EWMA time constants (seconds).
 const TAU_PHASE_SECS: f32 = 10.0;
 const TAU_DRAW_SECS: f32 = 300.0;
@@ -121,6 +129,9 @@ pub struct SocEstimator {
     voltage: f32,
     /// Seconds spent actively charging in the current session.
     charging_secs: f32,
+    /// Cumulative rest time near a pending lower plateau (see
+    /// PENDING_REST_CONFIRM_SECS).
+    pending_rest_secs: f32,
     /// Peak voltage seen in the current charge session.
     session_max_v: f32,
     /// Seconds the current has held inside the full band.
@@ -142,6 +153,7 @@ impl SocEstimator {
             i_draw: 0.0,
             voltage: 0.0,
             charging_secs: 0.0,
+            pending_rest_secs: 0.0,
             session_max_v: 0.0,
             band_secs: 0.0,
             ah_out: 0.0,
@@ -238,6 +250,32 @@ impl SocEstimator {
                     }
                 }
                 _ => {
+                    // Rest confirmation for a pending lower plateau:
+                    // pinned at the candidate voltage with no current
+                    // counts toward adoption even without new charge
+                    // cycles.
+                    if let Some((pv, n)) = self.cal.pending_lower {
+                        if (voltage - pv).abs() <= LEARN_DOWN_DELTA_V {
+                            self.pending_rest_secs += dt_secs;
+                            if self.pending_rest_secs >= PENDING_REST_CONFIRM_SECS {
+                                self.pending_rest_secs = 0.0;
+                                let n = n + 1;
+                                if n >= LEARN_DOWN_EVENTS {
+                                    self.cal.full_voltage = Some(pv.min(voltage));
+                                    self.cal.pending_lower = None;
+                                    self.dirty = true;
+                                    // The pack is resting at the newly
+                                    // adopted full plateau: that IS full.
+                                    self.enter_full();
+                                    return;
+                                }
+                                self.cal.pending_lower = Some((pv.min(voltage), n));
+                                self.dirty = true;
+                            }
+                        } else {
+                            self.pending_rest_secs = 0.0;
+                        }
+                    }
                     // Resting at the learned full voltage (e.g. we
                     // restarted while on the float charger).
                     if voltage >= self.effective_full_voltage() - REST_FULL_MARGIN_V {
@@ -524,6 +562,46 @@ mod tests {
         feed(e, plateau_v - 0.2, -0.8, 300); // taper
         feed(e, plateau_v, -0.3, 300); // late taper
         feed(e, plateau_v, -0.03, 400); // terminated, float
+    }
+
+    #[test]
+    fn pending_lower_confirms_by_resting_at_the_new_plateau() {
+        // Field case: charger CV dropped 24.79 -> 23.98; one taper put
+        // the estimator at pending_lower count 1, and the box then sat
+        // idle on the charger for days showing 88% - no new cycles, no
+        // adoption. Resting pinned at the candidate plateau must count.
+        let mut e = estimator(Calibration {
+            full_voltage: Some(24.79),
+            capacity_ah: Some(5.2),
+            pending_lower: Some((23.98, 1)),
+        });
+        // ~12h at the pending plateau, zero current (charger floating).
+        for _ in 0..2 {
+            feed(&mut e, 23.98, 0.004, (PENDING_REST_CONFIRM_SECS as u32) + 60);
+        }
+        let cal = e.calibration();
+        assert_eq!(cal.pending_lower, None, "pending should resolve");
+        let full = cal.full_voltage.unwrap();
+        assert!((full - 23.98).abs() < 0.02, "adopted {full}");
+        assert!(e.full(), "resting at the adopted plateau is full");
+        assert_eq!(e.soc(), 1.0);
+    }
+
+    #[test]
+    fn pending_lower_rest_confirmation_resets_off_plateau() {
+        // Wandering voltage (pack actually discharging) must not
+        // accumulate confirmation time.
+        let mut e = estimator(Calibration {
+            full_voltage: Some(24.79),
+            capacity_ah: Some(5.2),
+            pending_lower: Some((23.98, 1)),
+        });
+        feed(&mut e, 23.98, 0.004, (PENDING_REST_CONFIRM_SECS as u32) / 2);
+        feed(&mut e, 23.4, 0.004, 600); // sagged well below candidate
+        feed(&mut e, 23.98, 0.004, (PENDING_REST_CONFIRM_SECS as u32) / 2 + 120);
+        // Only ~half + half accumulated with a reset between: not
+        // enough for even one confirmation yet.
+        assert_eq!(e.calibration().pending_lower, Some((23.98, 1)));
     }
 
     #[test]
