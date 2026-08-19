@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Field, FieldDescription, FieldLabel } from "@boompi/ui/components/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@boompi/ui/components/select";
@@ -9,6 +10,8 @@ import { useBoompi, useSave } from "@boompi/ui/transport";
 export function AppearanceSection() {
   const { state } = useBoompi();
   const { status, save } = useSave();
+  // See GamesSection: controlled Radix sliders need onValueChange.
+  const [opacityDrag, setOpacityDrag] = useState<number | null>(null);
   const settings = state?.settings;
   if (!settings) return null;
 
@@ -52,13 +55,17 @@ export function AppearanceSection() {
         </Field>
         <Field>
           <FieldLabel>
-            Visualizer opacity: {Math.round(settings.visualizer_opacity * 100)}%
+            Visualizer opacity: {opacityDrag ?? Math.round(settings.visualizer_opacity * 100)}%
           </FieldLabel>
           <Slider
             min={10}
             max={100}
-            value={[Math.round(settings.visualizer_opacity * 100)]}
-            onValueCommit={([v]) => save({ visualizer_opacity: v / 100 })}
+            value={[opacityDrag ?? Math.round(settings.visualizer_opacity * 100)]}
+            onValueChange={([v]) => setOpacityDrag(v)}
+            onValueCommit={([v]) => {
+              save({ visualizer_opacity: v / 100 });
+              setOpacityDrag(null);
+            }}
           />
           <FieldDescription>
             How strongly the spectrum shows behind album art on the panel

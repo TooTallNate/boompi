@@ -22,6 +22,9 @@ const GAME_SYSTEMS = [
 export function GamesSection() {
   const { state, send, rest } = useBoompi();
   const [system, setSystem] = useState<string>("nes");
+  // Radix sliders are frozen when controlled without onValueChange:
+  // hold the thumb in local state while dragging, commit on release.
+  const [volDrag, setVolDrag] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { save, status } = useSave();
@@ -160,13 +163,17 @@ export function GamesSection() {
         )}
         <Field>
           <FieldLabel>
-            Game volume: {Math.round(settings.game_volume * 100)}%
+            Game volume: {volDrag ?? Math.round(settings.game_volume * 100)}%
           </FieldLabel>
           <Slider
             min={0}
             max={100}
-            value={[Math.round(settings.game_volume * 100)]}
-            onValueCommit={([v]) => save({ game_volume: v / 100 })}
+            value={[volDrag ?? Math.round(settings.game_volume * 100)]}
+            onValueChange={([v]) => setVolDrag(v)}
+            onValueCommit={([v]) => {
+              save({ game_volume: v / 100 });
+              setVolDrag(null);
+            }}
           />
         </Field>
         <StatusText status={status} />
