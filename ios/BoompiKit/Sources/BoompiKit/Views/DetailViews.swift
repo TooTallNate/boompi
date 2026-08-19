@@ -486,6 +486,17 @@ struct GeneralDetailView: View {
                 if let uptime = client.hello?.uptimeSecs {
                     LabeledContent("Uptime", value: "\(uptime / 3600)h \((uptime % 3600) / 60)m")
                 }
+                if let temp = client.state?.diag?.cpuTempC {
+                    LabeledContent("CPU Temperature") {
+                        Text(String(format: "%.1f °C", temp))
+                            .foregroundStyle(temp >= 75 ? .red : .secondary)
+                    }
+                }
+                if client.state?.diag?.throttled == true {
+                    Label("CPU throttled - overheating or weak power supply", systemImage: "thermometer.high")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
 
             if client.caps.contains(Caps.updates) {

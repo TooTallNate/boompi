@@ -147,6 +147,11 @@ export type WifiAction =
   | { action: "radio"; enabled: boolean }
   | { action: "ap"; enabled: boolean };
 
+export interface DiagState {
+  cpu_temp_c?: number;
+  throttled: boolean;
+}
+
 export interface Hello {
   proto_version: number;
   name: string;
@@ -205,6 +210,7 @@ export interface AppState {
   battery: Battery | null;
   games: GamesState;
   battery_status?: "unconfigured" | "error" | "ok";
+  diag?: DiagState;
   battery_status_detail?: string;
 }
 

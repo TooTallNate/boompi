@@ -694,10 +694,7 @@ async fn art_url(app: &SharedApp, art_id: &str) -> Option<String> {
 
 /// Diagnostics (CPU temperature; Linux only).
 async fn publish_diag(client: &AsyncClient, base: &str) {
-    let temp = std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")
-        .ok()
-        .and_then(|s| s.trim().parse::<f64>().ok())
-        .map(|milli| (milli / 100.0).round() / 10.0);
+    let temp = crate::state::read_diag().cpu_temp_c;
     if let Some(t) = temp {
         let _ = client
             .publish(

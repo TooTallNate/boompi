@@ -447,6 +447,21 @@ pub enum WifiJoinStatus {
     Failed { ssid: String, reason: String },
 }
 
+/// Box health diagnostics (CPU thermal state). Broadcast periodically
+/// and on meaningful change; previously MQTT-only, which made Home
+/// Assistant the only place to see the temperature.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct DiagState {
+    /// SoC temperature in °C (one decimal), absent off-hardware.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_temp_c: Option<f32>,
+    /// The firmware is actively limiting the clock right now
+    /// (under-voltage or soft thermal limit - the "why is it slow"
+    /// bit that once cost a bench session to discover).
+    #[serde(default)]
+    pub throttled: bool,
+}
+
 /// First-boot setup state.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct SetupState {
@@ -659,6 +674,8 @@ pub struct State {
     pub games: GamesState,
     #[serde(default)]
     pub battery_status: BatteryStatus,
+    #[serde(default)]
+    pub diag: DiagState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub battery_status_detail: Option<String>,
     pub pairing: Pairing,
@@ -746,6 +763,8 @@ pub enum ServerMessage {
     WifiNetworks {
         networks: Vec<WifiNetwork>,
     },
+    /// Box health diagnostics (CPU temperature / throttle state).
+    Diag(DiagState),
     EmojiFonts(EmojiFontsState),
     Update(UpdateState),
     /// Relay: a client asked to preview the screensaver; the panel

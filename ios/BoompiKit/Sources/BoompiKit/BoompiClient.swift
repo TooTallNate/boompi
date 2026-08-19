@@ -198,6 +198,7 @@ public final class BoompiClient: NSObject, ObservableObject {
         case .pairing(let p): pairing = p
         case .btDevices(let d): btDevices = d
         case .emojiFonts(let e): state?.emojiFonts = e
+        case .diag(let d): state?.diag = d
         case .other: break
         }
     }

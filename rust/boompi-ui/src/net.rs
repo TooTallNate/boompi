@@ -284,6 +284,9 @@ fn apply(ctx: &NetCtx, history: &mut BatteryHistory, msg: ServerMessage) {
         // Scan results answer another client's Scan (broadcasts are
         // global); the panel's Wi-Fi tab only lists saved networks.
         ServerMessage::WifiNetworks { .. } => {}
+        // Thermal diagnostics are for the remotes/web; the panel has
+        // no surface for them (yet).
+        ServerMessage::Diag(_) => {}
     }
 }
 

@@ -47,6 +47,7 @@ import { HomeAssistantSection } from "@boompi/ui/sections/home-assistant";
 import { ScreensaverSection } from "@boompi/ui/sections/screensaver";
 import { SoftwareSection } from "@boompi/ui/sections/software";
 import { SpeakerNameSection } from "@boompi/ui/sections/speaker-name";
+import { SystemSection } from "@boompi/ui/sections/system";
 import { VolumeSection } from "@boompi/ui/sections/volume";
 import { WifiSection } from "@boompi/ui/sections/wifi";
 
@@ -65,6 +66,7 @@ function GeneralPage() {
     <>
       <SpeakerNameSection />
       <ClockSection />
+      <SystemSection />
     </>
   );
 }

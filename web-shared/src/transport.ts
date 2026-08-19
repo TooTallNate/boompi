@@ -131,6 +131,8 @@ export function applyServerMessage(
       return { ...s, wifi: body as never };
     case "wifi_networks":
       return { ...s, wifi_networks: body["networks"] as never };
+    case "diag":
+      return { ...s, diag: body as never };
     case "emoji_fonts":
       return { ...s, emoji_fonts: body as never };
     case "update":

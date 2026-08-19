@@ -10,6 +10,24 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{broadcast, Notify, RwLock};
 
+/// Read the SoC temperature (°C, one decimal) and live-throttle bit.
+/// Linux/Pi paths; `None`/false elsewhere (desktop dev).
+pub fn read_diag() -> boompi_proto::DiagState {
+    let cpu_temp_c = std::fs::read_to_string("/sys/class/thermal/thermal_zone0/temp")
+        .ok()
+        .and_then(|s| s.trim().parse::<f64>().ok())
+        .map(|milli| ((milli / 100.0).round() / 10.0) as f32);
+    // get_throttled low bits = active conditions (0 under-voltage,
+    // 1 arm freq capped, 2 throttled, 3 soft temp limit). Reading the
+    // sysfs node clears the sticky (16+) bits, which we don't use.
+    let throttled = std::fs::read_to_string("/sys/devices/platform/soc/soc:firmware/get_throttled")
+        .ok()
+        .and_then(|s| u32::from_str_radix(s.trim().trim_start_matches("0x"), 16).ok())
+        .map(|bits| bits & 0xF != 0)
+        .unwrap_or(false);
+    boompi_proto::DiagState { cpu_temp_c, throttled }
+}
+
 /// The OS image version stamp: "vX.Y.Z" for release builds,
 /// "vX.Y.Z-<sha>" for untagged CI builds (written by the image
 /// workflow to /etc/boompi-version), "dev" when absent (local builds,
@@ -132,6 +150,7 @@ pub struct Shared {
     pub game_running: Option<String>,
     /// Why telemetry is (not) flowing; UIs explain instead of hiding.
     pub battery_status: boompi_proto::BatteryStatus,
+    pub diag: boompi_proto::DiagState,
     pub battery_status_detail: Option<String>,
     pub pairing: Pairing,
     pub bt_devices: Vec<BtDevice>,
@@ -475,6 +494,7 @@ impl App {
             battery: s.battery.clone(),
             games: s.games.clone(),
             battery_status: s.battery_status,
+            diag: s.diag.clone(),
             battery_status_detail: s.battery_status_detail.clone(),
             pairing: s.pairing.clone(),
             bt_devices: s.bt_devices.clone(),

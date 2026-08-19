@@ -203,6 +203,16 @@ public struct GamesState: Decodable, Equatable {
     public var games: [GameEntry]?
 }
 
+public struct DiagState: Decodable, Equatable {
+    public var cpuTempC: Double?
+    public var throttled: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case cpuTempC = "cpu_temp_c"
+        case throttled
+    }
+}
+
 public struct TrackInfo: Decodable, Equatable {
     public var title: String?
     public var artist: String?
@@ -222,9 +232,10 @@ public struct BoxState: Decodable, Equatable {
     public var pairing: Pairing?
     public var btDevices: [BtDevice]?
     public var emojiFonts: EmojiFontsState?
+    public var diag: DiagState?
 
     enum CodingKeys: String, CodingKey {
-        case settings, volume, battery, wifi, updates, track, games, pairing
+        case settings, volume, battery, wifi, updates, track, games, pairing, diag
         case btDevices = "bt_devices"
         case emojiFonts = "emoji_fonts"
     }
@@ -247,6 +258,7 @@ public enum ServerMessage {
     case pairing(Pairing)
     case btDevices([BtDevice])
     case emojiFonts(EmojiFontsState)
+    case diag(DiagState)
     case other(String)
 
     public static func decode(_ data: Data) throws -> ServerMessage {
@@ -273,6 +285,8 @@ public enum ServerMessage {
             return .btDevices(try dec.decode(DevicesBody.self, from: data).devices)
         case "emoji_fonts":
             return .emojiFonts(try dec.decode(EmojiFontsState.self, from: data))
+        case "diag":
+            return .diag(try dec.decode(DiagState.self, from: data))
         default: return .other(tag.type)
         }
     }

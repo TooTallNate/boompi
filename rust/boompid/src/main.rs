@@ -157,6 +157,28 @@ async fn main() -> anyhow::Result<()> {
                 let app = app.clone();
                 tokio::spawn(update::periodic(app));
             }
+            // Diagnostics (CPU temp / throttle): poll + broadcast on
+            // change so every UI can show it, not just Home Assistant.
+            {
+                let app = app.clone();
+                tokio::spawn(async move {
+                    let mut interval =
+                        tokio::time::interval(std::time::Duration::from_secs(30));
+                    loop {
+                        interval.tick().await;
+                        let diag = state::read_diag();
+                        let changed = {
+                            let mut s = app.shared.write().await;
+                            let changed = s.diag != diag;
+                            s.diag = diag.clone();
+                            changed
+                        };
+                        if changed {
+                            app.broadcast(boompi_proto::ServerMessage::Diag(diag));
+                        }
+                    }
+                });
+            }
             // Home Assistant integration (idles until a broker is
             // configured in settings).
             {
