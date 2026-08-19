@@ -110,6 +110,10 @@ struct BleShared {
     /// from two messages must never interleave (the reassembler would
     /// drop both).
     send_lock: tokio::sync::Mutex<()>,
+    /// Poked when a client unsubscribes: the moment the advertising
+    /// engine tends to be left dead, and the trigger for an immediate
+    /// re-assert (see the maintenance loop).
+    readvertise: tokio::sync::Notify,
 }
 
 impl BleShared {
@@ -254,6 +258,9 @@ impl EventsChar {
     async fn stop_notify(&mut self) -> Result<(), GattError> {
         self.notifying = false;
         tracing::info!("BLE client unsubscribed from events");
+        // Post-disconnect is when the controller tends to leave the
+        // broadcast dead: nudge the maintenance loop.
+        self.shared.readvertise.notify_one();
         Ok(())
     }
 
@@ -400,6 +407,7 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     // registrations die with it, so a task restart starts clean.
     let conn = zbus::Connection::system().await?;
     let shared = Arc::new(BleShared::default());
+    let shared_for_loop = shared.clone();
 
     let server = conn.object_server();
     server.at(APP_PATH, zbus::fdo::ObjectManager).await?;
@@ -494,25 +502,49 @@ async fn run(app: &SharedApp) -> anyhow::Result<()> {
     let mut cfg_watch = app.subscribe_cfg();
     cfg_watch.mark_unchanged();
 
-    // Advertising maintenance. Two RTL8761B (TP-Link UB500) facts rule
-    // this design, both observed in the field:
-    // - the controller silently stops broadcasting after connect/
-    //   disconnect churn while BlueZ reports the instance active, so
-    //   idle boxes must re-assert (unregister+register) on a timer;
+    // Advertising maintenance. RTL8761B (TP-Link UB500) facts rule
+    // this design, all observed in the field:
+    // - the controller tends to leave the broadcast silently dead
+    //   after connect/disconnect churn while BlueZ reports the
+    //   instance active - so re-assert (unregister+register) when a
+    //   client disconnects, the moment it actually happens;
     // - cycling a registration while a client is connected DROPS that
     //   connection, so the primary is never touched while subscribed -
     //   instead a spare instance keeps the box discoverable for the
-    //   next remote (the controller supports 3 instances; two remotes
-    //   plus a live spare verified working simultaneously).
+    //   next remote (3 instances supported; two remotes + a live
+    //   spare verified simultaneously);
+    // - an aggressive periodic cycle (15s) floods the kernel with
+    //   "Unexpected advertising set terminated" and races the
+    //   controller into EBUSY (opcode 0x2036 failed: -16), disturbing
+    //   connects and pairing - so the timer is only a slow safety net
+    //   and the real work is event-driven.
     let adv1_path = ObjectPath::try_from(ADV1_PATH)?;
     let mut spare_registered = false;
-    let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(15));
+    let readvertise_hint = shared_for_loop.clone();
+    let mut readvertise = tokio::time::interval(std::time::Duration::from_secs(300));
     readvertise.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     readvertise.reset(); // skip the immediate first tick; we just registered
 
     let mut rx = app.tx.subscribe();
     loop {
         tokio::select! {
+            _ = readvertise_hint.readvertise.notified() => {
+                // A client just disconnected: give the controller a
+                // beat to settle (EBUSY otherwise), then re-assert so
+                // the box is immediately discoverable again.
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                let _ = advm.unregister_advertisement(&adv_path).await;
+                if let Err(err) = advm
+                    .register_advertisement(&adv_path, HashMap::new())
+                    .await
+                {
+                    tracing::debug!(%err, "post-disconnect advert re-assert failed (safety net will retry)");
+                }
+                if spare_registered {
+                    let _ = advm.unregister_advertisement(&adv1_path).await;
+                    spare_registered = false;
+                }
+            }
             _ = readvertise.tick() => {
                 let subscribed = match conn
                     .object_server()
