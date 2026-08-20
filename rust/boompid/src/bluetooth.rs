@@ -495,7 +495,7 @@ async fn handle_interface_added(
             };
             if let Some(port) = session.obex_port {
                 tracing::info!(port, "player supports AVRCP cover art");
-                prime_art_session(ctx, session);
+                prime_art_session(ctx, session).await;
             }
             publish_track(ctx, session).await;
         }
@@ -743,7 +743,7 @@ async fn handle_properties_changed(
             if let Some(port) = changed.get("ObexPort").and_then(u16_from_value_ref) {
                 tracing::info!(port, "player supports AVRCP cover art");
                 session.obex_port = Some(port);
-                prime_art_session(ctx, session);
+                prime_art_session(ctx, session).await;
                 dirty = true;
             }
             if dirty {
@@ -1735,15 +1735,63 @@ async fn publish_track(ctx: &Ctx, session: &mut Session) {
     // fetched art rejected with active=None while the panel happily
     // showed the track).
     reclaim_display_if_unowned(ctx, session).await;
-    maybe_request_art(ctx, session);
+    maybe_request_art(ctx, session).await;
     let track = session.to_track(&ctx.resolved);
     ctx.app.shared.write().await.track = Some(track.clone());
     ctx.app.broadcast(ServerMessage::Track(track));
 }
 
+/// Address to hand obexd for the BIP session, resolved at request time.
+///
+/// `Session::address()` parses the MAC out of the BlueZ object path,
+/// which is frozen at object-creation time. When a phone first appears
+/// under an unresolved RPA (LE random address) and BlueZ later merges
+/// it into the identity device mid-connection, the `Device1` at the
+/// latched path vanishes - but the media children (player, transport)
+/// stay parented under the ghost path, and audio keeps flowing. OBEX
+/// connects to the fossil address then page-timeout with "Host is
+/// down (112)" forever (seen live: player under dev_52_C3_... while
+/// the phone's real BR/EDR identity was 6C:3A:...).
+///
+/// So: prefer the live `Device1` at the latched path; when it's gone,
+/// the player must belong to a connected device (media objects only
+/// exist on a live ACL) - pick the alias match among connected
+/// devices, or the sole connected device.
+async fn art_target_address(ctx: &Ctx, session: &Session) -> Option<String> {
+    if let Some(path) = session.device_path.clone() {
+        let live = async {
+            let proxy = Device1Proxy::builder(&ctx.conn)
+                .path(path)
+                .ok()?
+                .build()
+                .await
+                .ok()?;
+            proxy.address().await.ok()
+        }
+        .await;
+        if live.is_some() {
+            return live;
+        }
+    }
+    let devices = enumerate_devices(&ctx.conn).await.ok()?;
+    let connected: Vec<_> = devices.iter().filter(|d| d.connected).collect();
+    let pick = connected
+        .iter()
+        .find(|d| session.device_alias.as_deref() == Some(d.name.as_str()))
+        .copied()
+        .or_else(|| (connected.len() == 1).then(|| connected[0]))?;
+    tracing::info!(
+        target: "boompid::flow",
+        stale = session.address().as_deref().unwrap_or("-"),
+        resolved = %pick.address,
+        "art target re-resolved: latched Device1 gone (RPA merge orphaned the player)"
+    );
+    Some(pick.address.clone())
+}
+
 /// Kick off a cover-art fetch when the player advertises BIP support and
 /// the current track has an unresolved image handle.
-fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
+async fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
     let (Some(port), Some(handle)) = (session.obex_port, session.img_handle.clone()) else {
         return;
     };
@@ -1761,7 +1809,7 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
     {
         return;
     }
-    let Some(address) = session.address() else {
+    let Some(address) = art_target_address(ctx, session).await else {
         return;
     };
     session.art_requested_for = Some(handle.clone());
@@ -1775,8 +1823,11 @@ fn maybe_request_art(ctx: &Ctx, session: &mut Session) {
 
 /// Eagerly establish the BIP session as soon as cover-art support is seen -
 /// phones only include `ImgHandle` in metadata while the session is alive.
-fn prime_art_session(ctx: &Ctx, session: &Session) {
-    let (Some(port), Some(address)) = (session.obex_port, session.address()) else {
+async fn prime_art_session(ctx: &Ctx, session: &Session) {
+    let Some(port) = session.obex_port else {
+        return;
+    };
+    let Some(address) = art_target_address(ctx, session).await else {
         return;
     };
     let _ = ctx.art_tx.send(crate::artwork::ArtRequest {
