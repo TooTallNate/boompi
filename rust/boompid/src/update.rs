@@ -91,11 +91,23 @@ async fn fetch_release(channel: UpdateChannel) -> Result<Release> {
 }
 
 async fn fetch_release_from(url: &str) -> Result<Release> {
-    let resp = client()?.get(url).send().await?;
-    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+    // reqwest's Display hides the cause chain ("error sending request
+    // for url (...)" - was it DNS? TLS? timeout?), and error_for_status
+    // buries the code. Spell both out: these strings surface verbatim
+    // in every settings UI.
+    let resp = client()?
+        .get(url)
+        .send()
+        .await
+        .with_context(|| format!("request to {url} failed"))?;
+    let status = resp.status();
+    if status == reqwest::StatusCode::NOT_FOUND {
         bail!("no release published on this channel yet");
     }
-    let text = resp.error_for_status()?.text().await?;
+    if !status.is_success() {
+        bail!("HTTP {status} from {url}");
+    }
+    let text = resp.text().await.context("reading release response")?;
     Ok(serde_json::from_str(&text).context("parsing release JSON")?)
 }
 
@@ -248,7 +260,7 @@ pub async fn perform(app: &SharedApp, action: UpdateAction) -> Result<()> {
                     s.update_checking = false;
                     if let Err(err) = &result {
                         tracing::warn!(%err, "update check failed");
-                        s.update_error = Some(err.to_string());
+                        s.update_error = Some(format!("{err:#}"));
                     }
                 }
                 broadcast_state(&app).await;
@@ -290,7 +302,7 @@ pub async fn perform(app: &SharedApp, action: UpdateAction) -> Result<()> {
                         s.update_applying = None;
                         s.update_stage = None;
                         s.update_progress = None;
-                        s.update_error = Some(err.to_string());
+                        s.update_error = Some(format!("{err:#}"));
                         drop(s);
                         broadcast_state(&app).await;
                     }

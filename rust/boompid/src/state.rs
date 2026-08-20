@@ -663,7 +663,7 @@ impl App {
                 #[cfg(target_os = "linux")]
                 if let Err(err) = crate::update::perform(self, action).await {
                     tracing::warn!(%err, ?action, "update action failed");
-                    self.shared.write().await.update_error = Some(err.to_string());
+                    self.shared.write().await.update_error = Some(format!("{err:#}"));
                     let snapshot = crate::update::state(self).await;
                     self.broadcast(ServerMessage::Update(snapshot));
                 }
