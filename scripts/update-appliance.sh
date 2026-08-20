@@ -88,6 +88,14 @@ stream() { # <local-file> <remote-dev>
 stream "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
 stream "$BOOT_IMG" "$TARGET_BOOT"
 
+# The bundle's boot image is board-generic: re-materialize this box's
+# hardware profile (display overlays, rotation, wiring) into the
+# fenced config.txt section before anything dares boot it. Mirrors
+# on-box boompi-update-slot; skipping this boots a generic config -
+# field-bitten: the panel's framebuffer never appears and boompi-ui
+# crash-loops on a headless-looking box.
+ssh "$PI" "boompi-apply-box-config $TARGET_BOOT"
+
 if [ "${TRIAL:-1}" = 0 ]; then
     echo "committing without trial: flipping autoboot + firmware reboot"
     if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then TARGET_PART=1; else TARGET_PART=2; fi
