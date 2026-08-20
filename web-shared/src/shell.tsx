@@ -142,7 +142,8 @@ export function SettingsShell({
                   (hello
                     ? // The image stamp already carries its "v"
                       // ("v2.2.0-abc"); dev builds report "dev".
-                      `${hello.version} · up ${Math.floor(hello.uptime_secs / 60)} min`
+                      // (Uptime lives in General → System.)
+                      hello.version
                     : "connecting…")}
               </div>
             </div>
