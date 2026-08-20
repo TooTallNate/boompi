@@ -12,11 +12,21 @@ Both boards use the same SD card layout:
 ```
 p1  boot-a   FAT32: firmware, kernel, cmdline-a (root=p3), autoboot.txt
 p2  boot-b   FAT32: firmware, kernel, cmdline-b (root=p5)
-p3  rootfs-a ext4
+p3  rootfs-a ext4 (1024M)
 p4  (extended)
-p5  rootfs-b ext4
+p5  rootfs-b ext4 (1024M)
 p6  data     ext4 - config, pairings, caches, fonts; never touched by updates
 ```
+
+Fresh flashes lay the partitions out in that physical order. Boxes
+that started life with 512M root slots were grown in place by
+`boompi-migrate-roots`: there, p5 physically lives *after* p6 (the
+last 1024M of the card, reached by an out-of-order EBR chain - the
+kernel numbers logicals by chain order, so every `mmcblk0pN` name is
+identical across both layouts). `boompi-update-slot` and boompid's
+updater refuse images larger than the target slot, so an unmigrated
+box cannot be damaged by a post-migration image - the update fails
+with instructions instead.
 
 The firmware reads `autoboot.txt` on p1 (`boot_partition=N`) to pick
 the default slot. An update writes the candidate into the inactive

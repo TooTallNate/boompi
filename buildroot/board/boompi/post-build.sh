@@ -225,13 +225,14 @@ find "${TARGET_DIR}/lib/modules" -name 'hid-nintendo.ko*' 2>/dev/null | grep -q 
     || fail "hid-nintendo module missing (Switch Pro / 8BitDo Switch mode)"
 
 # --- Rootfs size ceiling. --------------------------------------------------
-# A/B partition sizes are frozen at flash time forever: an image that
-# outgrows 512M can never be delivered to an existing card. Fail the
-# build at 85% so the wall is visible a release early.
+# A/B partition sizes are frozen at flash (or migration) time: an
+# image that outgrows 1024M cannot be delivered to an existing card
+# (boompi-migrate-roots grew the fleet from the original 512M). Fail
+# the build at 85% so the wall is visible a release early.
 USED_KB=$(du -sxk "${TARGET_DIR}" | cut -f1)
-LIMIT_KB=$((512 * 1024 * 85 / 100))
+LIMIT_KB=$((1024 * 1024 * 85 / 100))
 [ "$USED_KB" -le "$LIMIT_KB" ] \
-    || fail "rootfs content ${USED_KB}KB exceeds 85% of the 512M slot (${LIMIT_KB}KB)"
-echo "rootfs fill: ${USED_KB}KB of $((512 * 1024))KB"
+    || fail "rootfs content ${USED_KB}KB exceeds 85% of the 1024M slot (${LIMIT_KB}KB)"
+echo "rootfs fill: ${USED_KB}KB of $((1024 * 1024))KB"
 
 echo "post-build assertions OK"
