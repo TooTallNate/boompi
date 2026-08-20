@@ -1,0 +1,78 @@
+From: Nathan Rajlich <n@n8.io>
+Date: Wed, 20 Aug 2026 02:30:00 -0700
+Subject: [PATCH] Bluetooth: add HCI_QUIRK_BROKEN_EXT_ADV, use for RTL8761B
+
+RTL8761B/BU firmware advertises LE Extended Advertising support but
+implements it unreliably. Observed in the field on RTL8761BU (TP-Link
+UB500, 2357:0604) across months of appliance use:
+
+ - HCI_OP_LE_SET_EXT_ADV_PARAMS (0x2036) intermittently fails -EBUSY
+   while connections are active, mirroring the extended-scan failures
+   fixed by 5ead2063611a ("Bluetooth: btrtl: fix RTL8761B/BU broken
+   LE extended scan");
+ - spec-violating LE_EXT_ADV_SET_TERM events with error status
+   ("Unexpected advertising set terminated event" spam);
+ - advertising sets that silently stop being broadcast while the host
+   still believes them active, after connect/disconnect activity.
+
+Add HCI_QUIRK_BROKEN_EXT_ADV, mirroring HCI_QUIRK_BROKEN_EXT_SCAN,
+gate ext_adv_capable() on it so the host falls back to legacy
+advertising (which this firmware handles correctly, with BlueZ
+software-multiplexing instances), and set it for CHIP_ID_8761B.
+
+[boompi: experimental local patch; upstream submission candidate as
+the sibling of 5ead2063611a if field results hold.]
+diff --git a/drivers/bluetooth/btrtl.c b/drivers/bluetooth/btrtl.c
+index 4e702b4..fa12f64 100644
+--- a/drivers/bluetooth/btrtl.c
++++ b/drivers/bluetooth/btrtl.c
+@@ -1305,9 +1305,12 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
+ 		/* RTL8761B/BU reports HCI version 5.1 but does not support
+ 		 * the LE Extended Scan commands (Opcode 0x2042), causing
+ 		 * repeated -EBUSY failures when BlueZ attempts extended
+-		 * scanning while a connection is active.
++		 * scanning while a connection is active. Its extended
++		 * advertising is equally unreliable (spurious set-terminated
++		 * events, sets silently dropped from the air).
+ 		 */
+ 		set_bit(HCI_QUIRK_BROKEN_EXT_SCAN, &hdev->quirks);
++		set_bit(HCI_QUIRK_BROKEN_EXT_ADV, &hdev->quirks);
+ 		break;
+ 	default:
+ 		break;
+diff --git a/include/net/bluetooth/hci.h b/include/net/bluetooth/hci.h
+index 77a3040..ba12b63 100644
+--- a/include/net/bluetooth/hci.h
++++ b/include/net/bluetooth/hci.h
+@@ -272,6 +272,17 @@ enum {
+ 	 */
+ 	HCI_QUIRK_BROKEN_EXT_SCAN,
+ 
++	/*
++	 * When this quirk is set, the LE Extended Advertising commands are
++	 * not used and the host falls back to legacy advertising. This is
++	 * required for controllers (e.g. RTL8761B) which claim extended
++	 * advertising support but implement it unreliably.
++	 *
++	 * This quirk can be set before hci_register_dev is called or
++	 * during the hdev->setup vendor callback.
++	 */
++	HCI_QUIRK_BROKEN_EXT_ADV,
++
+ 	/*
+ 	 * When this quirk is set, the HCI_OP_GET_MWS_TRANSPORT_CONFIG command is
+ 	 * disabled. This is required for some Broadcom controllers which
+diff --git a/include/net/bluetooth/hci_core.h b/include/net/bluetooth/hci_core.h
+index 4fcee6b..95392f0 100644
+--- a/include/net/bluetooth/hci_core.h
++++ b/include/net/bluetooth/hci_core.h
+@@ -1878,7 +1878,8 @@ void hci_conn_del_sysfs(struct hci_conn *conn);
+ #define use_ext_conn(dev) (((dev)->commands[37] & 0x80) && \
+ 	!test_bit(HCI_QUIRK_BROKEN_EXT_CREATE_CONN, &(dev)->quirks))
+ /* Extended advertising support */
+-#define ext_adv_capable(dev) (((dev)->le_features[1] & HCI_LE_EXT_ADV))
++#define ext_adv_capable(dev) (((dev)->le_features[1] & HCI_LE_EXT_ADV) && \
++			      !test_bit(HCI_QUIRK_BROKEN_EXT_ADV, &(dev)->quirks))
+ 
+ /* Maximum advertising length */
+ #define max_adv_len(dev) \
