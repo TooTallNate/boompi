@@ -1,0 +1,21 @@
+[Unit]
+Description=Nightly Bluetooth controller state refresh (idle-gated)
+# The fleet's RTL8761B dongle silently loses controller state over
+# time - LE advertising broadcasts, EIR names - while every register
+# reads back fine from the host side. bluetoothd rewrites all of it at
+# startup, and boompid re-registers its GATT app/adverts/agent on
+# bluetoothd restarts automatically. A nightly bounce caps any state
+# rot (known and future flavors) at a 24h lifetime.
+After=bluetooth.service
+
+[Service]
+Type=oneshot
+# Idle gate: never interrupt a live session (music, gamepad, remote).
+# A connected device skips tonight's refresh; the timer tries again
+# tomorrow.
+ExecStart=/bin/sh -c '\
+  if busctl call org.bluez / org.freedesktop.DBus.ObjectManager GetManagedObjects 2>/dev/null \
+     | grep -q "\"Connected\" b true"; then \
+    echo "device connected; skipping refresh"; exit 0; \
+  fi; \
+  systemctl try-restart bluetooth.service'

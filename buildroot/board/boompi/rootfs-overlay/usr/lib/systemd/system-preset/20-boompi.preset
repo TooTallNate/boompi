@@ -17,3 +17,7 @@ disable nmb.service
 disable winbind.service
 disable ctdb.service
 disable samba-bgqd.service
+
+# Nightly BT controller refresh (see bt-refresh.service): timers with
+# [Install] need explicit enablement through preset-all too.
+enable bt-refresh.timer

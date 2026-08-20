@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly Bluetooth controller state refresh
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+# Boxes have no RTC; if powered on past the window, run within the day.
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target
