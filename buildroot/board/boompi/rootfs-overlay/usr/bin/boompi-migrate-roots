@@ -1,0 +1,195 @@
+#!/bin/sh
+# Grow both A/B root slots from 512MiB to 1024MiB, in place, without
+# moving a single block of /data.
+#
+#   before:  p1 p2 | p3 root-a 512M | p5 root-b 512M | p6 data → card end
+#   after:   p1 p2 | p3 root-a 1024M ————————————————| p6 data ...| p5 root-b 1024M
+#
+# The trick: /data's *filesystem* is shrunk from its END (fast, no
+# start-block relocation), root-b is recreated as the last 1024MiB of
+# the card, and root-a absorbs root-b's old home. The MBR logical
+# chain ends up out of physical order (p5 beyond p6) - the kernel
+# numbers logicals by EBR chain order, not disk order, so every
+# /dev/mmcblk0pN literal in the fleet stays true. Bench-proven on the
+# real boxes' kernel + sfdisk, and exercised against loopback replicas
+# of both fleet layouts in CI (including the pi4's legacy packed
+# table, where partitions start at sector 1).
+#
+# The tightest fit is the pi4's packed layout: a full-GiB root-a
+# leaves exactly two spare sectors before p6 - one for p4's EBR (the
+# chain head describing p5) and one for p6's own EBR. Bench-proven on
+# the real kernel + sfdisk (which already round-trips this table's
+# existing 1-sector EBR gaps), and verified by sfdisk -V.
+#
+# Safety posture:
+#   - refuses to run unless booted from slot A (old p5 is demolished);
+#   - derives everything from the live table; bails on any anomaly;
+#   - never wipes signatures (--wipe never: p6 is recreated at its
+#     exact old start and must keep its superblock);
+#   - /data's start sector and contents are never touched;
+#   - partition table + first sectors are backed up to /data and
+#     printed to stdout before surgery;
+#   - the moment of truth is one sfdisk apply (MBR + 2 EBRs); if power
+#     dies mid-write, the box still boots from the untouched p3 start
+#     and the table is re-applied from the backup over ssh.
+#
+# Test mode: BOOMPI_MIGRATE_DISK=/dev/loopN skips the boot-slot check
+# and all service/mount management (CI runs the real script against a
+# loopback disk, same as boompi-grow-data).
+set -eu
+
+DISK="${BOOMPI_MIGRATE_DISK:-/dev/mmcblk0}"
+LIVE=1
+[ -n "${BOOMPI_MIGRATE_DISK:-}" ] && LIVE=0
+
+NEW_ROOT_SECTORS=2097152   # 1024MiB
+OLD_ROOT_SECTORS=1048576   # 512MiB
+ALIGN=8192                 # 4MiB
+
+fail() { echo "FATAL: $*" >&2; exit 1; }
+
+[ -b "$DISK" ] || fail "no disk $DISK"
+
+# --- Read and parse the live table ------------------------------------------
+DUMP=$(sfdisk -d "$DISK")
+part_field() { # <num> <field>
+    echo "$DUMP" | grep "^${DISK}p${1} :" \
+        | sed -n "s/.*${2}= *\([0-9]*\).*/\1/p"
+}
+P3_START=$(part_field 3 start); P3_SIZE=$(part_field 3 size)
+P4_START=$(part_field 4 start); P4_SIZE=$(part_field 4 size)
+P5_START=$(part_field 5 start); P5_SIZE=$(part_field 5 size)
+P6_START=$(part_field 6 start); P6_SIZE=$(part_field 6 size)
+DISK_SECTORS=$(cat "/sys/class/block/$(basename "$DISK")/size")
+for v in P3_START P3_SIZE P4_START P4_SIZE P5_START P5_SIZE \
+         P6_START P6_SIZE DISK_SECTORS; do
+    eval "[ -n \"\$$v\" ]" || fail "could not parse $v from sfdisk dump"
+done
+
+# --- Idempotency -------------------------------------------------------------
+if [ "$P3_SIZE" -eq "$NEW_ROOT_SECTORS" ] \
+    && [ "$P5_SIZE" -eq "$NEW_ROOT_SECTORS" ]; then
+    echo "already migrated (both root slots are 1024MiB)"
+    exit 0
+fi
+
+# --- Invariants: this must be the exact known-fleet layout -------------------
+[ "$P3_SIZE" -eq "$OLD_ROOT_SECTORS" ] || fail "p3 is not 512MiB ($P3_SIZE)"
+[ "$P5_SIZE" -eq "$OLD_ROOT_SECTORS" ] || fail "p5 is not 512MiB ($P5_SIZE)"
+[ "$P5_START" -gt "$P3_START" ] || fail "p5 not after p3"
+[ "$P6_START" -gt "$((P5_START + P5_SIZE - 1))" ] || fail "p6 overlaps p5"
+# p4 and p6 both end at the card end (boompi-grow-data leaves <16MiB).
+[ "$((DISK_SECTORS - P4_START - P4_SIZE))" -lt 32768 ] \
+    || fail "extended p4 does not reach the disk end"
+[ "$((DISK_SECTORS - P6_START - P6_SIZE))" -lt 32768 ] \
+    || fail "p6 does not reach the disk end (grow-data never ran?)"
+# 4GiB floor (CI replicas are exactly 4GiB; real cards are 16-32GB).
+# The headroom checks below are what actually guarantee a safe fit.
+[ "$DISK_SECTORS" -ge 8388608 ] || fail "disk under 4GiB"
+
+# --- Compute the new geometry ------------------------------------------------
+P3_NEW_END=$((P3_START + NEW_ROOT_SECTORS))
+# Room for p4's start sector (EBR1) and p6's EBR before p6's start.
+# On the pi4's packed layout this is exactly 2 sectors - proven fine.
+[ "$((P3_NEW_END + 2))" -le "$P6_START" ] \
+    || fail "no EBR headroom between grown p3 and p6"
+P4_NEW_START=$P3_NEW_END
+P4_NEW_SIZE=$((DISK_SECTORS - P4_NEW_START))
+P5_NEW_START=$(( (DISK_SECTORS - NEW_ROOT_SECTORS) / ALIGN * ALIGN ))
+[ "$P5_NEW_START" -gt "$((P6_START + 2048))" ] \
+    || fail "no room for a 1024MiB p5 at the disk end"
+P6_NEW_SIZE=$((P5_NEW_START - ALIGN - P6_START))
+
+echo "plan:"
+echo "  p3 root-a : start $P3_START size $P3_SIZE -> $NEW_ROOT_SECTORS"
+echo "  p4 ext    : start $P4_START -> $P4_NEW_START size -> $P4_NEW_SIZE"
+echo "  p5 root-b : start $P5_START -> $P5_NEW_START size -> $NEW_ROOT_SECTORS"
+echo "  p6 data   : start $P6_START (UNCHANGED) size $P6_SIZE -> $P6_NEW_SIZE"
+
+# --- Live-only gates ---------------------------------------------------------
+if [ "$LIVE" -eq 1 ]; then
+    case "$(cat /proc/cmdline)" in
+        *root=/dev/mmcblk0p3*) : ;;
+        *) fail "must be booted from slot A (p3); run an update to flip slots first" ;;
+    esac
+    [ -f /data/boompi-trial ] && fail "uncommitted trial pending"
+    [ "${BOOMPI_MIGRATE_CONFIRM:-}" = "yes" ] \
+        || { echo "dry run only. set BOOMPI_MIGRATE_CONFIRM=yes to execute."; exit 0; }
+fi
+
+# --- Backups (before any write) ----------------------------------------------
+STAMP=$(date +%Y%m%d-%H%M%S)
+BACKUP_DIR="${BOOMPI_MIGRATE_BACKUP_DIR:-/data/migrate-backup-$STAMP}"
+mkdir -p "$BACKUP_DIR"
+echo "$DUMP" > "$BACKUP_DIR/sfdisk-dump.txt"
+dd if="$DISK" of="$BACKUP_DIR/mbr.bin" bs=512 count=2048 status=none
+dd if="$DISK" of="$BACKUP_DIR/ebr-region.bin" bs=512 \
+    skip="$P4_START" count=2048 status=none
+sync
+echo "--- table backup (also in $BACKUP_DIR) ---"
+echo "$DUMP"
+echo "-------------------------------------------"
+
+# --- Quiesce /data (live only) -----------------------------------------------
+DATA_PART="${DISK}p6"
+if [ "$LIVE" -eq 1 ]; then
+    systemctl stop boompid boompi-ui smbd bluetooth 2>/dev/null || true
+    systemctl stop var-lib-bluetooth.mount 2>/dev/null || true
+    systemctl stop data.mount 2>/dev/null || true
+    mountpoint -q /data && fail "/data still mounted; refusing to continue"
+fi
+
+# --- Shrink /data's filesystem from the end ----------------------------------
+e2fsck -f -p "$DATA_PART" || [ $? -le 1 ] || fail "e2fsck on data failed"
+FS_BLOCK=$(tune2fs -l "$DATA_PART" | sed -n 's/^Block size: *//p')
+[ -n "$FS_BLOCK" ] || fail "cannot read data fs block size"
+TARGET_BLOCKS=$((P6_NEW_SIZE * 512 / FS_BLOCK))
+echo "shrinking data fs to $TARGET_BLOCKS blocks of $FS_BLOCK"
+resize2fs "$DATA_PART" "$TARGET_BLOCKS"
+
+# --- The moment of truth: one table rewrite ----------------------------------
+# p1/p2 re-emitted verbatim (the pi4's p1 carries a bootable flag);
+# p5 listed before p6 - EBR chain order is list order, and chain order
+# is what the kernel numbers by.
+{
+    echo "label: dos"
+    echo "$DUMP" | sed -n 's/^label-id:/label-id:/p'
+    echo "$DUMP" | grep "^${DISK}p1 :"
+    echo "$DUMP" | grep "^${DISK}p2 :"
+    echo "${DISK}p3 : start=$P3_START, size=$NEW_ROOT_SECTORS, type=83"
+    echo "${DISK}p4 : start=$P4_NEW_START, size=$P4_NEW_SIZE, type=f"
+    echo "${DISK}p5 : start=$P5_NEW_START, size=$NEW_ROOT_SECTORS, type=83"
+    echo "${DISK}p6 : start=$P6_START, size=$P6_NEW_SIZE, type=83"
+} > /tmp/boompi-migrate-table.sfdisk
+cat /tmp/boompi-migrate-table.sfdisk
+sfdisk --no-reread --force --wipe never --wipe-partitions never \
+    "$DISK" < /tmp/boompi-migrate-table.sfdisk
+partx -u "$DISK" || true
+sleep 1 # sysfs settle before verifying the kernel's view
+
+# --- Verify the kernel's view ------------------------------------------------
+for spec in "3:$P3_START:$NEW_ROOT_SECTORS" \
+            "5:$P5_NEW_START:$NEW_ROOT_SECTORS" \
+            "6:$P6_START:$P6_NEW_SIZE"; do
+    n=${spec%%:*}; rest=${spec#*:}; want_start=${rest%%:*}; want_size=${rest#*:}
+    got_start=$(cat "/sys/class/block/$(basename "$DISK")p$n/start")
+    got_size=$(cat "/sys/class/block/$(basename "$DISK")p$n/size")
+    [ "$got_start" -eq "$want_start" ] && [ "$got_size" -eq "$want_size" ] \
+        || fail "kernel sees p$n at $got_start+$got_size, wanted $want_start+$want_size"
+done
+
+# --- Grow root-a's filesystem into its new partition -------------------------
+# Online when live (mounted root; same mechanism raspi-config uses),
+# offline in tests.
+resize2fs "${DISK}p3"
+
+# --- Data back up, sanity, done ----------------------------------------------
+e2fsck -f -p "$DATA_PART" || [ $? -le 1 ] || fail "post-migration e2fsck failed"
+if [ "$LIVE" -eq 1 ]; then
+    systemctl start data.mount
+    systemctl start bluetooth boompid boompi-ui smbd 2>/dev/null || true
+    echo "MIGRATED. Slot B (p5) is empty - run a normal update to"
+    echo "populate and trial-boot it. A clean reboot is recommended."
+else
+    echo "MIGRATED (test mode)"
+fi

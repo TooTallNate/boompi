@@ -42,6 +42,18 @@ else
     BOOT_IMG="$BUNDLE/boot-a.vfat"
 fi
 
+# The image must fit its slot: partition sizes are frozen at flash
+# time (512M originally, 1024M after boompi-migrate-roots) and dd
+# would otherwise overflow into the neighbor partition.
+fits() { # <image-file> <block-dev>
+    cap=$(( $(cat "/sys/class/block/$(basename "$2")/size") * 512 ))
+    [ "$(wc -c < "$1")" -le "$cap" ] \
+        || { echo "$1 ($(wc -c < "$1") bytes) larger than $2 ($cap bytes);" \
+                  "migrate the root slots first (boompi-migrate-roots)" >&2; exit 1; }
+}
+fits "$BUNDLE/rootfs.ext4" "$TARGET_ROOT"
+fits "$BOOT_IMG" "$TARGET_BOOT"
+
 echo "active slot: $ACTIVE - writing update to $TARGET_ROOT / $TARGET_BOOT"
 dd if="$BUNDLE/rootfs.ext4" of="$TARGET_ROOT" bs=4M conv=fsync status=none
 dd if="$BOOT_IMG" of="$TARGET_BOOT" bs=4M conv=fsync status=none

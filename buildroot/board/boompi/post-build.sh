@@ -193,15 +193,17 @@ grep -q "DefaultDependencies=no" \
     "${TARGET_DIR}/etc/systemd/system/var-lib-bluetooth.mount" \
     || fail "var-lib-bluetooth.mount lacks DefaultDependencies=no (implicit Before=local-fs.target recreates the cycle)"
 
-# --- /data growth tooling. -----------------------------------------------
-for bin in sfdisk partx resize2fs; do
+# --- Partition tooling (grow-data + migrate-roots). -----------------------
+for bin in sfdisk partx resize2fs tune2fs; do
     find "${TARGET_DIR}/usr/sbin" "${TARGET_DIR}/usr/bin" \
          "${TARGET_DIR}/sbin" "${TARGET_DIR}/bin" \
          -maxdepth 1 -name "$bin" 2>/dev/null | grep -q . \
-        || fail "$bin missing (boompi-grow-data needs it)"
+        || fail "$bin missing (boompi-grow-data / boompi-migrate-roots need it)"
 done
 [ -x "${TARGET_DIR}/usr/bin/boompi-grow-data" ] \
     || fail "boompi-grow-data missing"
+[ -x "${TARGET_DIR}/usr/bin/boompi-migrate-roots" ] \
+    || fail "boompi-migrate-roots missing"
 
 # --- Gamepad support. -------------------------------------------------------
 # All three legs must land: kernel HID drivers arrive via the kernel

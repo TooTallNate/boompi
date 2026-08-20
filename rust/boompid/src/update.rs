@@ -572,6 +572,15 @@ where
         .await
         .with_context(|| format!("opening {dev}"))?;
 
+    // Partition capacity: slot sizes are frozen at flash time (512M
+    // originally, 1024M after boompi-migrate-roots). The entry's
+    // decompressed size is unknown up front (zstd), so guard inside
+    // the write loop - a clear refusal beats dd-style ENOSPC halfway
+    // into an overflow of the neighboring partition.
+    use tokio::io::AsyncSeekExt;
+    let capacity = file.seek(std::io::SeekFrom::End(0)).await?;
+    file.seek(std::io::SeekFrom::Start(0)).await?;
+
     let mut hasher = Sha256::new();
     let mut written: u64 = 0;
     let mut buf = vec![0u8; 1 << 20];
@@ -579,6 +588,12 @@ where
         let n = decoder.read(&mut buf).await.context("update stream")?;
         if n == 0 {
             break;
+        }
+        if written + n as u64 > capacity {
+            bail!(
+                "image for {dev} exceeds the partition ({capacity} bytes); \
+                 root slots need boompi-migrate-roots before this update"
+            );
         }
         hasher.update(&buf[..n]);
         file.write_all(&buf[..n])

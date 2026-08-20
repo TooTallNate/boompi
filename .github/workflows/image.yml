@@ -92,6 +92,95 @@ jobs:
           test "$(cat /sys/class/block/$(basename "$LOOP")p6/size)" -eq "$AFTER"
           sudo losetup -d "$LOOP"
 
+  # boompi-migrate-roots grows both A/B root slots 512M -> 1024M in
+  # place on live boxes: data fs shrunk from the end, root-b recreated
+  # as the last GB of the card (out-of-order EBR chain - kernel
+  # numbers by chain, not disk order), root-a grown into root-b's old
+  # home. Exercised against loopback replicas of BOTH fleet layouts
+  # using the real boxes' exact sector values.
+  migrate-test:
+    name: migrate-roots loopback test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        include:
+          # pi3: modern genimage layout (4MiB-aligned).
+          - layout: modern
+            table: |
+              1 : start=8192, size=131072, type=c
+              2 : start=139264, size=131072, type=c
+              3 : start=270336, size=1048576, type=83
+              4 : start=1318912, size=7069696, type=5
+              5 : start=1327104, size=1048576, type=83
+              6 : start=2383872, size=6004736, type=83
+            p3_start: 270336
+            p6_start: 2383872
+          # pi4: legacy packed layout (p1 at sector 1, bootable flag,
+          # p5 jammed one sector after the extended start).
+          - layout: legacy
+            table: |
+              1 : start=1, size=131072, type=c, bootable
+              2 : start=131073, size=131072, type=c
+              3 : start=262145, size=1048576, type=83
+              4 : start=1310721, size=7077887, type=5
+              5 : start=1310722, size=1048576, type=83
+              6 : start=2359299, size=6029309, type=83
+            p3_start: 262145
+            p6_start: 2359299
+    steps:
+      - uses: actions/checkout@v7
+      - name: Exercise boompi-migrate-roots (${{ matrix.layout }})
+        run: |
+          set -eux
+          SCRIPT=buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-migrate-roots
+          # 4GiB sparse disk = 8388608 sectors; p4/p6 sized to its end.
+          truncate -s 4G disk.img
+          { echo 'label: dos'; cat <<'EOF'
+          ${{ matrix.table }}
+          EOF
+          } | sed 's/^ *//' | sfdisk disk.img
+          LOOP=$(sudo losetup -P --show -f disk.img)
+          B=$(basename "$LOOP")
+          # Root-a gets a 512M fs (to prove the online-style grow),
+          # data gets a canary deep enough to matter.
+          sudo mkfs.ext4 -q "${LOOP}p3"
+          sudo mkfs.ext4 -q -L data "${LOOP}p6"
+          mkdir -p mnt && sudo mount "${LOOP}p6" mnt
+          echo "data survives the migration" | sudo tee mnt/canary >/dev/null
+          sudo dd if=/dev/urandom of=mnt/ballast bs=1M count=64 status=none
+          sudo md5sum mnt/ballast | awk '{print $1}' > ballast.md5
+          sudo umount mnt
+          # Run the real script.
+          sudo env BOOMPI_MIGRATE_DISK="$LOOP" sh "$SCRIPT"
+          # Kernel sees the new geometry: p3 1024M at its old start,
+          # p5 1024M as the last aligned GiB, p6 start untouched.
+          test "$(cat /sys/class/block/$B/${B}p3/start)" -eq "${{ matrix.p3_start }}"
+          test "$(cat /sys/class/block/$B/${B}p3/size)" -eq 2097152
+          test "$(cat /sys/class/block/$B/${B}p5/size)" -eq 2097152
+          test "$(cat /sys/class/block/$B/${B}p5/start)" -eq $(( (8388608 - 2097152) / 8192 * 8192 ))
+          test "$(cat /sys/class/block/$B/${B}p6/start)" -eq "${{ matrix.p6_start }}"
+          # Root-a's fs actually grew into the new partition.
+          BLOCKS=$(sudo tune2fs -l "${LOOP}p3" | awk '/^Block count/{print $3}')
+          BSIZE=$(sudo tune2fs -l "${LOOP}p3" | awk '/^Block size/{print $3}')
+          test $((BLOCKS * BSIZE)) -gt $((1000 * 1024 * 1024))
+          # Data: intact, fsck-clean, canary + ballast unharmed.
+          sudo e2fsck -f -n "${LOOP}p6"
+          sudo mount "${LOOP}p6" mnt
+          grep -q "data survives the migration" mnt/canary
+          test "$(sudo md5sum mnt/ballast | awk '{print $1}')" = "$(cat ballast.md5)"
+          sudo umount mnt
+          # New root-b is usable at full size.
+          sudo mkfs.ext4 -q "${LOOP}p5"
+          # Idempotent: second run exits 0 without changing anything.
+          sudo env BOOMPI_MIGRATE_DISK="$LOOP" sh "$SCRIPT" | grep "already migrated"
+          # grow-data no-ops on the migrated layout (p5 is the last
+          # partition; it must NOT try to grow p6 over it).
+          P6_BEFORE=$(cat /sys/class/block/$B/${B}p6/size)
+          sudo env BOOMPI_GROW_DISK="$LOOP" sh buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-grow-data
+          test "$(cat /sys/class/block/$B/${B}p6/size)" -eq "$P6_BEFORE"
+          sudo losetup -d "$LOOP"
+
   # web/dist is a build artifact (boompid embeds it via rust-embed).
   # Build it once here; both board jobs download it before the Rust
   # cross-build.

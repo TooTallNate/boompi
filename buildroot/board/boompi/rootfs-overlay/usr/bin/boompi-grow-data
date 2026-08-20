@@ -21,12 +21,19 @@ PART="${DISK}p${PART_NUM}"
 [ -b "$DISK" ] || { echo "no disk $DISK"; exit 0; }
 [ -b "$PART" ] || { echo "no partition $PART"; exit 0; }
 
-# Anything to gain? Compare the partition's end with the disk's end.
+# Anything to gain? Compare the LAST partition's end with the disk's
+# end. On boxes migrated to 1000MiB root slots (boompi-migrate-roots)
+# the last partition physically is p5 (root-b), not p6 - measuring
+# p6's own gap there would see root-b's region as "free" and try to
+# grow data over it every boot.
 DISK_SECTORS=$(cat "/sys/class/block/$(basename "$DISK")/size")
-PART_START=$(cat "/sys/class/block/$(basename "$PART")/start")
-PART_SIZE=$(cat "/sys/class/block/$(basename "$PART")/size")
-PART_END=$((PART_START + PART_SIZE))
-GAP=$((DISK_SECTORS - PART_END))
+LAST_END=0
+for p in /sys/class/block/$(basename "$DISK")p*; do
+    [ -e "$p/start" ] || continue
+    END=$(( $(cat "$p/start") + $(cat "$p/size") ))
+    [ "$END" -gt "$LAST_END" ] && LAST_END=$END
+done
+GAP=$((DISK_SECTORS - LAST_END))
 # Below 16MiB of headroom (32768 sectors) it is not worth the write.
 if [ "$GAP" -lt 32768 ]; then
     exit 0
