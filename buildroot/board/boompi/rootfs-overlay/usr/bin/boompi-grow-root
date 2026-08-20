@@ -1,0 +1,34 @@
+#!/bin/sh
+# Grow the running root filesystem to fill its partition (online).
+#
+# The rootfs is a fixed-size ext4 image dd'd into its slot; whenever
+# the image is smaller than the partition, the extra space is invisible
+# until resize2fs. That happens legitimately: root slots grown by
+# boompi-migrate-roots (the fs grow is deliberately deferred to the
+# boot AFTER the table rewrite, when the kernel actually sees the new
+# partition size), or a smaller-era image written into a 1024M slot.
+#
+# Runs every boot, exits instantly when there is nothing to gain
+# (under 4MiB). Same online-grow mechanism raspi-config uses.
+#
+# Test override: BOOMPI_GROWROOT_DEV=<blockdev> (CI loopback).
+set -eu
+
+DEV="${BOOMPI_GROWROOT_DEV:-}"
+if [ -z "$DEV" ]; then
+    DEV=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^root=//p')
+fi
+[ -n "$DEV" ] && [ -b "$DEV" ] || exit 0
+
+PART_SECTORS=$(cat "/sys/class/block/$(basename "$DEV")/size")
+BS=$(tune2fs -l "$DEV" | sed -n 's/^Block size: *//p')
+BLOCKS=$(tune2fs -l "$DEV" | sed -n 's/^Block count: *//p')
+[ -n "$BS" ] && [ -n "$BLOCKS" ] || exit 0
+PART_BLOCKS=$((PART_SECTORS * 512 / BS))
+GAIN_B=$(( (PART_BLOCKS - BLOCKS) * BS ))
+if [ "$GAIN_B" -le $((4 * 1024 * 1024)) ]; then
+    exit 0
+fi
+echo "growing root fs on $DEV: +$((GAIN_B / 1048576))MiB"
+resize2fs "$DEV"
+sync

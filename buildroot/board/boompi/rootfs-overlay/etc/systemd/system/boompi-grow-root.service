@@ -1,0 +1,13 @@
+[Unit]
+Description=Grow the root filesystem to fill its partition
+# After remount-rw; before the daemons that might fill the disk.
+After=systemd-remount-fs.service
+Before=boompid.service boompi-ui.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-grow-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -204,6 +204,24 @@ done
     || fail "boompi-grow-data missing"
 [ -x "${TARGET_DIR}/usr/bin/boompi-migrate-roots" ] \
     || fail "boompi-migrate-roots missing"
+[ -x "${TARGET_DIR}/usr/bin/boompi-grow-root" ] \
+    || fail "boompi-grow-root missing (migrated slots would never grow their fs)"
+[ -L "${TARGET_DIR}/etc/systemd/system/multi-user.target.wants/boompi-grow-root.service" ] \
+    || fail "boompi-grow-root.service not enabled"
+[ -L "${TARGET_DIR}/etc/systemd/system/local-fs.target.wants/boompi-fsck-data.service" ] \
+    || fail "boompi-fsck-data.service not enabled (unmountable /data = unreachable box)"
+
+# --- Recovery console. ------------------------------------------------------
+# A getty on tty2: when /data (and with it sshd's keys, NM's wifi
+# creds) is gone, USB keyboard + Ctrl-Alt-F2 is the last door in.
+# Field-bitten: the one time it was needed, it didn't exist, and the
+# box required SD extraction.
+[ -L "${TARGET_DIR}/etc/systemd/system/getty.target.wants/getty@tty2.service" ] \
+    || fail "getty@tty2 not enabled (no recovery console)"
+[ -f "${TARGET_DIR}/usr/lib/systemd/system/getty@.service" ] \
+    || fail "getty@.service template missing"
+grep -q "^root:" "${TARGET_DIR}/etc/shadow" \
+    || fail "root has no password entry (console login would be impossible)"
 
 # --- Gamepad support. -------------------------------------------------------
 # All three legs must land: kernel HID drivers arrive via the kernel

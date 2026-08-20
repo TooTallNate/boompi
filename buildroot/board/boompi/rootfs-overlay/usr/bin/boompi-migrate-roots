@@ -46,7 +46,9 @@ NEW_ROOT_SECTORS=2097152   # 1024MiB
 OLD_ROOT_SECTORS=1048576   # 512MiB
 ALIGN=8192                 # 4MiB
 
-fail() { echo "FATAL: $*" >&2; exit 1; }
+# Flush on every exit path - unflushed page-cache writes do not
+# survive the power cycle a stranded box inevitably gets.
+fail() { echo "FATAL: $*" >&2; sync; exit 1; }
 
 [ -b "$DISK" ] || fail "no disk $DISK"
 
@@ -160,6 +162,13 @@ FS_BLOCK=$(tune2fs -l "$DATA_PART" | sed -n 's/^Block size: *//p')
 TARGET_BLOCKS=$((P6_NEW_SIZE * 512 / FS_BLOCK))
 echo "shrinking data fs to $TARGET_BLOCKS blocks of $FS_BLOCK"
 resize2fs "$DATA_PART" "$TARGET_BLOCKS"
+# CRITICAL: flush the shrink to media before any partition-table work.
+# resize2fs writes through the block device's page cache; a subsequent
+# kernel partition resize INVALIDATES that cache, discarding unflushed
+# pages. Field-bitten on the pi4: partx resized p6 zero seconds after
+# the shrink, the still-dirty superblock evaporated, and the new table
+# wrapped an unshrunk filesystem - unmountable /data.
+sync
 
 # --- The moment of truth: one table rewrite ----------------------------------
 # p1/p2 re-emitted verbatim (the pi4's p1 carries a bootable flag);
@@ -178,35 +187,38 @@ resize2fs "$DATA_PART" "$TARGET_BLOCKS"
 cat /tmp/boompi-migrate-table.sfdisk
 sfdisk --no-reread --force --wipe never --wipe-partitions never \
     "$DISK" < /tmp/boompi-migrate-table.sfdisk
-partx -u "$DISK" || true
-sleep 1 # sysfs settle before verifying the kernel's view
 
-# --- Verify the kernel's view ------------------------------------------------
+# --- Verify the table ON DISK (never the live kernel view) -------------------
+# partx against the running disk is a trap: it cannot resize the
+# mounted root (p3) or a moved partition (p5), and its successful p6
+# resize is what invalidated the page cache above. The kernel adopts
+# the new table at reboot; what matters is what's on the media.
+REDUMP=$(sfdisk -d "$DISK")
+redump_field() { # <num> <field>
+    echo "$REDUMP" | grep "^${DISK}p${1} :" \
+        | sed -n "s/.*${2}= *\([0-9]*\).*/\1/p"
+}
 for spec in "3:$P3_START:$NEW_ROOT_SECTORS" \
             "5:$P5_NEW_START:$NEW_ROOT_SECTORS" \
             "6:$P6_START:$P6_NEW_SIZE"; do
     n=${spec%%:*}; rest=${spec#*:}; want_start=${rest%%:*}; want_size=${rest#*:}
-    got_start=$(cat "/sys/class/block/$(basename "$DISK")p$n/start")
-    got_size=$(cat "/sys/class/block/$(basename "$DISK")p$n/size")
+    got_start=$(redump_field "$n" start)
+    got_size=$(redump_field "$n" size)
     [ "$got_start" -eq "$want_start" ] && [ "$got_size" -eq "$want_size" ] \
-        || fail "kernel sees p$n at $got_start+$got_size, wanted $want_start+$want_size"
+        || fail "on-disk table has p$n at $got_start+$got_size, wanted $want_start+$want_size"
 done
 
-# --- Grow root-a's filesystem into its new partition -------------------------
-# Online when live (mounted root; same mechanism raspi-config uses),
-# offline in tests.
-resize2fs "${DISK}p3"
-
-# --- Data back up, sanity, done ----------------------------------------------
+# --- Data sanity, flush, done ------------------------------------------------
+# (root-a's filesystem is grown by boompi-grow-root on the next boot,
+# once the kernel actually sees the 1024M partition.)
 e2fsck -f -p "$DATA_PART" || [ $? -le 1 ] || fail "post-migration e2fsck failed"
+sync
 if [ "$LIVE" -eq 1 ]; then
-    # The quiesce cascade stopped an unknowable set of units (sshd and
-    # NetworkManager among them). A reboot restores everything from a
-    # clean slate - and proves the migrated table boots, immediately,
-    # while a human is watching.
-    echo "MIGRATED. Slot B (p5) is empty - run a normal update to"
-    echo "populate and trial-boot it. Rebooting now."
-    sync
+    # Reboot: the kernel adopts the new table, boompi-grow-root grows
+    # the root fs, /data mounts at its new size, and every unit the
+    # quiesce cascade stopped comes back from a clean slate.
+    echo "MIGRATED. Rebooting to adopt the new table. Slot B (p5) is"
+    echo "empty - run a normal update to populate and trial-boot it."
     reboot
 else
     echo "MIGRATED (test mode)"

@@ -153,6 +153,14 @@ jobs:
           sudo umount mnt
           # Run the real script.
           sudo env BOOMPI_MIGRATE_DISK="$LOOP" sh "$SCRIPT"
+          # "Reboot": the script verifies the on-disk table and defers
+          # kernel adoption to a reboot (live partx on a mounted disk
+          # is a trap - it invalidates page cache and can't resize the
+          # mounted root). Simulate by re-attaching the loop device.
+          sudo losetup -d "$LOOP"
+          LOOP=$(sudo losetup -P --show -f disk.img)
+          B=$(basename "$LOOP")
+          sleep 1
           # Kernel sees the new geometry: p3 1024M at its old start,
           # p5 1024M as the last aligned GiB, p6 start untouched.
           test "$(cat /sys/class/block/$B/${B}p3/start)" -eq "${{ matrix.p3_start }}"
@@ -160,10 +168,17 @@ jobs:
           test "$(cat /sys/class/block/$B/${B}p5/size)" -eq 2097152
           test "$(cat /sys/class/block/$B/${B}p5/start)" -eq $(( (8388608 - 2097152) / 8192 * 8192 ))
           test "$(cat /sys/class/block/$B/${B}p6/start)" -eq "${{ matrix.p6_start }}"
-          # Root-a's fs actually grew into the new partition.
+          # Post-"reboot" boompi-grow-root grows root-a's fs into the
+          # new partition (deferred from the migration itself).
+          sudo env BOOMPI_GROWROOT_DEV="${LOOP}p3" \
+              sh buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-grow-root
           BLOCKS=$(sudo tune2fs -l "${LOOP}p3" | awk '/^Block count/{print $3}')
           BSIZE=$(sudo tune2fs -l "${LOOP}p3" | awk '/^Block size/{print $3}')
           test $((BLOCKS * BSIZE)) -gt $((1000 * 1024 * 1024))
+          # grow-root is idempotent: second run gains nothing.
+          sudo env BOOMPI_GROWROOT_DEV="${LOOP}p3" \
+              sh buildroot/board/boompi/rootfs-overlay/usr/bin/boompi-grow-root
+          test "$(sudo tune2fs -l "${LOOP}p3" | awk '/^Block count/{print $3}')" -eq "$BLOCKS"
           # Data: intact, fsck-clean, canary + ballast unharmed.
           sudo e2fsck -f -n "${LOOP}p6"
           sudo mount "${LOOP}p6" mnt

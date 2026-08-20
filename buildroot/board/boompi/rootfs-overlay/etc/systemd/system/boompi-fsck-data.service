@@ -1,0 +1,21 @@
+[Unit]
+Description=Repair /data before mounting (e2fsck preen)
+# A dirty or damaged data filesystem must not take the box's entire
+# management plane down with it (field-bitten: an unmountable /data
+# cascaded into no boompid, no NetworkManager, no sshd - an appliance
+# with a working panel and no way in). Preen-fix before the mount;
+# anything preen can't fix still fails the mount, but the common
+# interrupted-write cases self-heal.
+DefaultDependencies=no
+After=systemd-udevd.service boompi-grow-data.service
+Before=data.mount local-fs.target
+ConditionPathExists=/dev/mmcblk0p6
+
+[Service]
+Type=oneshot
+# e2fsck exit 0 = clean, 1 = fixed, 2 = fixed-reboot-advised: all fine.
+ExecStart=/bin/sh -c 'e2fsck -p /dev/mmcblk0p6 || [ $? -le 2 ]'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=local-fs.target

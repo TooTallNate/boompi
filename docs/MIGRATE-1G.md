@@ -19,8 +19,10 @@ after:   p1 p2 | p3 root-a 1G ————————————————�
   chain goes out of physical order (p5 beyond p6): the kernel numbers
   logicals by EBR chain order, so every `/dev/mmcblk0pN` literal in
   the fleet stays true, and `data.mount` is by-label anyway.
-- root-a then grows into root-b's old home; its filesystem is resized
-  online (the same mechanism raspi-config uses).
+- root-a then grows into root-b's old home; its filesystem grow is
+  deliberately deferred to `boompi-grow-root` on the next boot - the
+  running kernel cannot adopt the resized mounted-root partition, so
+  the script verifies the table ON DISK and reboots to adopt it.
 - The tightest fit is the pi4's legacy packed table (p1 at sector 1,
   1-sector EBR gaps): a full-GiB root-a leaves exactly two spare
   sectors for the EBRs. Proven on real hardware and by `sfdisk -V`;
@@ -107,7 +109,30 @@ mid-surgery, power-cycle it and assess:
 - /data won't mount → `e2fsck -y /dev/mmcblk0p6` (an interrupted
   resize2fs shrink is repairable; worst case /data is config + caches).
 
-## Lessons learned (the pi3 migration, 2026-08-20)
+## How the pi4 actually went (2026-08-20)
+
+The pi4's first migration attempt failed and was recovered by reflash
++ identity restore - which is itself a documented path now:
+
+- The failure: resize2fs's shrink lived only in the page cache when
+  `partx` resized p6 in the kernel; a block-device resize INVALIDATES
+  that device's page cache, so the shrink evaporated before reaching
+  the SD card. The table (written synchronously) survived → new table
+  around an unshrunk fs → /data unmountable → no boompid, no NM (hard
+  Requires), no sshd keys, no getty anywhere: an unreachable box with
+  a working panel. All five of those failure links are now fixed.
+- The recovery (no working console needed, SD reader + Mac only):
+  `brew install e2fsprogs`, extract the journal from p3 with
+  `debugfs -R "rdump /var/log/journal ..."` (read it on another box),
+  extract all of /data with `debugfs -c -R "rdump / payload"` (the
+  fs/partition size mismatch doesn't block reads), flash the current
+  `boompi-sdcard` artifact, drop a `boompi-box/` provisioning bundle
+  (box profile + authorized_keys from the payload) on the boot FAT,
+  boot, ssh in over wired DHCP, tar the payload back into /data, fix
+  perms (600 keyfiles), reboot. Identity fully preserved - original
+  ssh host key, wifi, bluetooth pairings, name.
+
+## Lessons learned (the pi3 + pi4 migrations, 2026-08-20)
 
 Each of these is now codified in code; listed so nobody un-learns them:
 
@@ -147,3 +172,23 @@ Each of these is now codified in code; listed so nobody un-learns them:
    oversized images with instructions instead of dd'ing over the
    neighbor partition. This makes the migration a hard prerequisite
    for 1024M-era updates - by design.
+7. **`sync` before touching the partition table - and on every exit
+   path.** resize2fs writes through the block device's page cache; a
+   kernel partition resize invalidates that cache, DISCARDING dirty
+   pages. Zero seconds elapsed between shrink and partx on the pi4;
+   the shrink never reached the card. (The pi3 survived the identical
+   sequence only because its script died at a luckier instant and the
+   30s writeback timer beat the power cycle.) → the script syncs
+   after the shrink, before sfdisk, and in `fail()`.
+8. **Never partx a live disk you're rearranging.** It cannot resize
+   the mounted root or a moved partition, and its partial success is
+   what triggers the cache invalidation. → verify the on-disk table
+   (`sfdisk -d` re-read) and reboot to adopt; `boompi-grow-root`
+   grows the root fs on the following boot.
+9. **Every recovery layer must not share a single point of failure.**
+   sshd's keys, NM's credentials, and boompid's config all lived
+   behind one mount, and the console didn't exist. Now: getty on
+   tty2 (USB keyboard + Ctrl-Alt-F2, root/console password), NM
+   starts without /data (wired DHCP always works), e2fsck -p runs
+   before data.mount, and boompi-grow-root self-heals undersized
+   root filesystems.
