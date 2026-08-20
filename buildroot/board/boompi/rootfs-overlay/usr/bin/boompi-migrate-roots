@@ -115,6 +115,20 @@ if [ "$LIVE" -eq 1 ]; then
     [ -f /data/boompi-trial ] && fail "uncommitted trial pending"
     [ "${BOOMPI_MIGRATE_CONFIRM:-}" = "yes" ] \
         || { echo "dry run only. set BOOMPI_MIGRATE_CONFIRM=yes to execute."; exit 0; }
+    # Detach from the calling session: quiescing /data cascades
+    # (RequiresMountsFor) into NetworkManager and sshd, which kills
+    # the ssh session that launched us - and a child of that session
+    # dies with it, stranding the box mid-surgery with no network
+    # (field-bitten on the pi3; the box needed a power cycle).
+    # A transient systemd unit survives; progress goes to the journal.
+    if [ -z "${BOOMPI_MIGRATE_DETACHED:-}" ]; then
+        echo "detaching into transient unit boompi-migrate (follow with:"
+        echo "  journalctl -u boompi-migrate -f   ...until the box reboots)"
+        exec systemd-run --unit=boompi-migrate --collect \
+            --setenv=BOOMPI_MIGRATE_CONFIRM=yes \
+            --setenv=BOOMPI_MIGRATE_DETACHED=1 \
+            "$(readlink -f "$0")"
+    fi
 fi
 
 # --- Backups (before any write) ----------------------------------------------
@@ -186,10 +200,14 @@ resize2fs "${DISK}p3"
 # --- Data back up, sanity, done ----------------------------------------------
 e2fsck -f -p "$DATA_PART" || [ $? -le 1 ] || fail "post-migration e2fsck failed"
 if [ "$LIVE" -eq 1 ]; then
-    systemctl start data.mount
-    systemctl start bluetooth boompid boompi-ui smbd 2>/dev/null || true
+    # The quiesce cascade stopped an unknowable set of units (sshd and
+    # NetworkManager among them). A reboot restores everything from a
+    # clean slate - and proves the migrated table boots, immediately,
+    # while a human is watching.
     echo "MIGRATED. Slot B (p5) is empty - run a normal update to"
-    echo "populate and trial-boot it. A clean reboot is recommended."
+    echo "populate and trial-boot it. Rebooting now."
+    sync
+    reboot
 else
     echo "MIGRATED (test mode)"
 fi

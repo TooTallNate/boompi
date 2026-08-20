@@ -106,7 +106,13 @@ fi
 if [ "$BOARD" = pi3 ]; then
     # Spread the target boot partition number into PM_RSTS bits
     # 0,2,4,6,8,10 with the 0x5a password byte: p1 -> 0x1, p2 -> 0x4.
-    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; else RSTS=0x5a000004; fi
+    # Arm BOTH mechanisms, mirroring on-box boompi-trial-boot: PSCI
+    # kernels preserve the devmem write; spin-table kernels rewrite
+    # PM_RSTS on reboot but parse the reboot argument into the
+    # partition bits. (A plain `reboot` on a spin-table kernel
+    # clobbers the devmem request with partition 0 - bench-bitten:
+    # the box boots straight back into the old slot.)
+    if [ "$TARGET_BOOT" = /dev/mmcblk0p1 ]; then RSTS=0x5a000001; PART=1; else RSTS=0x5a000004; PART=2; fi
     echo "arming one-shot PM_RSTS partition request (box reboots now)"
     ssh "$PI" "set -eu
 # boot-a.vfat carries the image-default autoboot.txt (boot_partition=1,
@@ -120,7 +126,7 @@ fi
 echo $TARGET_ROOT > $MARKER
 sync
 devmem 0x3f100020 32 $RSTS
-reboot" || true # ssh drops at reboot
+systemctl reboot --reboot-argument=$PART || reboot" || true # ssh drops at reboot
     echo
     echo "Box is firmware-booting the candidate slot once. Verify in ~90s:"
     echo "  ssh $PI cat /proc/cmdline           # new slot's root device"
