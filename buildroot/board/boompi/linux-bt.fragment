@@ -4,3 +4,13 @@
 # stop working over a kernel bump: force them.
 CONFIG_BT_HCIBTUSB_RTL=y
 CONFIG_BT_HCIBTUSB_MTK=y
+
+# btusb poll_sync: serialize intr/bulk URB completion so HCI events
+# can't be reassembled out of order (the Pi 3's dwc_otg completes URBs
+# out of order under load: "Unexpected start frame" storms, garbled
+# RTL8761BU state). Was originally shipped as the force_poll_sync=1
+# module option; a kernel upgrade renamed the mechanism and the option
+# went silently inert - it stayed active only because this Kconfig
+# defaults to y. Pin it so a default change can't disable it again.
+# Runtime ground truth: /sys/kernel/debug/bluetooth/hci0/force_poll_sync
+CONFIG_BT_HCIBTUSB_POLL_SYNC=y
