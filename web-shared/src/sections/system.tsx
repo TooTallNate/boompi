@@ -2,15 +2,33 @@ import { Badge } from "@boompi/ui/components/badge";
 import { Button } from "@boompi/ui/components/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { useBoompi } from "@boompi/ui/transport";
+import { useEffect, useMemo, useReducer } from "react";
 
-/** "3 d 4 h" / "2 h 15 min" / "42 min" (as-of-connect snapshot). */
+/** All units spelled out: "2 days 5 hr 42 min" / "5 hr 42 min" / "42 min". */
 function formatUptime(secs: number): string {
   const d = Math.floor(secs / 86400);
   const h = Math.floor((secs % 86400) / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  if (d > 0) return `${d} d ${h} h`;
-  if (h > 0) return `${h} h ${m} min`;
-  return `${m} min`;
+  const parts: string[] = [];
+  if (d > 0) parts.push(`${d} ${d === 1 ? "day" : "days"}`);
+  if (d > 0 || h > 0) parts.push(`${h} hr`);
+  parts.push(`${m} min`);
+  return parts.join(" ");
+}
+
+/** Live uptime in seconds. `uptime_secs` is a snapshot taken when the
+ *  hello handshake fired; add the wall-clock time elapsed since it
+ *  arrived and re-render on a 30s tick. A reconnect (e.g. after the box
+ *  reboots) delivers a fresh hello object, resetting the baseline. */
+function useLiveUptimeSecs(uptimeSnapshot: number | undefined): number | null {
+  const receivedAt = useMemo(() => Date.now(), [uptimeSnapshot]);
+  const [, tick] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    const t = setInterval(tick, 30_000);
+    return () => clearInterval(t);
+  }, []);
+  if (uptimeSnapshot == null) return null;
+  return uptimeSnapshot + Math.floor((Date.now() - receivedAt) / 1000);
 }
 
 /** Box health (uptime, CPU temperature + live throttle state, when the
@@ -19,6 +37,7 @@ export function SystemSection() {
   const { hello, state, send } = useBoompi();
   const diag = state?.diag;
   const hot = (diag?.cpu_temp_c ?? 0) >= 75;
+  const uptimeSecs = useLiveUptimeSecs(hello?.uptime_secs);
 
   return (
     <Card>
@@ -26,11 +45,11 @@ export function SystemSection() {
         <CardTitle>System</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        {hello != null && (
+        {uptimeSecs != null && (
           <div className="flex items-center justify-between gap-3">
             <span>Uptime</span>
             <span className="text-muted-foreground">
-              {formatUptime(hello.uptime_secs)}
+              {formatUptime(uptimeSecs)}
             </span>
           </div>
         )}
