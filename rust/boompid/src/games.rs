@@ -8,8 +8,9 @@
 //! in-game menu (Start+Select), the web Stop button, or death.
 //!
 //! Audio flows through PipeWire like every other source, so music and
-//! gameplay coexist; while an external source is active the game's
-//! stream is ducked to `Settings::game_volume`.
+//! gameplay coexist on separate tracks: the game's stream holds
+//! `Settings::game_volume`, independent of the music track (no
+//! ducking - see mixer.rs).
 
 use crate::state::SharedApp;
 use anyhow::{bail, Context, Result};

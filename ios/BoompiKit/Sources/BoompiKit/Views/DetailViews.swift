@@ -398,7 +398,7 @@ struct GamesDetailView: View {
                         }
                     }
                 } footer: {
-                    Text("Music ducks the game volume while both play.")
+                    Text("The game's own volume level, independent of the music track.")
                 }
             }
 

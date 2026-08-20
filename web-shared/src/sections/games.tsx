@@ -67,7 +67,8 @@ export function GamesSection() {
             <>Upload ROMs from the Wi-Fi settings page,</>
           )}{" "}
           pair a controller (same pairing button as speakers), launch from the
-          panel. Music and gameplay mix; music ducks the game volume.
+          panel. Music and gameplay mix on separate tracks, each with its own
+          volume.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">

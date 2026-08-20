@@ -163,8 +163,8 @@ pub struct SettingsConfig {
     pub mqtt_username: String,
     #[serde(default)]
     pub mqtt_password: String,
-    /// RetroArch stream volume (0.0-1.0) while an external audio
-    /// source is active (music ducks the game).
+    /// RetroArch stream volume (0.0-1.0): the game track's own level,
+    /// independent of the music track (no ducking).
     #[serde(default = "default_game_volume")]
     pub game_volume: f32,
     /// Panel visualizer opacity (0.1-1.0).
