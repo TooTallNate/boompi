@@ -1,5 +1,5 @@
 import { Badge } from "@boompi/ui/components/badge";
-import { Button } from "@boompi/ui/components/button";
+import { ConfirmButton } from "@boompi/ui/components/confirm-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { useBoompi } from "@boompi/ui/transport";
 import { useEffect, useMemo, useReducer } from "react";
@@ -75,16 +75,15 @@ export function SystemSection() {
           <span className="text-sm text-muted-foreground">
             Orderly reboot - takes about half a minute.
           </span>
-          <Button
+          <ConfirmButton
             variant="destructive"
-            onClick={() => {
-              if (confirm("Restart the speaker? Music stops and it's back in about 30 seconds.")) {
-                send({ type: "reboot" });
-              }
-            }}
+            title="Restart the speaker?"
+            description="Music stops and it's back in about 30 seconds."
+            confirmLabel="Restart"
+            onConfirm={() => send({ type: "reboot" })}
           >
             Restart speaker
-          </Button>
+          </ConfirmButton>
         </div>
       </CardContent>
     </Card>

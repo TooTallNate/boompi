@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Alert, AlertDescription } from "@boompi/ui/components/alert";
 import { Button } from "@boompi/ui/components/button";
+import { ConfirmButton } from "@boompi/ui/components/confirm-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Field, FieldLabel } from "@boompi/ui/components/field";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@boompi/ui/components/select";
@@ -47,7 +48,6 @@ export function GamesSection() {
 
   const del = async (system: string, file: string) => {
     if (!rest) return;
-    if (!window.confirm(`Delete ${file}? Save files are kept.`)) return;
     await rest.deleteGame(system, file);
   };
 
@@ -149,14 +149,18 @@ export function GamesSection() {
                   </Button>
                 )}
                 {rest && (
-                  <Button
+                  <ConfirmButton
                     variant="ghost"
                     size="sm"
                     className="text-muted-foreground hover:text-destructive"
-                    onClick={() => void del(g.system, g.file)}
+                    title={`Delete ${g.file}?`}
+                    description="Save files are kept."
+                    confirmLabel="Delete"
+                    confirmVariant="destructive"
+                    onConfirm={() => void del(g.system, g.file)}
                   >
                     delete
-                  </Button>
+                  </ConfirmButton>
                 )}
               </li>
             ))}

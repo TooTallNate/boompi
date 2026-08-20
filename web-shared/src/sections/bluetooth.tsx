@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@boompi/ui/components/alert";
 import { Badge } from "@boompi/ui/components/badge";
 import { Button } from "@boompi/ui/components/button";
+import { ConfirmButton } from "@boompi/ui/components/confirm-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@boompi/ui/components/empty";
 import { Separator } from "@boompi/ui/components/separator";
@@ -140,21 +141,21 @@ export function BluetoothSection() {
                   >
                     {d.connected ? "Disconnect" : "Connect"}
                   </Button>
-                  <Button
+                  <ConfirmButton
                     variant="destructive"
                     size="sm"
-                    onClick={() => {
-                      if (confirm(`Unpair “${d.name}”?`)) {
-                        send({
-                          type: "bt_device",
-                          address: d.address,
-                          action: "remove",
-                        });
-                      }
-                    }}
+                    title={`Unpair “${d.name}”?`}
+                    confirmLabel="Unpair"
+                    onConfirm={() =>
+                      send({
+                        type: "bt_device",
+                        address: d.address,
+                        action: "remove",
+                      })
+                    }
                   >
                     Remove
-                  </Button>
+                  </ConfirmButton>
                 </div>
               </div>
             </Fragment>

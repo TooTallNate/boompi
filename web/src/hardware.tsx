@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@boompi/ui/components/alert";
 import { Button } from "@boompi/ui/components/button";
+import { ConfirmButton } from "@boompi/ui/components/confirm-button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@boompi/ui/components/card";
 import { Field, FieldGroup, FieldLabel } from "@boompi/ui/components/field";
 import { Input } from "@boompi/ui/components/input";
@@ -117,14 +118,6 @@ function BoxHardwareSection() {
     setProfile((p) => (p && p !== "locked" ? { ...p, ...patch } : p));
 
   const apply = async () => {
-    if (
-      !window.confirm(
-        "Apply this hardware profile? It is written into the boot " +
-          "configuration of both OS slots and takes effect on reboot.",
-      )
-    ) {
-      return;
-    }
     setStatus({ kind: "saving" });
     try {
       const outcome = await putBoxProfile(profile);
@@ -136,15 +129,6 @@ function BoxHardwareSection() {
   };
 
   const lock = async () => {
-    if (
-      !window.confirm(
-        "Lock hardware configuration? This page and its API turn off; " +
-          "further changes require ssh (boompi-box). Unlock with " +
-          "'boompi-box unlock'.",
-      )
-    ) {
-      return;
-    }
     try {
       await lockBoxProfile();
       setProfile("locked");
@@ -274,19 +258,33 @@ function BoxHardwareSection() {
             />
           </Field>
           <div className="flex items-center gap-3">
-            <Button disabled={status.kind === "saving"} onClick={apply}>
+            <ConfirmButton
+              disabled={status.kind === "saving"}
+              title="Apply this hardware profile?"
+              description="It is written into the boot configuration of both OS slots and takes effect on reboot."
+              confirmLabel="Apply"
+              onConfirm={() => void apply()}
+            >
               Apply to this box
-            </Button>
+            </ConfirmButton>
             <Button variant="outline" onClick={download}>
               Download bundle
             </Button>
-            <Button
+            <ConfirmButton
               variant="destructive"
-              onClick={lock}
-              title="Requires an ssh key; unlock via ssh"
+              title="Lock hardware configuration?"
+              description={
+                <>
+                  This page and its API turn off; further changes require ssh
+                  (<code>boompi-box</code>). Unlock with{" "}
+                  <code>boompi-box unlock</code>.
+                </>
+              }
+              confirmLabel="Lock"
+              onConfirm={() => void lock()}
             >
               Lock
-            </Button>
+            </ConfirmButton>
             <StatusText status={status} />
           </div>
           {rebootNeeded && (
