@@ -1,0 +1,25 @@
+fbcon: draw the boot logo even when the console is quiet
+
+The appliance boots with `quiet loglevel=3` (silent boot, see
+docs/PLAN.md), but fbcon refuses to draw the built-in boot logo
+whenever console_loglevel <= CONSOLE_LOGLEVEL_QUIET (4). That gate
+exists so desktop distros don't flash penguins over their quiet
+boots - here it defeats the whole point of the Boompi kernel logo
+(linux-splash.fragment + kernel-logo.ppm), which fills the dark
+window between firmware handoff and boompi-ui.
+
+Drop the loglevel check. Kernel *text* stays suppressed by
+loglevel=3; only the logo bitmap is drawn at fbcon takeover.
+
+--- a/drivers/video/fbdev/core/fbcon.c
++++ b/drivers/video/fbdev/core/fbcon.c
+@@ -1006,9 +1006,6 @@
+ 
+ 	info = fbcon_info_from_console(vc->vc_num);
+ 
+-	if (logo_shown < 0 && console_loglevel <= CONSOLE_LOGLEVEL_QUIET)
+-		logo_shown = FBCON_LOGO_DONTSHOW;
+-
+ 	if (vc != svc || logo_shown == FBCON_LOGO_DONTSHOW ||
+ 	    (info->fix.type == FB_TYPE_TEXT))
+ 		logo = 0;
