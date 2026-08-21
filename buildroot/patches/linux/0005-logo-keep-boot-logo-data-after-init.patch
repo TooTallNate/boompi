@@ -1,0 +1,75 @@
+logo: keep the boot logo data alive after init memory is freed
+
+The logo bitmaps are emitted __initdata/__initconst and logo.c marks
+them unusable at late_initcall_sync (logos_freed). On the Pi 3 the
+vc4/DPI pipeline needs several deferred-probe rounds (spi-gpio ->
+ili9806e -> component bind), so vc4drmfb only registers at ~6s -
+while init memory is freed at ~2.6s (bench dmesg, v2.2.0-fcc53ba).
+When fbcon re-takes-over on the real framebuffer, fb_find_logo()
+returns NULL and the Boompi logo silently never draws. (The earlier
+takeover at 0.8s draws onto the firmware simplefb, which the dark
+DPI panel never scans out.)
+
+Keep the generated logo in .data/.rodata permanently (~70KB - noise
+on these boxes) and drop the logos_freed latch, so a late fbcon
+takeover can still find and draw it.
+
+--- a/drivers/video/logo/logo.c
++++ b/drivers/video/logo/logo.c
+@@ -27,15 +27,9 @@
+  * Use late_init to mark the logos as freed to prevent any further use.
+  */
+ 
+-static bool logos_freed;
+-
+-static int __init fb_logo_late_init(void)
+-{
+-	logos_freed = true;
+-	return 0;
+-}
+-
+-late_initcall_sync(fb_logo_late_init);
++/* Boompi: logos are no longer __initdata (see pnmtologo.c); they
++ * survive free_initmem so a late-probing DRM fbdev (vc4 behind a
++ * deferred-probed DPI panel) can still draw the boot logo. */
+ 
+ /* logo's are marked __initdata. Use __ref to tell
+  * modpost that it is intended that this function uses data
+@@ -45,7 +39,7 @@
+ {
+ 	const struct linux_logo *logo = NULL;
+ 
+-	if (nologo || logos_freed)
++	if (nologo)
+ 		return NULL;
+ 
+ 	if (depth >= 1) {
+--- a/drivers/video/logo/pnmtologo.c
++++ b/drivers/video/logo/pnmtologo.c
+@@ -238,7 +238,7 @@
+ 	fprintf(out, " *  Linux logo %s\n", logoname);
+ 	fputs(" */\n\n", out);
+ 	fputs("#include <linux/linux_logo.h>\n\n", out);
+-	fprintf(out, "static unsigned char %s_data[] __initdata = {\n",
++	fprintf(out, "static unsigned char %s_data[] = {\n",
+ 		logoname);
+ }
+ 
+@@ -245,7 +245,7 @@
+ static void write_footer(void)
+ {
+ 	fputs("\n};\n\n", out);
+-	fprintf(out, "const struct linux_logo %s __initconst = {\n", logoname);
++	fprintf(out, "const struct linux_logo %s = {\n", logoname);
+ 	fprintf(out, "\t.type\t\t= %s,\n", logo_types[logo_type]);
+ 	fprintf(out, "\t.width\t\t= %d,\n", logo_width);
+ 	fprintf(out, "\t.height\t\t= %d,\n", logo_height);
+@@ -375,7 +375,7 @@
+ 	fputs("\n};\n\n", out);
+ 
+ 	/* write logo clut */
+-	fprintf(out, "static unsigned char %s_clut[] __initdata = {\n",
++	fprintf(out, "static unsigned char %s_clut[] = {\n",
+ 		logoname);
+ 	write_hex_cnt = 0;
+ 	for (i = 0; i < logo_clutsize; i++) {
