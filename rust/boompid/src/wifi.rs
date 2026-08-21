@@ -14,6 +14,7 @@
 #![cfg(target_os = "linux")]
 
 use serde::Serialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::process::Command;
 
 /// NM connection id (profile name) used for the onboarding access point.
@@ -23,6 +24,26 @@ pub const AP_CONNECTION: &str = "boompi-ap";
 /// onboarding hotspot, so the captive-portal Wi-Fi step serves this cache
 /// (refreshed just before the AP goes up) instead of an empty list.
 static SCAN_CACHE: std::sync::Mutex<Vec<WifiNetwork>> = std::sync::Mutex::new(Vec::new());
+
+const USER_DISCONNECTED_MARKER: &str = "/run/boompi/wifi-user-disconnected";
+static USER_DISCONNECTED: AtomicBool = AtomicBool::new(false);
+
+fn user_disconnected() -> bool {
+    USER_DISCONNECTED.load(Ordering::Acquire)
+        || std::path::Path::new(USER_DISCONNECTED_MARKER).exists()
+}
+
+fn set_user_disconnected(disconnected: bool) {
+    USER_DISCONNECTED.store(disconnected, Ordering::Release);
+    if disconnected {
+        if let Some(parent) = std::path::Path::new(USER_DISCONNECTED_MARKER).parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(USER_DISCONNECTED_MARKER, b"");
+    } else {
+        let _ = std::fs::remove_file(USER_DISCONNECTED_MARKER);
+    }
+}
 
 #[derive(Debug, Default, Serialize)]
 pub struct WifiStatus {
@@ -141,6 +162,19 @@ pub async fn status(scan: bool) -> anyhow::Result<WifiStatus> {
         best.sort_by(|a, b| b.in_use.cmp(&a.in_use).then(b.signal.cmp(&a.signal)));
         *SCAN_CACHE.lock().unwrap() = best.clone();
         st.networks = best;
+
+        // NetworkManager may rejoin a saved profile as a side effect of
+        // the scan, despite an earlier `dev disconnect`. Reassert the
+        // explicit disconnect after scanning; ignore "not active" when
+        // it remained down as requested.
+        if user_disconnected() {
+            let _ = nmcli(&["dev", "disconnect", &dev]).await;
+            st.connected = None;
+            st.ip = None;
+            for net in &mut st.networks {
+                net.in_use = false;
+            }
+        }
     } else if scan && st.enabled && st.ap_active {
         // Hotspot up: serve the pre-AP scan (nothing is "in use" - the
         // radio is busy being the hotspot).
@@ -203,6 +237,7 @@ pub async fn connect(ssid: &str, psk: Option<&str>) -> anyhow::Result<()> {
             return Err(err);
         }
     }
+    set_user_disconnected(false);
     tracing::info!(%ssid, "wifi connected");
     Ok(())
 }
@@ -253,6 +288,7 @@ pub async fn disconnect() -> anyhow::Result<()> {
         .map(|f| f[0].clone())
         .ok_or_else(|| anyhow::anyhow!("no wifi device"))?;
     nmcli(&["dev", "disconnect", &dev]).await?;
+    set_user_disconnected(true);
     tracing::info!(%dev, "wifi disconnected");
     Ok(())
 }
@@ -260,12 +296,14 @@ pub async fn disconnect() -> anyhow::Result<()> {
 /// Delete a saved profile (disconnects if active).
 pub async fn forget(name: &str) -> anyhow::Result<()> {
     nmcli(&["con", "delete", "id", name]).await?;
+    set_user_disconnected(false);
     tracing::info!(%name, "wifi profile forgotten");
     Ok(())
 }
 
 pub async fn set_radio(enabled: bool) -> anyhow::Result<()> {
     nmcli(&["radio", "wifi", if enabled { "on" } else { "off" }]).await?;
+    set_user_disconnected(false);
     tracing::info!(enabled, "wifi radio toggled");
     Ok(())
 }
@@ -273,6 +311,7 @@ pub async fn set_radio(enabled: bool) -> anyhow::Result<()> {
 /// Bring up the onboarding access point (open network, NM shared IPv4 -
 /// NM runs its own DHCP). Creates the profile on first use.
 pub async fn start_ap(ssid: &str) -> anyhow::Result<()> {
+    set_user_disconnected(false);
     // Refresh the scan cache while the radio can still scan: the captive
     // portal's Wi-Fi step shows these networks (see SCAN_CACHE).
     if let Err(err) = status(true).await {
@@ -317,6 +356,7 @@ pub async fn start_ap(ssid: &str) -> anyhow::Result<()> {
 
 pub async fn stop_ap() -> anyhow::Result<()> {
     nmcli(&["con", "down", AP_CONNECTION]).await?;
+    set_user_disconnected(false);
     tracing::info!("onboarding AP stopped");
     Ok(())
 }

@@ -160,7 +160,17 @@ export function WifiSection() {
 
   function join(net: WifiNetwork) {
     if (net.saved || net.security === "") {
-      act({ action: "connect", ssid: net.ssid });
+      if (!rest && net.saved) {
+        setBusy(true);
+        setError(null);
+        send({ type: "wifi", action: "rejoin", ssid: net.ssid });
+        setTimeout(() => send({ type: "wifi", action: "scan" }), 3000);
+        setJoining(null);
+        setPsk("");
+        setBusy(false);
+      } else {
+        act({ action: "connect", ssid: net.ssid });
+      }
     } else {
       setJoining(net.ssid);
       setPsk("");
@@ -279,6 +289,17 @@ export function WifiSection() {
                         title="Leave this network without forgetting its password"
                       >
                         Disconnect
+                      </Button>
+                    )}
+                    {n.saved && !n.in_use && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => join(n)}
+                        disabled={busy}
+                        title="Reconnect using the saved password"
+                      >
+                        Rejoin
                       </Button>
                     )}
                     {(n.saved || n.in_use) && (
