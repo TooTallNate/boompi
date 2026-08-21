@@ -62,7 +62,7 @@ BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,bba53a117a4a5c29da892962332ff1605990e17a)/linux-bba53a117a4a5c29da892962332ff1605990e17a.tar.gz"
 # kexec for A/B trial boots - firmware tryboot is not used on either
 # board (see board/boompi/linux-kexec.fragment).
-BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-audio.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-gamepads.fragment"
+BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-audio.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-gamepads.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-splash.fragment"
 BR2_LINUX_KERNEL_DTS_SUPPORT=y
 BR2_LINUX_KERNEL_DTB_OVERLAY_SUPPORT=y
 BR2_LINUX_KERNEL_NEEDS_HOST_OPENSSL=y

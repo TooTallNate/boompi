@@ -1,0 +1,23 @@
+# Initialize the Raspberry Pi display during kernel boot so the built-in
+# Boompi logo can appear before userspace and boompi-ui start. VC4 depends
+# on the ALSA SoC core, but individual audio devices remain modules.
+CONFIG_SND=y
+CONFIG_SND_SOC=y
+CONFIG_DRM=y
+CONFIG_DRM_VC4=y
+
+# The Pi 3 HyperPixel 4 is an ILI9806E panel initialized over a GPIO-backed
+# SPI bus. Every component in that probe chain must be built in too.
+CONFIG_SPI=y
+CONFIG_SPI_GPIO=y
+CONFIG_BACKLIGHT_CLASS_DEVICE=y
+CONFIG_BACKLIGHT_GPIO=y
+CONFIG_DRM_PANEL_ILITEK_ILI9806E=y
+
+# VC4's fbdev console is what renders the compiled-in CLUT224 logo.
+CONFIG_FB=y
+CONFIG_DRM_FBDEV_EMULATION=y
+CONFIG_FRAMEBUFFER_CONSOLE=y
+CONFIG_FRAMEBUFFER_CONSOLE_DETECT_PRIMARY=y
+CONFIG_LOGO=y
+CONFIG_LOGO_LINUX_CLUT224=y
