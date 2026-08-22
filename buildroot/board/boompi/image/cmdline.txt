@@ -1,1 +1,1 @@
-root=/dev/mmcblk0p3 rootwait quiet loglevel=3 vt.global_cursor_default=0 systemd.show_status=false console=tty1 fbcon=logo-count:1 fbcon=logo-pos:center
+root=/dev/mmcblk0p3 rootwait quiet loglevel=2 vt.global_cursor_default=0 systemd.show_status=false console=tty1 fbcon=logo-count:1 fbcon=logo-pos:center
