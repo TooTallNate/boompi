@@ -15,3 +15,14 @@ dtparam=i2c_arm=on
 # reasoning as georges (antenna sharing stutters, and two controllers
 # make boompid's adapter selection a boot-order coin flip).
 dtoverlay=disable-bt
+
+# The panel has no EDID: without these the firmware burns seconds on
+# EDID read retries, falls back to 640x480 safe mode, and the boot
+# logo stays dark until ~6s. Skip EDID entirely and light the native
+# mode directly (the kernel side already forces it via the cmdline
+# video=HDMI-A-1:1024x600M@60D).
+hdmi_force_hotplug=1
+hdmi_ignore_edid=0xa5000080
+hdmi_group=2
+hdmi_mode=87
+hdmi_cvt=1024 600 60 6 0 0 0
