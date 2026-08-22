@@ -14,6 +14,16 @@ CONFIG_BACKLIGHT_CLASS_DEVICE=y
 CONFIG_BACKLIGHT_GPIO=y
 CONFIG_DRM_PANEL_ILITEK_ILI9806E=y
 
+# HDMI DDC i2c controllers (bcm2835 on the Pi 3, brcmstb on the Pi 4).
+# As modules they gate the whole vc4 component bind behind udev's
+# coldplug (~5-6s): vc4-hdmi defers on its DDC bus, and the DRM card -
+# and with it the boot logo - waits for the slowest component.
+# Bench-verified on the Pi 3: hdmi bound seconds after i2c_bcm2835
+# loaded, nothing else outstanding.
+CONFIG_I2C=y
+CONFIG_I2C_BCM2835=y
+CONFIG_I2C_BRCMSTB=y
+
 # VC4's fbdev console is what renders the compiled-in CLUT224 logo.
 CONFIG_FB=y
 CONFIG_DRM_FBDEV_EMULATION=y
