@@ -15,10 +15,16 @@ contributes to "the quintessential Raspberry Pi boombox".
   sag the pack for seconds at a time. Thresholds and an opt-out live
   in `[battery]` config. Poweroff into the latching switch leaves the
   amp + LED drawing, but the Pi is down cleanly and the SD card safe.
-- **Boot-time measurement.** The plan targets < 10 s power → UI;
-  quiet boot shipped but the number was never measured. Stopwatch it,
-  `systemd-analyze blame` the stragglers, tune or honestly amend the
-  goal.
+- ~~**Boot-time measurement.**~~ Measured (2026-08, alongside the
+  boot splash work): boompi-ui starts at ~8 s monotonic on the Pi 4,
+  similar on the Pi 3 - the < 10 s goal is met. The formerly dark
+  window is now a branded splash: the kernel draws
+  `branding/logo.png` (generated + validated at build time, centered,
+  rotation-aware) at ~2 s on the Pi 3; the Pi 4's HDMI panel shows it
+  at ~6 s only because the panel itself takes ~4 s to re-lock after
+  the firmware→vc4 handoff - kernel-side it is identical (~1.6 s).
+  Undervoltage spam is off the panel (`loglevel=2`); everything still
+  lands in the journal.
 
 ## Tier 1 - earns the title
 
@@ -26,7 +32,11 @@ contributes to "the quintessential Raspberry Pi boombox".
   power-on and crackle through boot; once the audio stack is up the
   noise is gone. Fix it at the source: a configurable GPIO drives a
   MOSFET (or the amp's enable/mute pin) so the amplifier is only
-  powered after the audio stack has initialized. Design notes:
+  powered after the audio stack has initialized. Per-box pin surveys
+  and wiring are worked out in
+  [`notes/AMP-ENABLE.md`](notes/AMP-ENABLE.md) (Pi 4: BCM 22; Pi 3:
+  MCP23008 on i2c-11 - no free header GPIOs); the boompid `[amp]`
+  config/GPIO layer and the hardware mods are unbuilt. Design notes:
   - The pin must default OFF from the firmware onward, not just from
     boompid - the pops happen long before userspace. `gpio=N=op,dl`
     in config.txt holds it low from the bootloader; boompid raises it
@@ -64,24 +74,24 @@ contributes to "the quintessential Raspberry Pi boombox".
 
 ## Tier 2 - appliance polish
 
-- **Web now-playing remote.** The ws protocol already carries
-  track/transport/volume; a now-playing page in the existing web UI
-  turns every phone in the house into a remote for nearly free.
-- **Idle / ambient mode + screensavers.** Auto-dim + screen-off after
-  N idle minutes, wake on touch or audio - promoted from nice-to-have
-  after visible burn-in appeared on both boxes' panels. Screensaver
-  options for when the display stays on: big clock, ambient
-  visualizer, drifting album art, and Matrix digital rain (the
-  important one).
+- **Web now-playing remote.** Partially superseded: the hosted BLE
+  remote (`web-remote/`, any Web-Bluetooth browser, no LAN required)
+  and the iOS app shipped as the phone remotes. Still open in the
+  narrow sense: the LAN web UI (settings surface) has no now-playing
+  page of its own.
+- ~~**Idle / ambient mode + screensavers.**~~ Shipped: screensavers
+  (clock, visualizer, drifting art, Matrix rain) with a battery glyph
+  so a shelf glance answers "does it need charging?" without waking
+  the panel.
 - **Physical controls.** GPIO rotary encoder for volume, play/pause
   button, config-mapped. Tactility makes it hardware, not a computer
   in a box. (Pairs naturally with the amp-enable GPIO work: both grow
   a small GPIO layer in boompid.)
 - **Auto-update toggle.** Default off, applies updates at idle (no
   active source) only. Closes the original plan's last update item.
-- **Home Assistant / MQTT discovery.** Play state, volume, source as
-  entities; the HA crowd overlaps heavily with the audience that
-  would build one of these.
+- ~~**Home Assistant / MQTT discovery.**~~ Shipped (`boompid`'s mqtt
+  module): play state, volume, source, battery, CPU temperature as
+  discovered entities.
 
 - **AirPlay classic-only toggle: bench-verify.** Shipped as an
   experimental settings toggle (shairport patch 0003: classic record
@@ -100,12 +110,16 @@ contributes to "the quintessential Raspberry Pi boombox".
   logic, atomic_flush dev_enter/exit matching, AXI panic modes).
   Watch hang frequency on the bench; if wedges persist, lighter GPU
   load when idle is the next lever (ties into ambient mode).
+  NB: the 2026-08 boot-splash work made vc4 (+ DDC i2c, ili9806e
+  panel, fbcon) built-in rather than modular - any hang-frequency
+  observations from before then need a fresh baseline.
 
 ## Tier 3 - keeper of the fleet
 
-- **Diagnostics in settings.** CPU temperature + throttle events (a
-  Pi in a sealed box wants this), Wi-Fi RSSI, and a "download support
-  bundle" button (journal tail + redacted config).
+- **Diagnostics in settings.** Partially shipped: CPU temperature +
+  throttle state surface on the panel, web hardware page, and Home
+  Assistant. Still open: Wi-Fi RSSI and a "download support bundle"
+  button (journal tail + redacted config).
 - **Settings backup/export** for painless reflashes.
 - **Hardware watchdog** (`RuntimeWatchdogSec`) for hung-kernel
   recovery - mind the interplay with trial boots (arm only after
