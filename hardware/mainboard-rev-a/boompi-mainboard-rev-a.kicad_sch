@@ -1,0 +1,418 @@
+(kicad_sch
+	(version 20260306)
+	(generator "eeschema")
+	(generator_version "10.0")
+	(uuid "df277475-e6f3-473c-a0e7-cf021a9c3f66")
+	(paper "A4")
+	(title_block
+		(title "Boompi Mainboard Rev A - 00_TOP")
+		(date "2026-08-23")
+		(rev "A")
+		(company "Boompi")
+	)
+	(lib_symbols)
+	(sheet
+		(at 25.4 30.48)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "c1a4c5a1-71ae-57cc-afcc-9032a0a00ae6")
+		(property "Sheetname" "01_BATTERY_AON"
+			(at 25.4 29.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "01_battery_aon.kicad_sch"
+			(at 25.4 49.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 58.42)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "c857f0ac-260d-5741-855d-eafd7ab09ca6")
+		(property "Sheetname" "02_CM4_CORE"
+			(at 25.4 57.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "02_cm4_core.kicad_sch"
+			(at 25.4 77.02 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 86.36)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "025db21a-b79e-5611-a022-540384065cab")
+		(property "Sheetname" "03_MAIN_5V"
+			(at 25.4 85.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "03_main_5v.kicad_sch"
+			(at 25.4 104.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 114.3)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "1e964dbc-1231-52f5-97f1-0b444e781679")
+		(property "Sheetname" "04_USB"
+			(at 25.4 113.5 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "04_usb.kicad_sch"
+			(at 25.4 132.9 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "5")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 142.24)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "c19cdd26-fd03-5bbc-ab69-e812fcdf47a4")
+		(property "Sheetname" "05_AUDIO"
+			(at 25.4 141.44 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "05_audio.kicad_sch"
+			(at 25.4 160.84 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "6")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 170.18)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "0aba8f3d-7c4f-5e67-baa5-324f5656fb48")
+		(property "Sheetname" "06_DSI"
+			(at 25.4 169.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "06_dsi.kicad_sch"
+			(at 25.4 188.78 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "7")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 114.3 30.48)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "46a3bbd6-1f0e-57f3-b401-ac74de02a8eb")
+		(property "Sheetname" "07_ETHERNET"
+			(at 114.3 29.68 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "07_ethernet.kicad_sch"
+			(at 114.3 49.08 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "8")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 114.3 58.42)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "59388d5e-e8de-5096-8e3b-90835568f997")
+		(property "Sheetname" "08_THERMAL_FANS"
+			(at 114.3 57.62 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "08_thermal_fans.kicad_sch"
+			(at 114.3 77.02 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "9")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 114.3 86.36)
+		(size 63.5 17.78)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(fields_autoplaced yes)
+		(stroke
+			(width 0.1524)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0.0000)
+		)
+		(uuid "cdff3afd-a0f7-55cb-86fb-80e28a28af47")
+		(property "Sheetname" "09_CONNECTORS_DEBUG"
+			(at 114.3 85.56 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "09_connectors_debug.kicad_sch"
+			(at 114.3 104.96 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left top)
+				(hide yes)
+			)
+		)
+		(instances
+			(project "boompi-mainboard-rev-a"
+				(path "/df277475-e6f3-473c-a0e7-cf021a9c3f66"
+					(page "10")
+				)
+			)
+		)
+	)
+	(text "Boompi Mainboard Rev A\nGenerated per hardware/mainboard-rev-a/PLAN.md\nSee sheet notes for design intent; run scripts/gen_schematics.py to regenerate."
+		(exclude_from_sim yes)
+		(at 200.66 35.56 0)
+		(effects
+			(font
+				(size 2 2)
+			)
+			(justify left top)
+		)
+		(uuid "de7be692-ff19-5b48-9bc6-7ec741888523")
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)

@@ -1,0 +1,5 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "boompi")(type "KiCad")(uri "${KIPRJMOD}/libraries/boompi.pretty")(options "")(descr "Boompi custom footprints"))
+  (lib (name "CM4IO")(type "KiCad")(uri "${KIPRJMOD}/libraries/CM4IO.pretty")(options "")(descr "Footprints from the Raspberry Pi CM4IO reference design"))
+)

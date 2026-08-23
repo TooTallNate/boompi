@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "boompi")(type "KiCad")(uri "${KIPRJMOD}/libraries/boompi.kicad_sym")(options "")(descr "Boompi custom symbols (generated)"))
+)
