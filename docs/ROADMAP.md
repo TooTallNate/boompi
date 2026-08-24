@@ -89,6 +89,15 @@ contributes to "the quintessential Raspberry Pi boombox".
   a small GPIO layer in boompid.)
 - **Auto-update toggle.** Default off, applies updates at idle (no
   active source) only. Closes the original plan's last update item.
+- **Wi-Fi reachability watchdog.** The 2026-08 incident: nates sat
+  "connected" (NM activated, panel agreed) but unpingable for hours -
+  a silent brcmfmac wedge with zero log entries at any layer. Root
+  cause (powersave) is disabled via NM conf.d now, but the class of
+  failure remains: boompid should probe the gateway while NM claims
+  connectivity and bounce the connection after sustained silence,
+  surfacing the truth on the panel instead of NM's association state.
+  (boompid already owns the NM D-Bus session; the bounce is one
+  ActivateConnection call.)
 - ~~**Home Assistant / MQTT discovery.**~~ Shipped (`boompid`'s mqtt
   module): play state, volume, source, battery, CPU temperature as
   discovered entities.
