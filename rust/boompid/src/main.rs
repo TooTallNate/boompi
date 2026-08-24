@@ -127,7 +127,9 @@ async fn main() -> anyhow::Result<()> {
             // Bluetooth LE for clients with no shared IP network
             // (native phone apps, Web Bluetooth). See docs/BLE.md.
             ble_gatt::spawn(app.clone());
-            netname::spawn(app.clone());
+            // DNS-SD adverts (SMB share + _boompi._tcp control
+            // discovery) via avahi service files.
+            netname::spawn(app.clone(), cli.listen.port());
             mixer::spawn(app.clone());
             battery::spawn(app.clone());
             visualizer::spawn(app.clone());

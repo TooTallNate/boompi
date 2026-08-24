@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- Boompi control-protocol discovery (_boompi._tcp): WebSocket at
+     /ws + JSON API on the advertised port. Baseline only: boompid
+     (netname.rs) rewrites this file with the speaker name as the
+     instance name and the full TXT contract (id/proto/ver). The %h
+     wildcard covers first boot before boompid's first write. -->
+<service-group>
+  <name replace-wildcards="yes">%h</name>
+  <service>
+    <type>_boompi._tcp</type>
+    <port>3001</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>path=/ws</txt-record>
+  </service>
+</service-group>

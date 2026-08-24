@@ -1,4 +1,4 @@
-//! Network-visible speaker name.
+//! Network-visible speaker name + DNS-SD adverts.
 //!
 //! The DNS hostname stays machine-safe (boompi-XXXX: ssh targets,
 //! DHCP, avahi's mDNS collision handling all want plain ASCII). The
@@ -11,27 +11,46 @@
 //! though - see [`smb_safe_name`] for the macOS SMB bug that forbids
 //! non-BMP characters here.)
 //!
+//! It also owns the box's own discovery advert: `_boompi._tcp` on the
+//! protocol port, so control clients (the iOS app, web remote, other
+//! boompis) can find boxes on the LAN without knowing an IP. The
+//! instance name is the speaker name (full UTF-8 - no SMB filtering),
+//! and TXT records carry the connection contract:
+//!
+//! | key       | value                                             |
+//! |-----------|---------------------------------------------------|
+//! | `txtvers` | TXT layout version, currently `1`                 |
+//! | `id`      | stable box id (`boompi-XXXX`, matches hostname)   |
+//! | `proto`   | WebSocket JSON protocol version ([`boompi_proto::PROTO_VERSION`]) |
+//! | `ver`     | OS image version (`/etc/boompi-version`)         |
+//! | `path`    | WebSocket path on the advertised port (`/ws`)     |
+//!
 //! avahi-daemon watches /etc/avahi/services with inotify and reloads
 //! changed files on its own - no restarts, renames go live in
-//! seconds. The image ships a %h-wildcard baseline so discovery works
+//! seconds. The image ships %h-wildcard baselines so discovery works
 //! before boompid's first write.
 
 #![cfg(target_os = "linux")]
 
 use crate::state::SharedApp;
 
-const SERVICE_PATH: &str = "/etc/avahi/services/smb.service";
+const SMB_SERVICE_PATH: &str = "/etc/avahi/services/smb.service";
+const BOOMPI_SERVICE_PATH: &str = "/etc/avahi/services/boompi.service";
 
-pub fn spawn(app: SharedApp) {
+pub fn spawn(app: SharedApp, protocol_port: u16) {
     tokio::spawn(async move {
         let mut cfg = app.subscribe_cfg();
         let mut last: Option<String> = None;
         loop {
             let name = app.speaker_name().await;
             if last.as_deref() != Some(name.as_str()) {
-                match write_service(&name) {
+                match write_smb_service(&name) {
                     Ok(()) => tracing::info!(%name, "SMB advert instance name updated"),
                     Err(err) => tracing::warn!(%err, "failed to write SMB avahi service"),
+                }
+                match write_boompi_service(&name, protocol_port) {
+                    Ok(()) => tracing::info!(%name, "boompi advert instance name updated"),
+                    Err(err) => tracing::warn!(%err, "failed to write boompi avahi service"),
                 }
                 last = Some(name);
             }
@@ -120,13 +139,9 @@ fn bmp_substitute(c: char) -> Option<char> {
     })
 }
 
-fn write_service(name: &str) -> std::io::Result<()> {
+fn write_smb_service(name: &str) -> std::io::Result<()> {
     let safe = smb_safe_name(name);
-    let (instance, wildcards) = if safe.is_empty() {
-        ("%h".to_string(), "yes")
-    } else {
-        (xml_escape(&safe), "no")
-    };
+    let (instance, wildcards) = instance_name(&safe);
     let xml = format!(
         r#"<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
 <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
@@ -142,10 +157,64 @@ fn write_service(name: &str) -> std::io::Result<()> {
 </service-group>
 "#
     );
-    // Atomic replace: avahi reloads on inotify, never sees a torn file.
-    let tmp = format!("{SERVICE_PATH}.tmp");
+    write_atomic(SMB_SERVICE_PATH, &xml)
+}
+
+fn write_boompi_service(name: &str, port: u16) -> std::io::Result<()> {
+    let xml = boompi_service_xml(
+        name,
+        port,
+        crate::state::device_id(),
+        crate::state::os_version(),
+    );
+    write_atomic(BOOMPI_SERVICE_PATH, &xml)
+}
+
+/// The `_boompi._tcp` control-protocol advert. Unlike SMB, DNS-SD TXT
+/// consumers handle full UTF-8 instance names fine (same as AirPlay),
+/// so the speaker name goes out unfiltered.
+fn boompi_service_xml(name: &str, port: u16, id: &str, ver: &str) -> String {
+    let (instance, wildcards) = instance_name(name.trim());
+    let proto = boompi_proto::PROTO_VERSION;
+    let id = xml_escape(id);
+    let ver = xml_escape(ver);
+    format!(
+        r#"<?xml version="1.0" standalone='no'?><!--*-nxml-*-->
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!-- Boompi control-protocol discovery: WebSocket + JSON API on the
+     advertised port (see netname.rs for the TXT contract). Managed by
+     boompid: manual edits are overwritten. -->
+<service-group>
+  <name replace-wildcards="{wildcards}">{instance}</name>
+  <service>
+    <type>_boompi._tcp</type>
+    <port>{port}</port>
+    <txt-record>txtvers=1</txt-record>
+    <txt-record>id={id}</txt-record>
+    <txt-record>proto={proto}</txt-record>
+    <txt-record>ver={ver}</txt-record>
+    <txt-record>path=/ws</txt-record>
+  </service>
+</service-group>
+"#
+    )
+}
+
+/// Instance-name XML for an avahi service file: the (escaped) name
+/// itself, or the `%h` hostname wildcard when there is none.
+fn instance_name(name: &str) -> (String, &'static str) {
+    if name.is_empty() {
+        ("%h".to_string(), "yes")
+    } else {
+        (xml_escape(name), "no")
+    }
+}
+
+/// Atomic replace: avahi reloads on inotify, never sees a torn file.
+fn write_atomic(path: &str, xml: &str) -> std::io::Result<()> {
+    let tmp = format!("{path}.tmp");
     std::fs::write(&tmp, xml)?;
-    std::fs::rename(&tmp, SERVICE_PATH)
+    std::fs::rename(&tmp, path)
 }
 
 fn xml_escape(s: &str) -> String {
@@ -165,7 +234,35 @@ fn xml_escape(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::smb_safe_name;
+    use super::{boompi_service_xml, smb_safe_name};
+
+    #[test]
+    fn boompi_advert_carries_name_port_and_txt() {
+        let xml = boompi_service_xml("George's 🔊", 3001, "boompi-57fe", "v2.0.0");
+        // Full UTF-8 instance name (emoji intact), XML-escaped.
+        assert!(xml.contains(r#"<name replace-wildcards="no">George&apos;s 🔊</name>"#));
+        assert!(xml.contains("<type>_boompi._tcp</type>"));
+        assert!(xml.contains("<port>3001</port>"));
+        assert!(xml.contains("<txt-record>id=boompi-57fe</txt-record>"));
+        assert!(xml.contains(&format!(
+            "<txt-record>proto={}</txt-record>",
+            boompi_proto::PROTO_VERSION
+        )));
+        assert!(xml.contains("<txt-record>ver=v2.0.0</txt-record>"));
+        assert!(xml.contains("<txt-record>path=/ws</txt-record>"));
+    }
+
+    #[test]
+    fn boompi_advert_falls_back_to_hostname_wildcard() {
+        let xml = boompi_service_xml("  ", 3001, "boompi-57fe", "dev");
+        assert!(xml.contains(r#"<name replace-wildcards="yes">%h</name>"#));
+    }
+
+    #[test]
+    fn boompi_advert_escapes_xml() {
+        let xml = boompi_service_xml("A & B <Box>", 3001, "boompi-57fe", "dev");
+        assert!(xml.contains(r#"<name replace-wildcards="no">A &amp; B &lt;Box&gt;</name>"#));
+    }
 
     #[test]
     fn substitutes_astral_keeps_bmp() {
