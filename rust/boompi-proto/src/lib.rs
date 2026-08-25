@@ -504,6 +504,12 @@ pub enum PairingAction {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Hello {
     pub proto_version: u32,
+    /// Stable box id ("boompi-XXXX": matches the hostname, the mDNS
+    /// TXT `id`, and the BLE advert's manufacturer data), so clients
+    /// that see a box over several transports know it's one speaker.
+    /// Absent on boxes that predate the field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// Speaker name (Bluetooth alias / pretty hostname).
     pub name: String,
     /// Hardware model, read from the device tree at runtime
@@ -934,6 +940,46 @@ pub mod ble {
         trimmed[..end].trim_end().to_string()
     }
 
+    /// Manufacturer-data company id on the LE advert. 0xFFFF is the
+    /// SIG's "reserved for internal use" value: boompi has no assigned
+    /// company id, and the payload is only meaningful when the same
+    /// advert carries our 128-bit service UUID, so collisions with
+    /// other 0xFFFF users are filtered by the scan itself.
+    pub const MANUFACTURER_ID: u16 = 0xFFFF;
+
+    /// Max advertised box-id suffix bytes. Byte budget (legacy
+    /// ADV_IND, 31 bytes): flags 3 + 128-bit service UUID list 18 +
+    /// manufacturer data (4 + payload). 4 covers the serial-derived
+    /// suffix ("57fe") and the dev fallback ("dev") while staying at
+    /// 29 of 31 - BlueZ rejects oversized registrations outright.
+    pub const ADVERT_ID_MAX_BYTES: usize = 4;
+
+    /// The manufacturer-data payload advertising a box id: the ASCII
+    /// suffix after "boompi-" ("boompi-57fe" → b"57fe"). `None` when
+    /// the id has no advertisable form (foreign hostname fallback,
+    /// oversized suffix) - the advert then simply carries no id and
+    /// clients fall back to treating the BLE and mDNS sightings as
+    /// separate boxes.
+    pub fn advert_id_payload(id: &str) -> Option<&[u8]> {
+        let suffix = id.strip_prefix("boompi-")?;
+        (!suffix.is_empty()
+            && suffix.len() <= ADVERT_ID_MAX_BYTES
+            && suffix.bytes().all(|b| b.is_ascii_graphic()))
+        .then(|| suffix.as_bytes())
+    }
+
+    /// Rebuild the box id from an advert payload (client side; the
+    /// Swift/TS scanners mirror this).
+    pub fn box_id_from_advert(payload: &[u8]) -> Option<String> {
+        if payload.is_empty()
+            || payload.len() > ADVERT_ID_MAX_BYTES
+            || !payload.iter().all(|b| b.is_ascii_graphic())
+        {
+            return None;
+        }
+        Some(format!("boompi-{}", std::str::from_utf8(payload).ok()?))
+    }
+
     /// Chunk header flag: first chunk of a message (resets reassembly).
     pub const CHUNK_FIRST: u8 = 0x01;
     /// Chunk header flag: last chunk of a message (message complete).
@@ -1042,6 +1088,26 @@ mod tests {
             format!("{}{}", ble::ADVERT_PREFIX, ble::clamp_speaker_name("a very long speaker name indeed")).len() <= ble::ADVERT_NAME_MAX,
             true
         );
+    }
+
+    #[test]
+    fn advert_id_round_trip() {
+        use super::ble;
+        assert_eq!(ble::advert_id_payload("boompi-57fe"), Some(b"57fe".as_slice()));
+        assert_eq!(ble::advert_id_payload("boompi-dev"), Some(b"dev".as_slice()));
+        // No advertisable form: foreign hostname, oversized, empty.
+        assert_eq!(ble::advert_id_payload("myhost"), None);
+        assert_eq!(ble::advert_id_payload("boompi-toolong"), None);
+        assert_eq!(ble::advert_id_payload("boompi-"), None);
+        // Round trip.
+        let payload = ble::advert_id_payload("boompi-57fe").unwrap();
+        assert_eq!(ble::box_id_from_advert(payload).as_deref(), Some("boompi-57fe"));
+        assert_eq!(ble::box_id_from_advert(b""), None);
+        assert_eq!(ble::box_id_from_advert(b"57fe0"), None);
+        assert_eq!(ble::box_id_from_advert(&[0x57, 0x00]), None); // non-graphic
+        // Worst case stays within the legacy ADV_IND budget:
+        // flags 3 + 128-bit UUID list 18 + mfr data 4+payload ≤ 31.
+        assert!(3 + 18 + 4 + ble::ADVERT_ID_MAX_BYTES <= 31);
     }
 
     #[test]

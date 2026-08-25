@@ -152,6 +152,9 @@ export interface DiagState {
 
 export interface Hello {
   proto_version: number;
+  /** Stable box id ("boompi-XXXX": matches the hostname, mDNS TXT
+   *  `id`, and BLE advert manufacturer data). Absent on old boxes. */
+  id?: string;
   name: string;
   model?: string;
   version: string;

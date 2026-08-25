@@ -18,6 +18,29 @@ public enum BLE {
     public static let chunkFirst: UInt8 = 0x01
     public static let chunkLast: UInt8 = 0x02
 
+    /// Manufacturer-data company id on the advert (0xFFFF = SIG
+    /// "internal use"; the service UUID in the same advert
+    /// disambiguates other 0xFFFF users).
+    public static let manufacturerID: UInt16 = 0xFFFF
+    /// Max advertised box-id suffix bytes (see the byte-budget math in
+    /// boompi-proto's `ble::ADVERT_ID_MAX_BYTES`).
+    public static let advertIDMaxBytes = 4
+
+    /// The box id from a CBAdvertisementDataManufacturerDataKey blob:
+    /// company id (little-endian) + ASCII suffix -> "boompi-<suffix>".
+    /// nil for foreign manufacturer data or malformed payloads -
+    /// treat the sighting as a box with no known id.
+    public static func boxID(fromManufacturerData data: Data) -> String? {
+        guard data.count >= 3, data.count <= 2 + advertIDMaxBytes else { return nil }
+        let bytes = [UInt8](data)
+        let company = UInt16(bytes[0]) | (UInt16(bytes[1]) << 8)
+        guard company == manufacturerID else { return nil }
+        let payload = bytes.dropFirst(2)
+        // Mirror of is_ascii_graphic: printable, no spaces/controls.
+        guard payload.allSatisfy({ (0x21...0x7e).contains($0) }) else { return nil }
+        return "boompi-" + String(decoding: payload, as: UTF8.self)
+    }
+
     /// Reassembly cap: protocol messages are small; anything bigger is
     /// a framing error, not a message.
     public static let maxMessage = 64 * 1024

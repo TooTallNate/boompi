@@ -36,6 +36,9 @@ public enum Caps {
 
 public struct Hello: Decodable, Equatable {
     public var protoVersion: UInt32
+    /// Stable box id ("boompi-XXXX": matches the mDNS TXT `id` and
+    /// the BLE advert's manufacturer data). Absent on old boxes.
+    public var id: String?
     public var name: String
     public var model: String?
     public var version: String
@@ -44,7 +47,7 @@ public struct Hello: Decodable, Equatable {
 
     enum CodingKeys: String, CodingKey {
         case protoVersion = "proto_version"
-        case name, model, version
+        case id, name, model, version
         case uptimeSecs = "uptime_secs"
         case capabilities
     }

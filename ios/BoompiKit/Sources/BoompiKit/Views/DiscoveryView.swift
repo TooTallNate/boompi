@@ -2,10 +2,12 @@ import SwiftUI
 
 /// Nearby boompis: BLE scan (filtered on the control service) plus
 /// Bonjour browse (`_boompi._tcp`), so only real boxes appear. A box
-/// on both transports shows one row per pipe - the trailing icon says
-/// which. Connection state lives on each speaker's own row - no
-/// banner. The most recently used box auto-connects the moment it's
-/// seen; the list is really for first-run and multi-box homes.
+/// seen on both transports is one row (the advertised box id joins
+/// them; Wi-Fi wins), with the trailing icon showing the pipe - boxes
+/// too old to advertise an id stay one row per pipe. Connection state
+/// lives on each speaker's own row - no banner. The most recently
+/// used box auto-connects the moment it's seen; the list is really
+/// for first-run and multi-box homes.
 struct DiscoveryView: View {
     @ObservedObject var client: BoompiClient
 

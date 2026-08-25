@@ -315,9 +315,30 @@ impl StateChar {
 }
 
 /// LE advertisement carrying the service UUID + speaker name so scanning
-/// apps can filter and label.
+/// apps can filter and label, plus the box id's suffix as manufacturer
+/// data so multi-transport clients (the iOS app) can unify a box's BLE
+/// sighting with its `_boompi._tcp` mDNS advert before connecting.
 struct Advertisement {
     local_name: String,
+}
+
+/// Manufacturer data advertising the box id (see
+/// [`ble::advert_id_payload`] for the format and byte-budget math).
+/// Empty when the id has no advertisable form - BlueZ skips empty
+/// dicts, so the advert simply carries no id.
+fn advert_manufacturer_data() -> HashMap<u16, zbus::zvariant::OwnedValue> {
+    let mut map = HashMap::new();
+    if let Some(payload) = ble::advert_id_payload(crate::state::device_id()) {
+        match zbus::zvariant::OwnedValue::try_from(zbus::zvariant::Value::from(
+            payload.to_vec(),
+        )) {
+            Ok(value) => {
+                map.insert(ble::MANUFACTURER_ID, value);
+            }
+            Err(err) => tracing::warn!(%err, "advert manufacturer data conversion failed"),
+        }
+    }
+    map
 }
 
 #[zbus::interface(name = "org.bluez.LEAdvertisement1")]
@@ -335,6 +356,11 @@ impl Advertisement {
     #[zbus(property)]
     fn local_name(&self) -> String {
         self.local_name.clone()
+    }
+
+    #[zbus(property)]
+    fn manufacturer_data(&self) -> HashMap<u16, zbus::zvariant::OwnedValue> {
+        advert_manufacturer_data()
     }
 
     #[zbus(property)]

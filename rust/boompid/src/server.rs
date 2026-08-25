@@ -156,6 +156,7 @@ async fn api_state(State(app): State<SharedApp>) -> impl IntoResponse {
 pub(crate) async fn hello(app: &SharedApp) -> Hello {
     Hello {
         proto_version: PROTO_VERSION,
+        id: Some(crate::state::device_id().to_string()),
         name: app.speaker_name().await,
         model: crate::state::board_model(),
         // The OS image stamp, not the crate version: changesets bump

@@ -159,6 +159,50 @@ do {
     expect(state.settings.gameVolume == 0.8, "settings game_volume decodes")
 } catch { expect(false, "full settings decode: \(error)") }
 
+// MARK: Advert box id (manufacturer data)
+
+do {
+    // Company id 0xFFFF little-endian + ASCII suffix.
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0xFF, 0xFF, 0x35, 0x37, 0x66, 0x65]))
+            == "boompi-57fe",
+        "advert id: 57fe decodes"
+    )
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0xFF, 0xFF] + Array("dev".utf8)))
+            == "boompi-dev",
+        "advert id: dev fallback decodes"
+    )
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0x4C, 0x00, 0x35, 0x37])) == nil,
+        "advert id: foreign company id rejected"
+    )
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0xFF, 0xFF])) == nil,
+        "advert id: empty payload rejected"
+    )
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0xFF, 0xFF] + Array("toolong".utf8))) == nil,
+        "advert id: oversized payload rejected"
+    )
+    expect(
+        BLE.boxID(fromManufacturerData: Data([0xFF, 0xFF, 0x35, 0x00])) == nil,
+        "advert id: non-graphic bytes rejected"
+    )
+}
+
+do {
+    let msg = try decode(
+        #"{"type":"hello","proto_version":2,"id":"boompi-57fe","name":"X","version":"2.3.0","uptime_secs":1}"#
+    )
+    if case .hello(let h) = msg {
+        expect(h.id == "boompi-57fe", "hello id decodes")
+    } else {
+        expect(false, "hello with id decodes as .hello")
+    }
+    // Old boxes: absent id stays nil (see the earlier hello checks).
+} catch { expect(false, "hello with id decodes: \(error)") }
+
 // MARK: BoxID persistence
 
 do {

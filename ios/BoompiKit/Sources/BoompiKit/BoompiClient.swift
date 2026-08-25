@@ -17,9 +17,10 @@ import Foundation
 
 /// A box's identity, scoped by how it was discovered: CoreBluetooth
 /// peripherals are phone-local UUIDs, Bonjour boxes carry the stable
-/// box id (TXT `id`, "boompi-XXXX"). The same physical box seen both
-/// ways is two entries - BLE adverts don't carry the box id, so the
-/// link can't be unified until the protocol grows one.
+/// box id (TXT `id`, "boompi-XXXX"). The BLE advert's manufacturer
+/// data carries the same box id (docs/BLE.md), letting the client
+/// recognize one physical box across both and pick the better pipe;
+/// boxes whose software predates that stay two entries.
 public enum BoxID: Hashable {
     case ble(UUID)
     case network(String)
@@ -110,6 +111,12 @@ public final class BoompiClient: NSObject, ObservableObject {
 
     /// BLE scan results, merged with Bonjour results into `discovered`.
     private var bleFound: [DiscoveredBox] = []
+    /// Peripheral -> stable box id, learned from the advert's
+    /// manufacturer data (and from Hello.id once connected). This is
+    /// the join key between a box's BLE and mDNS sightings: matching
+    /// rows collapse to one (Wi-Fi shown) and auto-connect picks the
+    /// best visible transport.
+    private var bleBoxIds: [UUID: String] = [:]
 
     private static let lastBoxKey = "boompi.lastBox"
     /// CB connect attempts pend forever; give up and rescan after this.
@@ -284,26 +291,74 @@ public final class BoompiClient: NSObject, ObservableObject {
 
     private func networkBoxesChanged(_ boxes: [NetworkBox]) {
         rebuildDiscovered()
-        guard !userDisconnected, peripheral == nil, ws == nil else { return }
-        guard let last = lastBoxID, case .network(let key) = last,
+        guard !userDisconnected, peripheral == nil, ws == nil,
+              let last = lastBoxID else { return }
+        // The remembered box may have been used over BLE: the box-id
+        // join upgrades it to Wi-Fi the moment the advert appears.
+        let target = preferredTransport(for: last)
+        guard case .network(let key) = target,
               boxes.contains(where: { $0.key == key }) else { return }
         switch phase {
         // The common case: one boompi, seen before - just connect.
         // (.unavailable = BT off; Wi-Fi still works.)
         case .scanning, .idle, .unavailable:
-            connect(to: last)
-        case .lost(let lostID) where lostID == last && netRetry == nil:
-            connect(to: last)
+            connect(to: target)
+        case .lost(let lostID) where sameBox(lostID, target):
+            connect(to: target)
         default:
             break
         }
     }
 
+    /// One row per physical box: a BLE sighting whose box id is also
+    /// visible on the network collapses into the Wi-Fi row (the better
+    /// pipe; tapping it connects over WebSocket).
     private func rebuildDiscovered() {
         let network = netDiscovery.boxes.map {
             DiscoveredBox(id: .network($0.key), name: $0.name, rssi: nil)
         }
-        discovered = network + bleFound
+        let netKeys = Set(netDiscovery.boxes.map(\.key))
+        let ble = bleFound.filter {
+            guard case .ble(let uuid) = $0.id, let boxID = bleBoxIds[uuid] else { return true }
+            return !netKeys.contains(boxID)
+        }
+        discovered = network + ble
+    }
+
+    /// Same physical box, possibly seen via different transports
+    /// (joined on the advertised box id).
+    private func sameBox(_ a: BoxID?, _ b: BoxID) -> Bool {
+        guard let a else { return false }
+        if a == b { return true }
+        switch (a, b) {
+        case (.ble(let uuid), .network(let key)), (.network(let key), .ble(let uuid)):
+            return bleBoxIds[uuid] == key
+        default:
+            return false
+        }
+    }
+
+    /// The best visible pipe to a box: Wi-Fi when its advert is on the
+    /// network (faster, longer range), the BLE twin when only that is
+    /// in sight, else the id unchanged.
+    private func preferredTransport(for id: BoxID) -> BoxID {
+        switch id {
+        case .ble(let uuid):
+            if let key = bleBoxIds[uuid],
+               netDiscovery.boxes.contains(where: { $0.key == key }) {
+                return .network(key)
+            }
+            return id
+        case .network(let key):
+            if netDiscovery.boxes.contains(where: { $0.key == key }) {
+                return id
+            }
+            if let uuid = bleBoxIds.first(where: { $0.value == key })?.key,
+               bleFound.contains(where: { $0.id == .ble(uuid) }) {
+                return .ble(uuid)
+            }
+            return id
+        }
     }
 
     /// Per-connection transport state. Chunk framing carries no
@@ -358,7 +413,14 @@ public final class BoompiClient: NSObject, ObservableObject {
     private func handle(_ data: Data) {
         guard let msg = try? ServerMessage.decode(data) else { return }
         switch msg {
-        case .hello(let h): hello = h
+        case .hello(let h):
+            hello = h
+            // Hello.id also joins a BLE peripheral to its mDNS twin -
+            // covers adverts that couldn't carry the id (see BLE.md).
+            if ws == nil, let uuid = peripheral?.identifier, let boxId = h.id {
+                bleBoxIds[uuid] = boxId
+                rebuildDiscovered()
+            }
         case .state(let s):
             state = s
             connectTimeout?.cancel()
@@ -430,8 +492,15 @@ extension BoompiClient: CBCentralManagerDelegate {
                 break
             }
         }
+        // Manufacturer data carries the box id (docs/BLE.md): the join
+        // key to this box's mDNS advert. Absent on old boxes.
+        let boxId = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data)
+            .flatMap(BLE.boxID(fromManufacturerData:))
         MainActor.assumeIsolated {
             let id = BoxID.ble(peripheral.identifier)
+            if let boxId {
+                self.bleBoxIds[peripheral.identifier] = boxId
+            }
             if let i = self.bleFound.firstIndex(where: { $0.id == id }) {
                 self.bleFound[i].name = name
                 self.bleFound[i].rssi = RSSI.intValue
@@ -442,19 +511,28 @@ extension BoompiClient: CBCentralManagerDelegate {
             guard !self.userDisconnected, self.peripheral == nil, self.ws == nil
             else { return }
             switch self.phase {
-            // The common case: one boompi, seen before - just connect.
+            // The common case: one boompi, seen before - just connect
+            // (over Wi-Fi instead, when this box is also on the LAN).
             case .scanning, .idle:
-                if id == self.lastBoxID { self.connect(to: id) }
+                if self.sameBox(self.lastBoxID, id) {
+                    self.connect(to: self.preferredTransport(for: id))
+                }
             // A lost box is advertising again: reconnect (or after
             // the post-cancel cooldown expires).
-            case .lost(let lostID) where lostID == id:
+            case .lost(let lostID) where self.sameBox(lostID, id):
+                let target = self.preferredTransport(for: id)
+                if target.isNetwork {
+                    self.connect(to: target) // no CB cancel cooldown
+                    return
+                }
                 let wait = self.retryNotBefore[id, default: .distantPast].timeIntervalSinceNow
                 if wait <= 0 {
                     self.connect(to: id)
                 } else {
                     Task { [weak self] in
                         try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
-                        guard let self, case .lost(let l) = self.phase, l == id else { return }
+                        guard let self, case .lost(let l) = self.phase,
+                              self.sameBox(l, id) else { return }
                         self.connect(to: id)
                     }
                 }

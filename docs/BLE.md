@@ -39,7 +39,16 @@ Swift/Kotlin/TS).
 
 The LE advertisement carries the service UUID and the speaker name as
 `LocalName`, so apps can scan-filter on the UUID and label results
-without connecting.
+without connecting. It also carries the box id as manufacturer data
+(company id `0xFFFF` = SIG "internal use"; we have no assigned id and
+the service UUID in the same advert disambiguates): the payload is the
+ASCII suffix of the box id after `boompi-` (`b"57fe"` →
+`boompi-57fe`), matching the mDNS `_boompi._tcp` TXT `id` and
+`Hello.id`, so multi-transport clients can unify a box's BLE and Wi-Fi
+sightings before connecting. Ids with no advertisable form (foreign
+hostnames, suffixes over 4 bytes) are simply omitted - treat such
+sightings as separate boxes. Format + byte-budget math in
+`boompi_proto::ble::advert_id_payload`.
 
 ## Chunk framing
 
