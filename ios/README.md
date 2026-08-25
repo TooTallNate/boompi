@@ -1,11 +1,14 @@
 # Boompi iOS app
 
-Controls a Boompi speaker over BLE GATT (the same JSON protocol as the
-WebSocket and the hosted remote at boompi.n8.io; contract in
-`docs/BLE.md`). Discovery scans for the boompi control service, the
-most recently used speaker auto-connects when seen, and every UI
-section is capability-gated on `Hello.capabilities` so the app shows
-only what the connected box's software actually supports.
+Controls a Boompi speaker over BLE GATT (contract in `docs/BLE.md`) or
+over Wi-Fi via a WebSocket to boompid's `/ws` - both pipes speak the
+same JSON protocol as the hosted remote at boompi.n8.io. Discovery is
+a BLE scan for the boompi control service plus a Bonjour browse for
+`_boompi._tcp` (advertised by the box via avahi, see
+`rust/boompid/src/netname.rs`); the most recently used speaker
+auto-connects when seen, and every UI section is capability-gated on
+`Hello.capabilities` so the app shows only what the connected box's
+software actually supports.
 
 ## Layout
 
@@ -13,8 +16,11 @@ only what the connected box's software actually supports.
   - `Chunking.swift` - BLE chunk framing (mirror of
     `boompi-proto::ble`, like the web's `ble.ts`)
   - `Proto.swift` - protocol models + capabilities
-  - `BoompiClient.swift` - CoreBluetooth central: discovery,
-    auto-(re)connect, chunked transport
+  - `BoompiClient.swift` - the client state machine: discovery,
+    auto-(re)connect, transport selection, message handling
+  - `NetworkDiscovery.swift` - Bonjour browse (`_boompi._tcp`)
+  - `WebSocketTransport.swift` - Wi-Fi transport (endpoint
+    resolution + URLSessionWebSocketTask to `/ws`)
   - `Views/` - SwiftUI (discovery + remote)
 - `Boompi/` - the thin `@main` app shell
 - `project.yml` - XcodeGen spec for the app target
@@ -47,4 +53,6 @@ means regenerating the project never loses signing:
       DEVELOPMENT_TEAM: ABCDE12345
 
 Bluetooth needs real hardware - the iOS Simulator has no CoreBluetooth
-radio. Build to a device.
+radio. Build to a device. The Wi-Fi path works in the Simulator,
+though: a box on the Mac's network (or `boompid --sim` behind a local
+avahi/dns-sd advert) is discoverable and controllable there.

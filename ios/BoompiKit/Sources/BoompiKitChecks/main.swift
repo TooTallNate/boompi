@@ -6,6 +6,7 @@
 //     swift run BoompiKitChecks
 
 import Foundation
+import Network
 import BoompiKit
 
 var failures = 0
@@ -157,6 +158,49 @@ do {
     expect(state.settings.uiScale == 1.5, "settings ui_scale decodes")
     expect(state.settings.gameVolume == 0.8, "settings game_volume decodes")
 } catch { expect(false, "full settings decode: \(error)") }
+
+// MARK: BoxID persistence
+
+do {
+    let uuid = UUID()
+    let ble = BoxID.ble(uuid)
+    expect(BoxID(persisted: ble.persisted) == ble, "BoxID.ble round trip")
+    let net = BoxID.network("boompi-57fe")
+    expect(BoxID(persisted: net.persisted) == net, "BoxID.network round trip")
+    // BLE-only builds stored the bare peripheral UUID.
+    expect(BoxID(persisted: uuid.uuidString) == ble, "legacy bare UUID loads as .ble")
+    expect(BoxID(persisted: "net:") == nil, "empty network key rejected")
+    expect(BoxID(persisted: "garbage") == nil, "garbage rejected")
+}
+
+// MARK: WebSocket URL formatting
+
+do {
+    expect(
+        WSURL.string(host: .name("boompi-57fe.local", nil), port: 3001)
+            == "ws://boompi-57fe.local:3001/ws",
+        "ws URL: hostname"
+    )
+    expect(
+        WSURL.string(host: .ipv4(IPv4Address("192.168.1.20")!), port: 3001)
+            == "ws://192.168.1.20:3001/ws",
+        "ws URL: IPv4 literal"
+    )
+    expect(
+        WSURL.string(host: .ipv6(IPv6Address("fd00::1")!), port: 8080)
+            == "ws://[fd00::1]:8080/ws",
+        "ws URL: IPv6 literal gets brackets"
+    )
+    let scoped = WSURL.string(host: .ipv6(IPv6Address("fe80::1%lo0")!), port: 3001)
+    expect(
+        scoped.hasPrefix("ws://[fe80::1%25") && scoped.hasSuffix("]:3001/ws"),
+        "ws URL: link-local scope is %25-escaped"
+    )
+    expect(
+        URL(string: scoped) != nil,
+        "ws URL: scoped IPv6 parses as a URL"
+    )
+}
 
 if failures > 0 {
     print("\n\(failures) check(s) FAILED")

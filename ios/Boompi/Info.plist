@@ -20,8 +20,19 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Boompi uses Bluetooth to find and control your speaker - no Wi-Fi or account needed.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_boompi._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Boompi finds and controls speakers on your Wi-Fi network.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>bluetooth-central</string>

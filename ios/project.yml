@@ -33,6 +33,17 @@ targets:
         NSBluetoothAlwaysUsageDescription: >-
           Boompi uses Bluetooth to find and control your speaker -
           no Wi-Fi or account needed.
+        # Bonjour discovery of boxes on the LAN (_boompi._tcp, see
+        # rust/boompid/src/netname.rs); both keys are required for
+        # NWBrowser, and the description shows in the local-network
+        # permission prompt.
+        NSLocalNetworkUsageDescription: >-
+          Boompi finds and controls speakers on your Wi-Fi network.
+        NSBonjourServices: [_boompi._tcp]
+        # The control WebSocket is cleartext ws:// on the LAN; ATS
+        # needs the local-networking carve-out to allow it.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
         # Keep the GATT link alive while backgrounded/locked - without
         # this iOS tears the connection down on suspend, which shows
         # up as constant 'connection lost' churn.

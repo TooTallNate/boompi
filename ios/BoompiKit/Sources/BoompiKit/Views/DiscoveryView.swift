@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Nearby boompis (scan filtered on the control service, so only real
-/// boxes appear). Connection state lives on each speaker's own row -
-/// no banner. The most recently used box auto-connects the moment
-/// it's seen; the list is really for first-run and multi-box homes.
+/// Nearby boompis: BLE scan (filtered on the control service) plus
+/// Bonjour browse (`_boompi._tcp`), so only real boxes appear. A box
+/// on both transports shows one row per pipe - the trailing icon says
+/// which. Connection state lives on each speaker's own row - no
+/// banner. The most recently used box auto-connects the moment it's
+/// seen; the list is really for first-run and multi-box homes.
 struct DiscoveryView: View {
     @ObservedObject var client: BoompiClient
 
@@ -30,7 +32,7 @@ struct DiscoveryView: View {
             } header: {
                 Text("Speakers")
             } footer: {
-                Text("Any powered-on Boompi in Bluetooth range shows up here - no Wi-Fi or setup needed.")
+                Text("Any powered-on Boompi in Bluetooth range shows up here - no Wi-Fi or setup needed. Speakers on your Wi-Fi network appear too.")
             }
         }
         .navigationTitle("Boompi")
@@ -80,10 +82,14 @@ private struct SpeakerRow: View {
                     }
                 }
                 Spacer()
-                if rowState == .none {
-                    SignalIcon(rssi: box.rssi)
-                } else {
+                if rowState != .none {
                     ProgressView()
+                } else if let rssi = box.rssi {
+                    SignalIcon(rssi: rssi)
+                } else {
+                    // Network box: mDNS has no signal strength.
+                    Image(systemName: "wifi")
+                        .foregroundStyle(.secondary)
                 }
             }
         }
