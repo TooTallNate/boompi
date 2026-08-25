@@ -1,5 +1,36 @@
 # boompi
 
+## 2.3.1
+
+### Patch Changes
+
+- a1ffd4d: Boxes now identify themselves consistently across every discovery
+  path: the BLE advert carries the stable box id as manufacturer data
+  (alongside the existing name), matching the mDNS TXT `id`, and
+  `Hello` gained an `id` field. The iOS app uses the join to show one
+  row per physical speaker instead of one per transport - a box seen
+  over both Bluetooth and Wi-Fi collapses into the Wi-Fi row - and to
+  auto-connect the remembered speaker over the best visible pipe, so
+  a box last used over Bluetooth upgrades to Wi-Fi the moment its
+  network advert appears. Boxes too old to advertise an id keep the
+  previous one-row-per-pipe behavior.
+- 6a95da2: The iOS app now finds and controls speakers over Wi-Fi as well as
+  Bluetooth. It browses the network for the `_boompi._tcp` advert and
+  connects over the WebSocket protocol - same remote, faster pipe -
+  while BLE remains for boxes with no shared network. Wi-Fi boxes show
+  a wifi glyph in the speaker list where BLE rows show signal bars,
+  the remembered box auto-connects on whichever transport it was last
+  used, and a lost Wi-Fi link retries while the box stays advertised
+  (so boompid restarts and OTA reboots reconnect on their own).
+- 802c8bc: Boxes now advertise a `_boompi._tcp` DNS-SD service on the LAN via
+  avahi, so control clients (the iOS app, web remote, other boompis)
+  can discover boxes by name instead of needing an IP. The instance
+  name is the speaker name (full UTF-8, following renames live), and
+  TXT records carry the connection contract: stable box id, WebSocket
+  protocol version, OS image version, and the /ws path on the
+  advertised port. A %h-wildcard baseline in the image covers first
+  boot before boompid's first write.
+
 ## 2.3.0
 
 ### Minor Changes
