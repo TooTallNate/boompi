@@ -102,16 +102,20 @@ contributes to "the quintessential Raspberry Pi boombox".
   module): play state, volume, source, battery, CPU temperature as
   discovered entities.
 
-- **AirPlay classic-only toggle: bench-verify.** Shipped as an
-  experimental settings toggle (shairport patch 0003: classic record
-  set, no _airplay._tcp service, so senders negotiate classic AirPlay
-  whose DACP remote control works). Needs live verification with an
-  iPhone: does modern iOS still speak classic to a vs=105.1 receiver,
-  does DACP come up (panel buttons light via the existing
-  RemoteControl.Available watch), and does audio behave. Re-evaluate
-  the whole area when Buildroot ships shairport-sync 5.x (upstream
-  restored classic remote control there, and metadata is currently
-  reported broken in 5.1 - issue #2239).
+- **AirPlay 2 remote controls: bench-verify.** The image now pins
+  shairport-sync development commit `94070a1d514229b03a1ca202297a20a8993d6d92`
+  (5.6-dev). [Discussion #2262](https://github.com/mikebrady/shairport-sync/discussions/2262)
+  identified the event-channel commands; [5.4-dev](https://github.com/mikebrady/shairport-sync/blob/development/RELEASENOTES-DEVELOPMENT.md#version-54-dev)
+  integrated them. Stable 5.5.2 does **not** contain this work: the stable
+  branch jumped from 5.2.3 to 5.5 for security-release numbering.
+  Controls use sender-advertised `Client.CommandInformation` as well as
+  classic DACP `RemoteControl.Available`. Classic mode remains available
+  through upstream `service_type`, preserving saved settings. Verify on
+  iPhone and macOS: play/pause/next/previous, capability changes across
+  apps and reconnects, volume in both directions, artwork and progress,
+  44.1/48 kHz audio, and multi-speaker playback. Also verify discovery
+  and DACP with classic mode on, then switch back to AirPlay 2. The pipe
+  output is fixed at 44.1 kHz/S16_LE/stereo to match boompid's reader.
 - **VC4 GPU hang: verify the kernel bump helps.** The reset-storm
   watchdog hard-reboots out of wedges; the kernel pin moved from
   6.6.28 (2024-04) to rpi-6.6.y head (2025-02) picking up ~10 months

@@ -123,7 +123,7 @@ BR2_PACKAGE_AVAHI=y
 BR2_PACKAGE_AVAHI_DAEMON=y
 BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT=y
 
-# AirPlay 2: shairport-sync 4.3.7 (Buildroot ≥ 2026.02), spawned by boompid
+# AirPlay 2: shairport-sync 5.6-dev (94070a1d5142), spawned by boompid
 # (pipe backend → pw-cat; org.gnome.ShairportSync D-Bus control); the dbus
 # policy files ship with the package. AIRPLAY2 selects nqptp (PTP clock
 # daemon - systemd unit lives in our overlay; the package only ships SysV)

@@ -1,6 +1,7 @@
 [Unit]
 Description=Boompi backend daemon
-After=pipewire.service wireplumber.service bluetooth.service obexd.service network.target systemd-tmpfiles-setup.service
+After=pipewire.service wireplumber.service bluetooth.service obexd.service network.target systemd-tmpfiles-setup.service nqptp.service
+Wants=nqptp.service
 RequiresMountsFor=/data
 
 [Service]

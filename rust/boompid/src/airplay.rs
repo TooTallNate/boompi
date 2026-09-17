@@ -4,20 +4,17 @@
 //! restart) so the receiver name always matches the speaker name and there
 //! is no separate service to keep in sync. Integration is three-legged:
 //!
-//! - **Audio**: shairport's `pipe` backend writes raw 44.1 kHz s16 stereo PCM
-//!   into a FIFO; we bridge it into `pw-cat --playback --raw` (same approach
-//!   as the librespot sink). Works identically on shairport 3.3.9 (Buildroot)
-//!   and 4.x (dev Pi), needs no Pulse shim, and PipeWire mixing feeds the
-//!   visualizer for free.
-//! - **Metadata/state**: the native `org.gnome.ShairportSync` D-Bus interface
-//!   (system bus). We code against the 3.3.9 property set; 4.x is a strict
-//!   superset (adds `ClientName`, used opportunistically for the device name).
+//! - **Audio**: explicitly fixed 44.1 kHz S16_LE stereo PCM through a FIFO
+//!   into `pw-cat --playback`. Shairport 5.x otherwise defaults to 48 kHz
+//!   S32_LE in AP2 builds, which is incompatible with this raw bridge.
+//! - **Metadata/state**: native `org.gnome.ShairportSync` on the system bus,
+//!   plus live MPRIS Position for the 5.6-dev plist metadata path. Native
+//!   progress still supplies classic duration and fallback position; existing
+//!   4.x dev installs retain DACP availability and their classic-mode option.
 //! - **Transport**: `RemoteControl.Play/Pause/Next/Previous` - shairport
-//!   relays these to the phone over DACP, which spares us an mDNS resolver
-//!   and a DACP HTTP client.
-//!
-//! AirPlay 2 needs nqptp (not packaged in Buildroot 2025.02), so this is
-//! classic AirPlay for now - see docs/PLAN.md "AirPlay 2 vs classic".
+//!   relays these over DACP or the AP2 event channel in the pinned development
+//!   build (94070a1d). AP2 capabilities come from Client.CommandInformation,
+//!   not RemoteControl.Available, which still only describes DACP.
 
 #![cfg(target_os = "linux")]
 
@@ -45,8 +42,8 @@ const CONF_PATH: &str = "/run/boompi/shairport.conf";
 // streamed into a dead inode (bench, Aug 2026). /run/boompi is a
 // RuntimeDirectory: always present, never age-cleaned.
 const FIFO_PATH: &str = "/run/boompi/airplay.pcm";
-/// AirPlay PCM timestamps run at the RTP frame rate.
-const FRAME_RATE: u64 = 44_100;
+/// Legacy senders without SourceFormat metadata use 44.1 kHz RTP timestamps.
+const FRAME_RATE: u32 = 44_100;
 
 #[zbus::proxy(
     interface = "org.gnome.ShairportSync",
@@ -57,6 +54,8 @@ trait ShairportSync {
     /// True while an AirPlay session is connected.
     #[zbus(property)]
     fn active(&self) -> zbus::Result<bool>;
+    #[zbus(property)]
+    fn source_format(&self) -> zbus::Result<String>;
 }
 
 #[zbus::proxy(
@@ -70,8 +69,7 @@ trait RemoteControl {
     fn next(&self) -> zbus::Result<()>;
     fn previous(&self) -> zbus::Result<()>;
 
-    /// Ask the *sender* to change its volume (DACP `dmcp.device-volume`);
-    /// the phone's slider follows and it echoes back via `AirplayVolume`.
+    /// Synchronize the sender's slider over DACP or the AP2 event channel.
     fn set_airplay_volume(&self, volume: f64) -> zbus::Result<()>;
 
     /// Sender-side volume in dB attenuation: 0 (max) … -30 (min),
@@ -80,21 +78,42 @@ trait RemoteControl {
     /// absolute volume on the Bluetooth path).
     #[zbus(property)]
     fn airplay_volume(&self) -> zbus::Result<f64>;
-    /// Whether the sender runs a DACP server the transport methods can
-    /// reach. Modern iOS does not for AirPlay 2 sessions, in which case
-    /// Play/Pause/Next/Previous silently no-op - surface this so the
-    /// panel can dim its controls instead of lying.
+    /// DACP availability only, even in AP2-capable development builds.
     #[zbus(property)]
     fn available(&self) -> zbus::Result<bool>;
+    /// "Buffered" / "Realtime" for AP2, "Classic" / "AirPlay" for classic.
+    #[zbus(property)]
+    fn stream_type(&self) -> zbus::Result<String>;
     /// "Playing" / "Paused" / "Stopped" / "Not Available".
     #[zbus(property)]
     fn player_state(&self) -> zbus::Result<String>;
-    /// "start/current/end" RTP frame timestamps (44.1 kHz).
+    /// Legacy "start/current/end" RTP timestamps at the source sample rate.
     #[zbus(property)]
     fn progress_string(&self) -> zbus::Result<String>;
     /// MPRIS-style dict: xesam:title/artist/album, mpris:length/artUrl.
     #[zbus(property)]
     fn metadata(&self) -> zbus::Result<HashMap<String, OwnedValue>>;
+}
+
+#[zbus::proxy(
+    interface = "org.gnome.ShairportSync.Client",
+    default_service = "org.gnome.ShairportSync",
+    default_path = "/org/gnome/ShairportSync"
+)]
+trait AirplayClient {
+    #[zbus(property(emits_changed_signal = "invalidates"))]
+    fn command_information(&self) -> zbus::Result<Vec<OwnedValue>>;
+}
+
+#[zbus::proxy(
+    interface = "org.mpris.MediaPlayer2.Player",
+    default_service = "org.mpris.MediaPlayer2.ShairportSync",
+    default_path = "/org/mpris/MediaPlayer2"
+)]
+trait MprisPlayer {
+    /// Computed on Get, in microseconds; upstream never pushes changes.
+    #[zbus(property(emits_changed_signal = "false"))]
+    fn position(&self) -> zbus::Result<i64>;
 }
 
 pub fn spawn(app: SharedApp) {
@@ -167,6 +186,17 @@ async fn run_once(
     wait_for_bus_name(&conn).await?;
     let sps = ShairportSyncProxy::new(&conn).await?;
     let rc = RemoteControlProxy::new(&conn).await?;
+    let client = AirplayClientProxy::new(&conn).await?;
+    // Older 4.x builds have neither Client nor a working live MPRIS Position.
+    let plist_metadata = client.command_information().await.is_ok();
+    let mpris = MprisPlayerProxy::builder(&conn)
+        .cache_properties(zbus::proxy::CacheProperties::No)
+        .build()
+        .await?;
+    let mut position_tick = tokio::time::interval(Duration::from_secs(1));
+    position_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    let mut position_warned = false;
+    let mut live_position = false;
     tracing::info!(%name, "AirPlay receiver active (shairport-sync child)");
 
     let mut active_stream = sps.receive_active_changed().await;
@@ -175,17 +205,19 @@ async fn run_once(
     let mut progress_stream = rc.receive_progress_string_changed().await;
     let mut volume_stream = rc.receive_airplay_volume_changed().await;
     let mut available_stream = rc.receive_available_changed().await;
+    let mut commands_stream = client.receive_command_information_changed().await;
+    let mut stream_type_stream = rc.receive_stream_type_changed().await;
 
     let mut meta = MetaState::default();
 
     // Adopt an already-running session (e.g. boompid restarted mid-stream).
     if sps.active().await.unwrap_or(false) {
-        claim_source(app, &rc).await;
+        claim_source(app, &rc, &client).await;
         if let Ok(md) = rc.metadata().await {
             apply_metadata(app, &md, &mut meta).await;
         }
         if let Ok(state) = rc.player_state().await {
-            apply_player_state(app, &rc, &state).await;
+            apply_player_state(app, &rc, &client, &state).await;
         }
         if let Ok(db) = rc.airplay_volume().await {
             apply_airplay_volume(app, db).await;
@@ -202,13 +234,14 @@ async fn run_once(
             Some(active) = active_stream.next() => {
                 match active.get().await {
                     Ok(true) => {
-                        claim_source(app, &rc).await;
+                        claim_source(app, &rc, &client).await;
                         // Snap the speaker to the sender's slider position.
                         if let Ok(db) = rc.airplay_volume().await {
                             apply_airplay_volume(app, db).await;
                         }
                     }
                     Ok(false) => {
+                        live_position = false;
                         // NB: also fires once at startup when the property
                         // cache primes with the initial `false`.
                         let was_active = app.shared.read().await.source.active
@@ -224,7 +257,7 @@ async fn run_once(
             }
             Some(state) = state_stream.next() => {
                 if let Ok(state) = state.get().await {
-                    apply_player_state(app, &rc, &state).await;
+                    apply_player_state(app, &rc, &client, &state).await;
                 }
             }
             Some(md) = meta_stream.next() => {
@@ -233,8 +266,40 @@ async fn run_once(
                 }
             }
             Some(progress) = progress_stream.next() => {
+                // Even new binaries can receive classic prgr without astm.
+                // Keep its duration, and its position if MPRIS is unavailable.
                 if let Ok(progress) = progress.get().await {
-                    apply_progress(app, &progress).await;
+                    let rate = sps.source_format().await.ok()
+                        .and_then(|format| source_frame_rate(&format))
+                        .unwrap_or(FRAME_RATE);
+                    if let Some((position, duration)) = parse_progress(&progress, rate) {
+                        apply_progress(app, (!live_position).then_some(position), Some(duration)).await;
+                    }
+                }
+            }
+            _ = position_tick.tick(), if plist_metadata => {
+                let active = {
+                    let s = app.shared.read().await;
+                    s.source.active == Some(SourceKind::Airplay) && s.track.is_some()
+                };
+                if active {
+                    match mpris.position().await {
+                        Ok(us) => {
+                            position_warned = false;
+                            let position = position_ms(us);
+                            live_position = position.is_some();
+                            if position.is_some() {
+                                apply_progress(app, position, None).await;
+                            }
+                        }
+                        Err(err) => {
+                            live_position = false;
+                            if !position_warned {
+                                tracing::warn!(%err, "AirPlay MPRIS position unavailable; using native progress when provided");
+                                position_warned = true;
+                            }
+                        }
+                    }
                 }
             }
             Some(v) = volume_stream.next() => {
@@ -247,9 +312,18 @@ async fn run_once(
                 }
             }
             Some(a) = available_stream.next() => {
-                if let Ok(available) = a.get().await {
-                    apply_controllable(app, available).await;
-                }
+                // Resolve invalidations before reading both capability sources.
+                let _ = a.get().await;
+                apply_controllable(app, remote_controllable(&rc, &client).await).await;
+            }
+            Some(commands) = commands_stream.next() => {
+                let _ = commands.get().await;
+                apply_controllable(app, remote_controllable(&rc, &client).await).await;
+            }
+            Some(stream_type) = stream_type_stream.next() => {
+                live_position = false;
+                let _ = stream_type.get().await;
+                apply_controllable(app, remote_controllable(&rc, &client).await).await;
             }
             _ = cfg_watch.changed() => {
                 tracing::info!("speaker renamed or AirPlay model changed; restarting receiver");
@@ -308,14 +382,28 @@ impl<T> Drop for AbortOnDrop<T> {
 
 /// Generated shairport-sync config (libconfig format).
 fn write_config(name: &str, airplay_model: &str, airplay_classic: bool) -> anyhow::Result<()> {
+    // RuntimeDirectory= provides /run/boompi under systemd; create it
+    // for bench runs launched by hand.
+    if let Some(dir) = Path::new(CONF_PATH).parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(
+        CONF_PATH,
+        generated_config(name, airplay_model, airplay_classic),
+    )?;
+    Ok(())
+}
+
+fn generated_config(name: &str, airplay_model: &str, airplay_classic: bool) -> String {
     let escaped = name.replace('\\', "\\\\").replace('"', "\\\"");
-    // Classic-only receiver mode (patch 0003): no AirPlay 2 service is
-    // advertised and the _raop records carry no AP2 feature bits, so
-    // senders speak classic AirPlay - the only protocol whose
-    // receiver-side remote control (DACP) works with modern iOS. The
-    // trade is no multi-room; the panel's transport buttons light up
-    // via the usual RemoteControl.Available watch.
-    let classic_line = if airplay_classic {
+    let service_type = if airplay_classic {
+        "classic"
+    } else {
+        "airplay2"
+    };
+    // Binary-only deploy-dev.sh updates leave patched 4.3.7 installed.
+    // Each shairport version ignores the option it does not recognize.
+    let legacy_classic_line = if airplay_classic {
         "  airplay_classic_only = \"yes\";\n"
     } else {
         ""
@@ -343,11 +431,12 @@ fn write_config(name: &str, airplay_model: &str, airplay_classic: bool) -> anyho
             airplay_model.replace('\\', "\\\\").replace('"', "\\\"")
         )
     };
-    let conf = format!(
+    format!(
         r#"// Generated by boompid - do not edit.
 general = {{
   name = "{escaped}";
-{model_line}{classic_line}  output_backend = "pipe";
+{model_line}{legacy_classic_line}  service_type = "{service_type}";
+  output_backend = "pipe";
   // Don't software-attenuate the PCM: the sender's volume drives the
   // system volume instead (AirplayVolume watcher), matching how AVRCP
   // absolute volume works on the Bluetooth path. Without this the
@@ -356,20 +445,16 @@ general = {{
 }};
 pipe = {{
   name = "{FIFO_PATH}";
+  output_rate = 44100;
+  output_format = "S16_LE";
+  output_channels = 2;
 }};
 metadata = {{
   enabled = "yes";
   include_cover_art = "yes";
 }};
 "#
-    );
-    // RuntimeDirectory= provides /run/boompi under systemd; create it
-    // for bench runs launched by hand.
-    if let Some(dir) = Path::new(CONF_PATH).parent() {
-        std::fs::create_dir_all(dir)?;
-    }
-    std::fs::write(CONF_PATH, conf)?;
-    Ok(())
+    )
 }
 
 fn make_fifo(path: &Path) -> anyhow::Result<()> {
@@ -408,9 +493,8 @@ async fn wait_for_bus_name(conn: &zbus::Connection) -> anyhow::Result<()> {
     anyhow::bail!("org.gnome.ShairportSync never appeared on the system bus (dbus policy?)")
 }
 
-/// FIFO → `pw-cat --playback` (raw PCM pipe). One pw-cat per AirPlay
-/// session: the read side blocks until shairport opens the pipe (session
-/// start) and sees EOF when it closes it (session end).
+/// FIFO -> `pw-cat --playback` (raw PCM pipe). Shairport 5.x keeps its
+/// writer open between sessions; EOF occurs when the receiver exits.
 ///
 /// NB: no `--raw` flag - it doesn't exist before PipeWire 1.4 and makes
 /// 1.2.x print usage and exit. Stdin is always treated as a raw pipe
@@ -471,7 +555,11 @@ async fn log_stderr(stderr: tokio::process::ChildStderr) {
     }
 }
 
-async fn claim_source(app: &SharedApp, rc: &RemoteControlProxy<'_>) {
+async fn claim_source(
+    app: &SharedApp,
+    rc: &RemoteControlProxy<'_>,
+    client: &AirplayClientProxy<'_>,
+) {
     // 4.x exposes the client's friendly name; 3.3.9 only has the IP, which
     // isn't worth showing.
     let device_name = rc
@@ -484,7 +572,7 @@ async fn claim_source(app: &SharedApp, rc: &RemoteControlProxy<'_>) {
     let source = SourceInfo {
         active: Some(SourceKind::Airplay),
         device_name: Some(device_name),
-        controllable: rc.available().await.unwrap_or(false),
+        controllable: remote_controllable(rc, client).await,
     };
     let mut s = app.shared.write().await;
     if s.source != source {
@@ -499,9 +587,40 @@ async fn claim_source(app: &SharedApp, rc: &RemoteControlProxy<'_>) {
     }
 }
 
-/// Follow RemoteControl.Available mid-session (the DACP monitor can
-/// resolve the sender's control server after the session starts, or
-/// lose it).
+async fn remote_controllable(rc: &RemoteControlProxy<'_>, client: &AirplayClientProxy<'_>) -> bool {
+    transport_controllable(
+        rc.available().await.unwrap_or(false),
+        &rc.stream_type().await.unwrap_or_default(),
+        &client.command_information().await.unwrap_or_default(),
+    )
+}
+
+fn transport_controllable(
+    dacp_available: bool,
+    stream_type: &str,
+    commands: &[OwnedValue],
+) -> bool {
+    // mrSupportedCommandsFromSender is an array of embedded binary plists.
+    // Upstream plist_to_gvariant decodes them into av of a{sv}, with uint64
+    // command IDs and booleans. Only commands used by our panel count, and
+    // never let a previous AP2 command list enable a classic session.
+    dacp_available
+        || (matches!(stream_type, "Buffered" | "Realtime")
+            && commands.iter().any(|command| {
+                let Ok(command) = <HashMap<String, OwnedValue>>::try_from(command.clone()) else {
+                    return false;
+                };
+                let id = command
+                    .get("kCommandInfoCommandKey")
+                    .and_then(|v| u64::try_from(v).ok());
+                let enabled = command
+                    .get("kCommandInfoEnabledKey")
+                    .and_then(|v| bool::try_from(v).ok());
+                matches!(id, Some(0 | 1 | 4 | 5)) && enabled == Some(true)
+            }))
+}
+
+/// All capability/stream-type updates and source claims use the same calculation.
 async fn apply_controllable(app: &SharedApp, available: bool) {
     let mut s = app.shared.write().await;
     if s.source.active == Some(SourceKind::Airplay) && s.source.controllable != available {
@@ -523,14 +642,19 @@ async fn clear_if_active(app: &SharedApp) {
     }
 }
 
-async fn apply_player_state(app: &SharedApp, rc: &RemoteControlProxy<'_>, state: &str) {
+async fn apply_player_state(
+    app: &SharedApp,
+    rc: &RemoteControlProxy<'_>,
+    client: &AirplayClientProxy<'_>,
+    state: &str,
+) {
     let status = match state {
         "Playing" => PlaybackStatus::Playing,
         "Paused" => PlaybackStatus::Paused,
         _ => PlaybackStatus::Stopped,
     };
     if status == PlaybackStatus::Playing {
-        claim_source(app, rc).await;
+        claim_source(app, rc, client).await;
     }
     let track = {
         let mut s = app.shared.write().await;
@@ -638,10 +762,7 @@ async fn apply_metadata(app: &SharedApp, md: &HashMap<String, OwnedValue>, ms: &
     }
 }
 
-async fn apply_progress(app: &SharedApp, progress: &str) {
-    let Some((position_ms, duration_ms)) = parse_progress(progress) else {
-        return;
-    };
+async fn apply_progress(app: &SharedApp, position_ms: Option<u32>, duration_ms: Option<u32>) {
     let track = {
         let mut s = app.shared.write().await;
         if s.source.active != Some(SourceKind::Airplay) {
@@ -649,11 +770,13 @@ async fn apply_progress(app: &SharedApp, progress: &str) {
         }
         match s.track.as_mut() {
             Some(track) => {
-                track.position_ms = Some(position_ms);
-                if duration_ms > 0 {
-                    track.duration_ms = Some(duration_ms);
+                if let Some(position) = position_ms {
+                    track.position_ms = Some(position);
+                    track.updated_at = now_ms();
                 }
-                track.updated_at = now_ms();
+                if let Some(duration) = duration_ms.filter(|duration| *duration > 0) {
+                    track.duration_ms = Some(duration);
+                }
                 Some(track.clone())
             }
             None => None,
@@ -750,18 +873,37 @@ fn md_length_ms(md: &HashMap<String, OwnedValue>) -> Option<u32> {
     u32::try_from(us / 1000).ok()
 }
 
-/// Parse `ProgressString` ("start/current/end" RTP frames @44.1 kHz) into
-/// (position_ms, duration_ms).
-fn parse_progress(s: &str) -> Option<(u32, u32)> {
+fn source_frame_rate(format: &str) -> Option<u32> {
+    // SourceFormat is e.g. "ALAC/48000/S24/2", not the fixed pipe format.
+    format
+        .split('/')
+        .nth(1)?
+        .parse()
+        .ok()
+        .filter(|rate| *rate > 0)
+}
+
+fn position_ms(microseconds: i64) -> Option<u32> {
+    u32::try_from(u64::try_from(microseconds).ok()? / 1000).ok()
+}
+
+/// Legacy progress, with the same signed wrapping RTP differences upstream uses.
+fn parse_progress(s: &str, frame_rate: u32) -> Option<(u32, u32)> {
     let mut parts = s.split('/');
-    let start: u64 = parts.next()?.trim().parse().ok()?;
-    let current: u64 = parts.next()?.trim().parse().ok()?;
-    let end: u64 = parts.next()?.trim().parse().ok()?;
-    let position_ms = current.saturating_sub(start) * 1000 / FRAME_RATE;
-    let duration_ms = end.saturating_sub(start) * 1000 / FRAME_RATE;
+    let start: u32 = parts.next()?.trim().parse().ok()?;
+    let current: u32 = parts.next()?.trim().parse().ok()?;
+    let end: u32 = parts.next()?.trim().parse().ok()?;
+    if parts.next().is_some() || frame_rate == 0 {
+        return None;
+    }
+    let position = u64::try_from(current.wrapping_sub(start) as i32).ok()?;
+    let duration = u64::try_from(end.wrapping_sub(start) as i32).ok()?;
+    if position > duration {
+        return None;
+    }
     Some((
-        u32::try_from(position_ms).ok()?,
-        u32::try_from(duration_ms).ok()?,
+        u32::try_from(position * 1000 / u64::from(frame_rate)).ok()?,
+        u32::try_from(duration * 1000 / u64::from(frame_rate)).ok()?,
     ))
 }
 
@@ -769,16 +911,214 @@ fn parse_progress(s: &str) -> Option<(u32, u32)> {
 mod tests {
     use super::*;
 
+    fn command_info(id: u64, enabled: bool) -> OwnedValue {
+        OwnedValue::from(HashMap::from([
+            ("kCommandInfoCommandKey".to_string(), OwnedValue::from(id)),
+            (
+                "kCommandInfoEnabledKey".to_string(),
+                OwnedValue::from(enabled),
+            ),
+        ]))
+    }
+
+    #[test]
+    fn enabled_transport_commands() {
+        for id in [0, 1, 4, 5] {
+            for stream_type in ["Buffered", "Realtime"] {
+                assert!(transport_controllable(
+                    false,
+                    stream_type,
+                    &[command_info(id, true)]
+                ));
+                assert!(!transport_controllable(
+                    false,
+                    stream_type,
+                    &[command_info(id, false)]
+                ));
+            }
+            for stream_type in ["Classic", "AirPlay", "", "Unknown", "buffered"] {
+                assert!(!transport_controllable(
+                    false,
+                    stream_type,
+                    &[command_info(id, true)]
+                ));
+                assert!(transport_controllable(
+                    true,
+                    stream_type,
+                    &[command_info(id, true)]
+                ));
+            }
+        }
+        // PlayPause/Stop/volume/shuffle/seek alone do not implement our buttons.
+        for id in [2, 3, 12, 13, 25, 26, 999] {
+            assert!(!transport_controllable(
+                false,
+                "Buffered",
+                &[command_info(id, true)]
+            ));
+        }
+        assert!(transport_controllable(
+            false,
+            "Buffered",
+            &[command_info(0, false), command_info(1, true)],
+        ));
+    }
+
+    #[test]
+    fn missing_and_malformed_commands() {
+        assert!(!transport_controllable(false, "Buffered", &[]));
+        assert!(transport_controllable(true, "", &[])); // Client absent on 4.x
+        let malformed = [
+            OwnedValue::from(true),
+            OwnedValue::from(HashMap::<String, OwnedValue>::new()),
+            OwnedValue::from(HashMap::from([(
+                "kCommandInfoCommandKey".to_string(),
+                OwnedValue::from(0u64),
+            )])),
+            OwnedValue::from(HashMap::from([(
+                "kCommandInfoEnabledKey".to_string(),
+                OwnedValue::from(true),
+            )])),
+            OwnedValue::from(HashMap::from([
+                (
+                    "kCommandInfoCommandKey".to_string(),
+                    OwnedValue::from(zbus::zvariant::Str::from("0")),
+                ),
+                ("kCommandInfoEnabledKey".to_string(), OwnedValue::from(true)),
+            ])),
+            OwnedValue::from(HashMap::from([
+                ("kCommandInfoCommandKey".to_string(), OwnedValue::from(0u64)),
+                ("kCommandInfoEnabledKey".to_string(), OwnedValue::from(1u64)),
+            ])),
+            // A data item that upstream could not decode remains ay, not a dict.
+            OwnedValue::try_from(zbus::zvariant::Value::from(vec![0u8, 1])).unwrap(),
+        ];
+        for entry in malformed {
+            assert!(!transport_controllable(false, "Buffered", &[entry]));
+        }
+    }
+
+    #[tokio::test]
+    async fn capability_updates_combine_both_sources() {
+        let app = crate::state::App::new(crate::config::Config::default(), None);
+        app.shared.write().await.source.active = Some(SourceKind::Airplay);
+        // Initial claim, AP2 enable, DACP changes, AP2 disable, then DACP loss.
+        for (dacp, commands, expected) in [
+            (false, vec![], false),
+            (false, vec![command_info(0, true)], true),
+            (true, vec![command_info(0, true)], true),
+            (false, vec![command_info(0, true)], true),
+            (true, vec![command_info(0, false)], true),
+            (false, vec![command_info(0, false)], false),
+            (true, vec![], true),
+            (false, vec![], false),
+        ] {
+            apply_controllable(&app, transport_controllable(dacp, "Buffered", &commands)).await;
+            assert_eq!(app.shared.read().await.source.controllable, expected);
+        }
+        let commands = [command_info(0, true)];
+        for (stream_type, expected) in [
+            ("Buffered", true),
+            ("Classic", false),
+            ("Realtime", true),
+            ("AirPlay", false),
+            ("", false),
+        ] {
+            apply_controllable(&app, transport_controllable(false, stream_type, &commands)).await;
+            assert_eq!(app.shared.read().await.source.controllable, expected);
+        }
+        app.shared.write().await.source.active = Some(SourceKind::Bluetooth);
+        apply_controllable(&app, true).await;
+        assert!(!app.shared.read().await.source.controllable);
+    }
+
+    #[test]
+    fn config_fixes_pipe_format_and_selects_service_type() {
+        for (classic, service_type) in [(false, "airplay2"), (true, "classic")] {
+            let conf = generated_config("BoomPi", "AudioAccessory5,1", classic);
+            assert!(conf.contains(&format!("service_type = \"{service_type}\";")));
+            assert!(conf.contains("output_backend = \"pipe\";"));
+            assert!(conf.contains("ignore_volume_control = \"yes\";"));
+            assert!(conf.contains(&format!(
+                "pipe = {{\n  name = \"{FIFO_PATH}\";\n  output_rate = 44100;\n  output_format = \"S16_LE\";\n  output_channels = 2;\n}};"
+            )));
+            assert!(conf.contains("airplay_device_model = \"AudioAccessory5,1\";"));
+            assert!(conf.contains("include_cover_art = \"yes\";"));
+            assert_eq!(conf.contains("airplay_classic_only = \"yes\";"), classic);
+            if !classic {
+                assert!(!conf.contains("airplay_classic_only"));
+            }
+            assert!(!conf.contains("get_plist_metadata"));
+        }
+        let conf = generated_config("a\"b\\c", "m\"n\\o", false);
+        assert!(conf.contains(r#"name = "a\"b\\c";"#));
+        assert!(conf.contains(r#"airplay_device_model = "m\"n\\o";"#));
+        assert!(!generated_config("BoomPi", "", false).contains("airplay_device_model"));
+    }
+
     #[test]
     fn parses_progress_string() {
         // 60 s track, 15 s in.
-        let start = 1_000_000u64;
-        let s = format!(
-            "{start}/{}/{}",
-            start + 15 * FRAME_RATE,
-            start + 60 * FRAME_RATE
+        for rate in [44_100, 48_000] {
+            for start in [1_000_000u32, u32::MAX - rate] {
+                let s = format!(
+                    "{start}/{}/{}",
+                    start.wrapping_add(15 * rate),
+                    start.wrapping_add(60 * rate)
+                );
+                assert_eq!(parse_progress(&s, rate), Some((15_000, 60_000)));
+            }
+        }
+        assert_eq!(source_frame_rate("ALAC/48000/S24/2"), Some(48_000));
+        assert_eq!(source_frame_rate("AAC/44100/F32/2"), Some(FRAME_RATE));
+        for format in ["", "48000/S16_LE/2", "ALAC/0/S16/2", "ALAC/no/S16/2"] {
+            assert_eq!(source_frame_rate(format), None);
+        }
+    }
+
+    #[test]
+    fn mpris_position_is_time_not_rtp_frames() {
+        assert_eq!(position_ms(15_000_999), Some(15_000));
+        assert_eq!(position_ms(0), Some(0));
+        assert_eq!(position_ms(-1), None);
+        assert_eq!(position_ms(i64::MAX), None);
+    }
+
+    #[tokio::test]
+    async fn native_progress_supplies_duration_without_astm() {
+        let app = crate::state::App::new(crate::config::Config::default(), None);
+        app.shared.write().await.source.active = Some(SourceKind::Airplay);
+        let md = HashMap::from([(
+            "xesam:title".to_string(),
+            OwnedValue::from(zbus::zvariant::Str::from("Classic track")),
+        )]);
+        apply_metadata(&app, &md, &mut MetaState::default()).await;
+        assert_eq!(
+            app.shared.read().await.track.as_ref().unwrap().duration_ms,
+            None
         );
-        assert_eq!(parse_progress(&s), Some((15_000, 60_000)));
+
+        // Works without MPRIS; no astm/mpris:length was supplied.
+        let (position, duration) = parse_progress("0/661500/2646000", FRAME_RATE).unwrap();
+        apply_progress(&app, Some(position), Some(duration)).await;
+        let track = app.shared.read().await.track.clone().unwrap();
+        assert_eq!(track.position_ms, Some(15_000));
+        assert_eq!(track.duration_ms, Some(60_000));
+
+        // A new binary's live MPRIS position must not erase native duration.
+        apply_progress(&app, position_ms(16_000_000), None).await;
+        let track = app.shared.read().await.track.clone().unwrap();
+        assert_eq!(track.position_ms, Some(16_000));
+        assert_eq!(track.duration_ms, Some(60_000));
+
+        // Native timing ahead of audible MPRIS progress supplies only duration.
+        let (position, duration) = parse_progress("0/882000/3087000", FRAME_RATE).unwrap();
+        let live_position = true;
+        apply_progress(&app, (!live_position).then_some(position), Some(duration)).await;
+        let updated = app.shared.read().await.track.clone().unwrap();
+        assert_eq!(updated.position_ms, Some(16_000));
+        assert_eq!(updated.duration_ms, Some(70_000));
+        assert_eq!(updated.updated_at, track.updated_at);
     }
 
     #[test]
@@ -801,10 +1141,17 @@ mod tests {
 
     #[test]
     fn progress_string_garbage() {
-        assert_eq!(parse_progress(""), None);
-        assert_eq!(parse_progress("1/2"), None);
-        assert_eq!(parse_progress("a/b/c"), None);
-        // Out-of-order values must not panic.
-        assert_eq!(parse_progress("100/50/20"), Some((0, 0)));
+        for s in [
+            "",
+            "1/2",
+            "a/b/c",
+            "100/50/20",
+            "1/3/2",
+            "1/2/3/4",
+            "0/1/18446744073709551615",
+        ] {
+            assert_eq!(parse_progress(s, FRAME_RATE), None);
+        }
+        assert_eq!(parse_progress("0/1/2", 0), None);
     }
 }
