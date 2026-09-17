@@ -95,6 +95,16 @@ find "${TARGET_DIR}/usr/bin" "${TARGET_DIR}/usr/sbin" \
      -maxdepth 1 -name devmem 2>/dev/null | grep -q . \
     || fail "devmem missing (Pi 3 PM_RSTS trial boot needs it)"
 
+# --- Onboard Wi-Fi authentication (both boards). -----------------------------
+# The pinned brcmfmac driver lacks the authorization notification required
+# by wpa_supplicant 2.12 with firmware handshake offload. The workaround
+# must ship in every root slot, and requires a module (not built-in Wi-Fi).
+grep -qx 'options brcmfmac feature_disable=0x2000' \
+    "${TARGET_DIR}/etc/modprobe.d/brcmfmac-boompi.conf" \
+    || fail "missing brcmfmac WPA2 handshake-offload workaround"
+find "${TARGET_DIR}/lib/modules" -name 'brcmfmac.ko*' 2>/dev/null | grep -q . \
+    || fail "brcmfmac module missing (modprobe.d workaround would not apply)"
+
 # --- Onboard Bluetooth UART firmware (both boards). --------------------------
 # The generic images leave onboard BT enabled; without the .hcd
 # firmware hci0 never appears (pairing shows "unavailable"). Both
