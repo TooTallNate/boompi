@@ -20,13 +20,13 @@ import {
   SidebarTrigger,
 } from "@boompi/ui/components/sidebar";
 import { GithubIcon } from "@boompi/ui/components/github-icon";
+import { HomeAssistantIcon } from "@boompi/ui/components/home-assistant-icon";
 import { Separator } from "@boompi/ui/components/separator";
 import {
   BatteryMedium,
   Bluetooth,
   CloudDownload,
   Gamepad2,
-  Home,
   Monitor,
   Settings2,
   Volume2,
@@ -99,7 +99,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   { id: "wifi", label: "Wi-Fi", icon: Wifi, content: WifiSection, requires: "wifi" },
   { id: "games", label: "Games", icon: Gamepad2, content: GamesSection, requires: "games" },
   { id: "battery", label: "Battery", icon: BatteryMedium, content: BatterySection, requires: "battery" },
-  { id: "home-assistant", label: "Home Assistant", icon: Home, content: HomeAssistantSection, requires: "home_assistant" },
+  { id: "home-assistant", label: "Home Assistant", icon: HomeAssistantIcon, content: HomeAssistantSection, requires: "home_assistant" },
   { id: "software", label: "Software", icon: CloudDownload, content: SoftwareSection, requires: "updates" },
 ];
 
