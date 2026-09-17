@@ -40,9 +40,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # LTS line (YYYY.02). 2026.02 brings shairport-sync 4.3.7 + nqptp,
-  # unlocking AirPlay 2.
-  BR_VERSION: "2026.02"
+  # Current stable release, not LTS; track its maintenance updates.
+  # The external Bootlin toolchain and Raspberry Pi kernel stay pinned.
+  BR_VERSION: "2026.08"
 
 jobs:
   # boompi-grow-data resizes the shared /data partition on live boxes:
