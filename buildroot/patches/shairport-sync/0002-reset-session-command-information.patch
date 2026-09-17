@@ -1,0 +1,101 @@
+Reset CommandInformation at audio session ownership boundaries
+
+The hub retains supported_commands_plist after a session ends, and D-Bus
+leaves CommandInformation unchanged when the plist is NULL. Free and clear
+the plist, notify watchers, and publish an empty av to disable stale AP2
+controls. A fresh supported-commands update can then re-enable the same
+capabilities, including when reconnecting from the same sender.
+
+Reset synchronously when get_play_lock acquires a different audio
+connection, and when release_play_lock or stop_play releases it. Do not
+reset in the queued conn handler: /command updates the hub synchronously
+and can overtake queued metadata. Already-owned connections and RC-only
+SETUP must not reset controls. Neither pend (also emitted for stream-only
+TEARDOWN and stream replacement) nor disc (also emitted by RC event
+receivers) is a reliable audio session boundary. Pausing, resuming and
+replacing streams within the same connection must retain capabilities.
+
+Rebased for 94070a1d514229b03a1ca202297a20a8993d6d92 (5.6-dev).
+
+--- a/metadata/hub.c
++++ b/metadata/hub.c
+@@ -129,5 +129,19 @@
+ void metadata_hub_stop(void) {}
+ 
++void metadata_hub_reset_session_commands(void) {
++#ifdef CONFIG_AIRPLAY_2
++  // Called synchronously at audio ownership changes, not from queued conn/pend metadata.
++  int changed = 0;
++  metadata_hub_modify_prolog();
++  if (metadata_store.supported_commands_plist != NULL) {
++    plist_free(metadata_store.supported_commands_plist);
++    metadata_store.supported_commands_plist = NULL;
++    changed = 1;
++  }
++  metadata_hub_modify_epilog(changed);
++#endif
++}
++
+ void add_metadata_watcher(metadata_watcher fn) {
+   int i;
+   for (i = 0; i < number_of_watchers; i++) {
+--- a/metadata/hub.h
++++ b/metadata/hub.h
+@@ -122,6 +122,7 @@
+ 
+ void metadata_hub_init(void);
+ void metadata_hub_stop(void);
++void metadata_hub_reset_session_commands(void);
+ void metadata_hub_process_metadata(uint32_t type, uint32_t code, char *data, uint32_t length);
+ int metadata_hub_process_picture(const char *data, const size_t length);
+ void metadata_hub_reset_npi(metadata_npi_bundle *npi); // reset "now playing" information
+--- a/dbus/dbus-service.c
++++ b/dbus/dbus-service.c
+@@ -347,9 +347,9 @@
+ 
+   // output the CommandInformation stuff
+   GVariant *sc = plist_to_gvariant(argc->supported_commands_plist);
+-  if (sc != NULL) {
+-    shairport_sync_client_set_command_information(shairportSyncClientSkeleton, sc);
+-  }
++  if (sc == NULL)
++    sc = g_variant_new_array(G_VARIANT_TYPE_VARIANT, NULL, 0);
++  shairport_sync_client_set_command_information(shairportSyncClientSkeleton, sc);
+ 
+ #endif
+ }
+--- a/rtsp.c
++++ b/rtsp.c
+@@ -307,6 +307,9 @@
+     build_bonjour_strings(principal_conn);
+     mdns_update(txt_records, secondary_txt_records);
+     principal_conn = NULL; // let it go
++#ifdef CONFIG_METADATA_HUB
++    metadata_hub_reset_session_commands();
++#endif
+     debug(1, "Connection successfully closed.");
+   }
+   pthread_rwlock_unlock(&principal_conn_lock);
+@@ -328,6 +331,9 @@
+       mdns_update(txt_records, secondary_txt_records);
+       debug(4, "Connection %d: (%s) has released play lock.", conn->connection_number,
+             get_category_string(conn->airplay_stream_category));
++#ifdef CONFIG_METADATA_HUB
++      metadata_hub_reset_session_commands();
++#endif
+     }
+     principal_conn = NULL; // let it go
+   }
+@@ -408,6 +414,12 @@
+         response = play_lock_acquired_by_breaking_in;
+       }
+     }
++#ifdef CONFIG_METADATA_HUB
++    // A repeated SETUP/ANNOUNCE on the same connection is not a new session.
++    if ((response == play_lock_acquired_without_breaking_in) ||
++        (response == play_lock_acquired_by_breaking_in))
++      metadata_hub_reset_session_commands();
++#endif
+     //    if ((principal_conn != NULL) && (response != play_lock_already_acquired))
+     if (response != play_lock_already_acquired) {
+       debug(4, "Connection %d: (%s) has acquired play lock.", conn->connection_number,

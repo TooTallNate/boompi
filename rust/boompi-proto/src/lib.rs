@@ -261,10 +261,9 @@ pub struct Settings {
     /// Which releases the software updater follows.
     #[serde(default)]
     pub update_channel: UpdateChannel,
-    /// Advertise/serve classic AirPlay only (no AirPlay 2): trades
-    /// multi-room away for a working remote-control channel - modern
-    /// iOS runs no DACP server for AirPlay 2 sessions, so the
-    /// speaker's own transport buttons only work on classic.
+    /// Advertise/serve classic AirPlay only (no AirPlay 2 or multi-room).
+    /// Compatibility fallback; supported AirPlay 2 senders also provide
+    /// speaker-side transport controls on the current receiver build.
     #[serde(default)]
     pub airplay_classic: bool,
     /// 24-hour clock (footer + screensaver); 12-hour with AM/PM when

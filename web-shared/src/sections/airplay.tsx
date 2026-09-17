@@ -120,10 +120,10 @@ export function AirplaySection() {
           <div className="flex flex-col gap-1">
             <FieldLabel htmlFor="airplay-classic">Classic AirPlay only</FieldLabel>
             <FieldDescription>
-              The speaker's play/pause/next buttons only work over classic
-              AirPlay: iOS drops the classic control channel on AirPlay 2
-              sessions, and AirPlay 2's own one is encrypted and not yet
-              reverse-engineered. Trade: no multi-speaker audio while enabled.
+              Use classic AirPlay for compatibility with older senders.
+              Leave off to use AirPlay 2, including speaker-side playback
+              controls with supported senders and apps. Enabling this
+              disables multi-speaker audio.
             </FieldDescription>
           </div>
           <Switch
