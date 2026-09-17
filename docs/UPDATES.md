@@ -78,6 +78,30 @@ flag armed and a raw register-poked reset); on Pi 4 rev ≤ 1.3 the
 PMIC power-cycle wipes it. The docs' "all models support tryboot"
 carries asterisks the bench had to discover.
 
+## Network-dependent rollouts
+
+The current health gate only checks boompid's local HTTP endpoint. It
+does **not** check Wi-Fi association, DHCP, gateway reachability, or
+Internet access. A candidate with broken Wi-Fi can pass this gate and
+be committed on either board; A/B slots are not a network-loss recovery
+guarantee.
+
+Before updating a Wi-Fi-only box whose Ethernet or SD card is difficult
+to reach, validate the candidate on the same Wi-Fi hardware with an
+independent recovery path. Pi 3 testing alone does not validate the Pi
+4's different onboard radio. Test a full reboot, saved-network
+autoconnect, reconnect, and traffic explicitly bound to `wlan0`, not
+just traffic that might take Ethernet. Do not unload the Wi-Fi driver
+or restart networking remotely when Wi-Fi is the only access path.
+
+The Buildroot 2026.08 image needs `brcmfmac-boompi.conf` in its rootfs
+overlay to disable firmware WPA2 handshake offload for the pinned Pi
+kernel. This keeps WPA2 encryption enabled and lets wpa_supplicant
+perform the handshake. Installing the file by hand in the running
+slot is not enough for OTA: the next candidate must contain it too.
+The post-build assertions check the setting and modular driver, but
+cannot replace hardware testing or prove roaming/rekey stability.
+
 ## Delivery
 
 - **Releases** (changesets flow): merging the Version Packages PR
