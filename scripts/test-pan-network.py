@@ -330,7 +330,7 @@ def ruleset():
 
 
 def test_setup():
-    run("nft", "-f", "-", input='table inet pan_test_keep { chain sentinel { counter comment "keep me"; } }\n')
+    run("nft", "-f", "-", input='table inet pan_test_keep {\n chain sentinel {\n  counter comment "keep me"\n }\n}\n')
     keep = run("nft", "list", "table", "inet", "pan_test_keep").stdout
     for kind, owner, error in (
         ("dummy", "boompi-pan", "br-pan is not a bridge"),
