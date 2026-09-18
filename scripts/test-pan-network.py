@@ -321,12 +321,20 @@ def network(expected_error=None):
 
 def bridge_state():
     links = json.loads(ip(None, "-j", "-d", "link", "show", "br-pan").stdout)
+    # Bridge maintenance timers tick independently of configuration changes.
+    for link in links:
+        data = link.get("linkinfo", {}).get("info_data", {})
+        for key in list(data):
+            if key.endswith("_timer"):
+                del data[key]
     addresses = json.loads(ip(None, "-j", "-4", "address", "show", "br-pan").stdout)
     return links, addresses
 
 
 def ruleset():
-    return run("nft", "list", "ruleset").stdout
+    # Replacing our tables resets counters; compare policy rather than traffic.
+    return re.sub(r"counter packets \d+ bytes \d+", "counter",
+                  run("nft", "list", "ruleset").stdout)
 
 
 def test_setup():
@@ -381,7 +389,9 @@ def test_setup():
     before, firewall = bridge_state(), ruleset()
     network()
     network()
-    check(bridge_state() == before and ruleset() == firewall, "Repeated setup was not idempotent")
+    after, after_firewall = bridge_state(), ruleset()
+    check(after == before, f"Repeated setup changed bridge configuration: {before!r} -> {after!r}")
+    check(after_firewall == firewall, f"Repeated setup changed firewall policy: {firewall!r} -> {after_firewall!r}")
     check(Path("/sys/class/net/br-pan/ifalias").read_text().strip() == "boompi-pan", "Wrong bridge owner")
     addresses = before[1][0]["addr_info"]
     check(any(a["local"] == "10.77.0.1" and a["prefixlen"] == 24 for a in addresses), "Missing PAN address")
