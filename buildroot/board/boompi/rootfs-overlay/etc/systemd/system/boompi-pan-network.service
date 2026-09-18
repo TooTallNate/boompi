@@ -1,0 +1,8 @@
+[Unit]
+Description=Boompi recovery PAN bridge and isolation
+Before=boompi-pan.service boompi-pan-dhcp.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/boompi-pan-network
+RemainAfterExit=yes

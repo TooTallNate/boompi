@@ -119,6 +119,9 @@ becomes reachable.
 
 ## Not carried over BLE
 
+Emergency SSH is a separate [Bluetooth Classic PAN service](BLUETOOTH-RECOVERY.md)
+for enrolled Linux clients, not an SSH tunnel over this GATT control channel.
+
 - **Binary frames** (visualizer bars at ~30 fps, artwork bytes): they
   would swamp a ~5-50 KB/s LE link. Fetch artwork via `GET /art/{id}`
   when an IP path exists; skip the visualizer.

@@ -794,6 +794,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "boompi-pan"
+version = "2.0.0-dev"
+dependencies = [
+ "anyhow",
+ "futures-util",
+ "tokio",
+ "zbus",
+]
+
+[[package]]
 name = "boompi-panel"
 version = "2.0.0-dev"
 dependencies = [

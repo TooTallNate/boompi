@@ -21,3 +21,6 @@ disable samba-bgqd.service
 # Nightly BT controller refresh (see bt-refresh.service): timers with
 # [Install] need explicit enablement through preset-all too.
 enable bt-refresh.timer
+
+# Recovery access is independent of the application and NetworkManager.
+enable boompi-pan.service
