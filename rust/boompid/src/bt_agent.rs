@@ -132,7 +132,7 @@ impl Agent {
         }
     }
 
-    /// Profile (A2DP/AVRCP/...) authorization - auto-accepted.
+    /// Audio profile authorization is auto-accepted; PAN requires enrollment.
     ///
     /// We tried gating this on a user prompt ("first-connect consent"),
     /// but BlueZ holds the profile connection hostage during the prompt:
@@ -145,6 +145,25 @@ impl Agent {
         device: OwnedObjectPath,
         uuid: String,
     ) -> Result<(), AgentError> {
+        // BlueZ's NAP server authorizes the BNEP UUID, not just the NAP UUID.
+        // Unlike audio, recovery networking requires a previously enrolled peer.
+        if matches!(
+            uuid.to_ascii_lowercase().as_str(),
+            "0000000f-0000-1000-8000-00805f9b34fb"
+                | "00001115-0000-1000-8000-00805f9b34fb"
+                | "00001116-0000-1000-8000-00805f9b34fb"
+                | "00001117-0000-1000-8000-00805f9b34fb"
+        ) {
+            let peer = zbus::Proxy::new(&self.conn, "org.bluez", device.clone(), "org.bluez.Device1")
+                .await?;
+            if !peer.get_property::<bool>("Paired").await?
+                || !peer.get_property::<bool>("Trusted").await?
+            {
+                return Err(AgentError::Rejected(
+                    "recovery PAN requires a paired and trusted device".into(),
+                ));
+            }
+        }
         tracing::debug!(device = %device.as_str(), %uuid, "service authorized");
         Ok(())
     }

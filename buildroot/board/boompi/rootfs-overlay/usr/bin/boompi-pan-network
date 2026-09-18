@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    echo "boompi-pan-network: $*" >&2
+    exit 1
+}
+
+# Never adopt an unrelated device, even if it happens to have our bridge name.
+# sysfs must belong to this network namespace (also true in namespace tests).
+existing=false
+if [ -e /sys/class/net/br-pan ]; then
+    [ -d /sys/class/net/br-pan/bridge ] || fail "br-pan is not a bridge"
+    IFS= read -r owner < /sys/class/net/br-pan/ifalias || fail "cannot read br-pan owner"
+    [ "$owner" = boompi-pan ] || fail "br-pan is not owned by boompi-pan"
+    [ ! -e /sys/class/net/br-pan/master ] || fail "br-pan has an unexpected master"
+    for port in /sys/class/net/br-pan/brif/*; do
+        [ -e "$port" ] || continue
+        case "${port##*/}" in
+            bnep*) ;;
+            *) fail "unexpected bridge member: ${port##*/}" ;;
+        esac
+    done
+    existing=true
+fi
+
+# Fail closed before creating/raising/addressing the bridge. nft -f commits
+# both families atomically, leaving the previous protection intact on failure.
+nft -f /etc/boompi/pan.nft
+
+if [ "$existing" = false ]; then
+    ip link add name br-pan alias boompi-pan type bridge
+fi
+ip address replace 10.77.0.1/24 broadcast 10.77.0.255 dev br-pan
+ip link set dev br-pan up
+# No teardown: stopping a service must not remove the firewall while BNEP
+# devices still exist. No global forwarding, default route or uplink changes.
