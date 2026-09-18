@@ -11,7 +11,7 @@ fail() {
 existing=false
 if [ -e /sys/class/net/br-pan ]; then
     [ -d /sys/class/net/br-pan/bridge ] || fail "br-pan is not a bridge"
-    IFS= read -r owner < /sys/class/net/br-pan/ifalias || fail "cannot read br-pan owner"
+    owner=$(cat /sys/class/net/br-pan/ifalias) || fail "cannot read br-pan owner"
     [ "$owner" = boompi-pan ] || fail "br-pan is not owned by boompi-pan"
     [ ! -e /sys/class/net/br-pan/master ] || fail "br-pan has an unexpected master"
     for port in /sys/class/net/br-pan/brif/*; do
