@@ -347,7 +347,8 @@ def test_setup():
         ip(None, "link", "del", "br-pan")
     print("PASS ownership refusal (non-bridge, foreign owner, unowned bridge)", flush=True)
 
-    ip(None, "link", "add", "br-pan", "alias", "boompi-pan", "type", "bridge")
+    ip(None, "link", "add", "br-pan", "type", "bridge")
+    ip(None, "link", "set", "br-pan", "alias", "boompi-pan")
     ip(None, "link", "add", "foreign0", "type", "dummy")
     ip(None, "link", "set", "foreign0", "master", "br-pan")
     before, firewall = bridge_state(), ruleset()

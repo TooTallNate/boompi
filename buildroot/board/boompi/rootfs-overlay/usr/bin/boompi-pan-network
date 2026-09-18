@@ -29,7 +29,8 @@ fi
 nft -f /etc/boompi/pan.nft
 
 if [ "$existing" = false ]; then
-    ip link add name br-pan alias boompi-pan type bridge
+    ip link add name br-pan type bridge
+    ip link set dev br-pan alias boompi-pan
 fi
 ip address replace 10.77.0.1/24 broadcast 10.77.0.255 dev br-pan
 ip link set dev br-pan up
