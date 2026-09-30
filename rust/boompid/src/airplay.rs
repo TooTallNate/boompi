@@ -493,14 +493,13 @@ async fn wait_for_bus_name(conn: &zbus::Connection) -> anyhow::Result<()> {
     anyhow::bail!("org.gnome.ShairportSync never appeared on the system bus (dbus policy?)")
 }
 
-/// FIFO -> `pw-cat --playback` (raw PCM pipe). Shairport 5.x keeps its
-/// writer open between sessions; EOF occurs when the receiver exits.
+/// FIFO -> `pw-cat --playback --raw`. Shairport 5.x keeps its writer open
+/// between sessions; EOF occurs when the receiver exits.
 ///
-/// NB: no `--raw` flag - it doesn't exist before PipeWire 1.4 and makes
-/// 1.2.x print usage and exit. Stdin is always treated as a raw pipe
-/// whose parameters come from the CLI args, and the rate matters:
-/// pw-cat defaults to 48000, which plays 44100 content 8.8% fast
-/// (+1.5 semitones).
+/// `--raw` is required on PipeWire 1.4+: otherwise stdin is opened with
+/// libsndfile, which rejects headerless PCM and exits immediately. Raw
+/// parameters come from the CLI args, and the rate matters: pw-cat defaults
+/// to 48000, which plays 44100 content 8.8% fast (+1.5 semitones).
 async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
     loop {
         // Blocks (on the blocking pool) until a writer appears.
@@ -508,6 +507,7 @@ async fn audio_bridge(fifo: PathBuf) -> anyhow::Result<()> {
         let mut pwcat = tokio::process::Command::new("pw-cat")
             .args([
                 "--playback",
+                "--raw",
                 "--rate",
                 "44100",
                 "--channels",

@@ -362,10 +362,11 @@ fn stable_device_id(name: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// Audio sink: s16le PCM → `pw-cat --playback` (raw pipe) → PipeWire default
-// sink. No `--raw` flag (absent before PipeWire 1.4; 1.2.x exits with
-// usage), and the explicit --rate is load-bearing: stdin is a raw pipe
-// whose parameters come from the CLI, default rate 48000 ≠ 44100.
+// Audio sink: s16le PCM → `pw-cat --playback --raw` → PipeWire default
+// sink. PipeWire 1.4+ opens stdin with libsndfile unless `--raw` is given,
+// and rejects headerless PCM (1.6.6: "Format not recognised"). The explicit
+// --rate is load-bearing: raw parameters come from the CLI, and the default
+// rate 48000 ≠ 44100.
 // ---------------------------------------------------------------------------
 
 #[derive(Default)]
@@ -388,6 +389,7 @@ impl Sink for PwCatSink {
             let child = std::process::Command::new("pw-cat")
                 .args([
                     "--playback",
+                    "--raw",
                     "--rate",
                     "44100",
                     "--channels",
