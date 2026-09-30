@@ -13,6 +13,7 @@ what's harmless (volume, screensavers) from what can degrade the box
 | Web hardware page / `/api/box` | none **until locked** | boot config, ssh key install, provisioning bundle |
 | SMB `smb://<box>/games` | none (LAN, guest) | read/write the games library only |
 | ssh (root) | **public key only** | everything, incl. `boompi-box`, factory reset |
+| Bluetooth PAN | bonded/trusted peer, then SSH public key | isolated recovery SSH; no web UI, SMB, or forwarding |
 | Console (HDMI + keyboard) | root password | everything (physical access) |
 
 ## SSH
@@ -56,6 +57,7 @@ includes people in your living room.
 | State | Recovery |
 |---|---|
 | Dark panel, ssh key provisioned | ssh → `boompi-box` |
+| Wi-Fi/NM/boompid unavailable, enrolled Bluetooth peer and SSH key | [Bluetooth PAN recovery](BLUETOOTH-RECOVERY.md) from Linux |
 | Dark panel, no key, unlocked | web `#/hardware` page |
 | No key and locked | HDMI console (root / `boompi`) |
 | Everything, sealed enclosure | SD card surgery |

@@ -1,0 +1,29 @@
+# This whole file is one atomic transaction. Only PAN-owned tables are reset;
+# never flush the ruleset or touch NetworkManager's hotspot firewall.
+add table inet boompi_pan
+delete table inet boompi_pan
+table inet boompi_pan {
+    chain input {
+        type filter hook input priority -200; policy accept;
+        iifname "br-pan" ip saddr { 0.0.0.0, 10.77.0.0/24 } udp sport 68 udp dport 67 counter accept
+        iifname "br-pan" ip saddr 10.77.0.0/24 ip daddr 10.77.0.1 tcp dport 22 counter accept
+        iifname "br-pan" ip saddr 10.77.0.0/24 ip daddr 10.77.0.1 icmp type echo-request counter accept
+        iifname "br-pan" counter drop
+    }
+
+    chain forward {
+        type filter hook forward priority -200; policy accept;
+        iifname "br-pan" counter drop
+        oifname "br-pan" counter drop
+    }
+}
+
+add table bridge boompi_pan
+delete table bridge boompi_pan
+table bridge boompi_pan {
+    chain forward {
+        type filter hook forward priority -200; policy accept;
+        meta ibrname "br-pan" counter drop
+        meta obrname "br-pan" counter drop
+    }
+}

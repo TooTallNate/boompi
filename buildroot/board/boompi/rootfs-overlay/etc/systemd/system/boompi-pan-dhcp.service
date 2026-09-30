@@ -1,0 +1,11 @@
+[Unit]
+Description=Boompi recovery PAN DHCP
+Requires=boompi-pan-network.service
+After=boompi-pan-network.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/boompi/pan-dnsmasq.conf
+Restart=on-failure
+RestartSec=3

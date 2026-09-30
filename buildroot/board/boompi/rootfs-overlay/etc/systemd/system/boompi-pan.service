@@ -1,0 +1,15 @@
+[Unit]
+Description=Boompi Bluetooth recovery PAN
+Requires=boompi-pan-network.service bluetooth.service
+After=boompi-pan-network.service bluetooth.service boompi-pan-dhcp.service sshd.service
+Wants=boompi-pan-dhcp.service sshd.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/boompi-pan
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

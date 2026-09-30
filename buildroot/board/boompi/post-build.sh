@@ -63,6 +63,68 @@ for bin in nmcli wireplumber wpctl pw-cat pw-record \
         || fail "runtime binary '$bin' missing from the image"
 done
 
+# --- Standalone Bluetooth recovery PAN. -------------------------------------
+# Check resolved configs, not just fragments: Kconfig can drop requirements.
+# Do not assert /usr/bin/boompi-pan here: CI pass 1 precedes Rust injection.
+[ -f "${BR2_CONFIG:-}" ] || fail "BR2_CONFIG missing (PAN package checks)"
+for option in BLUEZ5_UTILS_PLUGINS_NETWORK IPROUTE2 NFTABLES DNSMASQ DNSMASQ_DHCP; do
+    grep -qx "BR2_PACKAGE_${option}=y" "$BR2_CONFIG" \
+        || fail "BR2_PACKAGE_${option} is not enabled (recovery PAN)"
+done
+KERNEL_VERSION=$(sed -n 's/^BR2_LINUX_KERNEL_VERSION="\(.*\)"$/\1/p' "$BR2_CONFIG")
+[ -n "$KERNEL_VERSION" ] || fail "BR2_LINUX_KERNEL_VERSION missing"
+KERNEL_CONFIG="${BUILD_DIR}/linux-${KERNEL_VERSION}/.config"
+[ -f "$KERNEL_CONFIG" ] || fail "kernel config missing: $KERNEL_CONFIG"
+for option in BT_BREDR BT_BNEP_MC_FILTER BT_BNEP_PROTO_FILTER INET IPV6 \
+              NETFILTER NF_TABLES_INET; do
+    grep -qx "CONFIG_${option}=y" "$KERNEL_CONFIG" \
+        || fail "CONFIG_${option} is not enabled (recovery PAN)"
+done
+# This family is compiled into nf_tables, not a separate nf_tables_bridge.ko.
+grep -qE '^CONFIG_NF_TABLES_BRIDGE=(y|m)$' "$KERNEL_CONFIG" \
+    || fail "CONFIG_NF_TABLES_BRIDGE is not enabled (recovery PAN)"
+# Modules selected as built-ins need no .ko; otherwise check actual rootfs
+# installation as well as Kconfig. Names verified against the pinned 6.6 tree.
+for entry in BT:bluetooth BT_BNEP:bnep BRIDGE:bridge \
+             NETFILTER_NETLINK:nfnetlink NF_TABLES:nf_tables \
+             NFT_BRIDGE_META:nft_meta_bridge; do
+    option=${entry%%:*}
+    mod=${entry#*:}
+    if grep -qx "CONFIG_${option}=m" "$KERNEL_CONFIG"; then
+        find "${TARGET_DIR}/lib/modules" -name "${mod}.ko*" 2>/dev/null | grep -q . \
+            || fail "kernel module $mod missing (recovery PAN)"
+    else
+        grep -qx "CONFIG_${option}=y" "$KERNEL_CONFIG" \
+            || fail "CONFIG_${option} is not enabled (recovery PAN)"
+    fi
+done
+for bin in ip nft; do
+    find "${TARGET_DIR}/usr/bin" "${TARGET_DIR}/usr/sbin" \
+         "${TARGET_DIR}/bin" "${TARGET_DIR}/sbin" \
+         -maxdepth 1 -name "$bin" 2>/dev/null | grep -q . \
+        || fail "runtime binary '$bin' missing (recovery PAN)"
+done
+[ -x "${TARGET_DIR}/usr/sbin/dnsmasq" ] || fail "PAN dnsmasq executable missing"
+[ -x "${TARGET_DIR}/usr/bin/boompi-pan-network" ] || fail "PAN setup executable missing"
+for config in boompi/pan.nft boompi/pan-dnsmasq.conf bluetooth/network.conf \
+              NetworkManager/conf.d/90-boompi-pan.conf \
+              systemd/system/boompi-pan-network.service \
+              systemd/system/boompi-pan-dhcp.service \
+              systemd/system/boompi-pan.service \
+              systemd/system/bluetooth.service.d/boompi-pan.conf; do
+    [ -s "${TARGET_DIR}/etc/$config" ] || fail "PAN config missing: $config"
+done
+strings "${TARGET_DIR}/usr/libexec/bluetooth/bluetoothd" | grep -q 'org.bluez.NetworkServer1' \
+    || fail "bluetoothd lacks NetworkServer1 (recovery PAN)"
+grep -qx 'DisableSecurity=false' "${TARGET_DIR}/etc/bluetooth/network.conf" \
+    || fail "PAN Bluetooth link security must remain enabled"
+grep -qx 'unmanaged-devices+=interface-name:br-pan;interface-name:bnep\*' \
+    "${TARGET_DIR}/etc/NetworkManager/conf.d/90-boompi-pan.conf" \
+    || fail "NM must leave br-pan and bnep* strictly unmanaged"
+grep -qx 'enable boompi-pan.service' \
+    "${TARGET_DIR}/usr/lib/systemd/system-preset/20-boompi.preset" \
+    || fail "boompi-pan.service must be preset enabled"
+
 # CA trust store: without it every on-box HTTPS client except boompid
 # (rustls, compiled-in roots) fails with a trust-anchor error - curl,
 # wget, anything a bench session shells out to.

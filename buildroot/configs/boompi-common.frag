@@ -20,13 +20,13 @@ BR2_TOOLCHAIN_EXTERNAL_BOOTLIN_AARCH64_GLIBC_STABLE=y
 
 BR2_CCACHE=y
 
-# No BR2_SYSTEM_DHCP: NetworkManager owns all interfaces (ethernet DHCPs
+# No BR2_SYSTEM_DHCP: NetworkManager owns uplink interfaces (ethernet DHCPs
 # by default); a networkd config here would fight it for eth0.
 BR2_TARGET_GENERIC_HOSTNAME="boompi"
 BR2_TARGET_GENERIC_ISSUE="Boompi v2"
 BR2_TARGET_GENERIC_ROOT_PASSWD="boompi"
 BR2_INIT_SYSTEMD=y
-# NetworkManager owns all interfaces; networkd would fight it for eth0
+# NetworkManager owns uplink interfaces; networkd would fight it for eth0
 # (and its wait-online unit fails the boot health picture).
 # BR2_PACKAGE_SYSTEMD_NETWORKD is not set
 
@@ -92,6 +92,8 @@ BR2_PACKAGE_BLUEZ5_UTILS_OBEX=y
 BR2_PACKAGE_BLUEZ5_UTILS_TOOLS=y
 BR2_PACKAGE_BLUEZ5_UTILS_EXPERIMENTAL=y
 BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_AUDIO=y
+# Standalone recovery NAP, independent of boompid and NetworkManager.
+BR2_PACKAGE_BLUEZ5_UTILS_PLUGINS_NETWORK=y
 # HID plugin: without it bluetoothd has no input profile at all -
 # a paired DualSense connects, finds "no more profiles to connect
 # to", is dropped, and powers itself off. Classic BT pads (DS4/DS5,
@@ -142,6 +144,10 @@ BR2_PACKAGE_WPA_SUPPLICANT=y
 BR2_PACKAGE_WPA_SUPPLICANT_AP_SUPPORT=y
 BR2_PACKAGE_WPA_SUPPLICANT_DBUS=y
 BR2_PACKAGE_DNSMASQ=y
+BR2_PACKAGE_DNSMASQ_DHCP=y
+# PAN bridge setup and scoped isolation (do not rely on NM's dependencies).
+BR2_PACKAGE_IPROUTE2=y
+BR2_PACKAGE_NFTABLES=y
 BR2_PACKAGE_WIRELESS_REGDB=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI=y
 BR2_PACKAGE_BRCMFMAC_SDIO_FIRMWARE_RPI_WIFI=y

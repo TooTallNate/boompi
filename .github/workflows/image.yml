@@ -45,6 +45,22 @@ env:
   BR_VERSION: "2026.08"
 
 jobs:
+  pan-test:
+    name: Bluetooth PAN recovery tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            dbus-daemon nftables iproute2 dnsmasq-base util-linux procps
+      - name: Test BlueZ registration lifecycle
+        run: cargo test --manifest-path rust/Cargo.toml --locked -p boompi-pan
+      - name: Test isolated PAN network and DHCP
+        run: sudo unshare --mount --net --pid --fork --mount-proc python3 -B scripts/test-pan-network.py
+
   # boompi-grow-data resizes the shared /data partition on live boxes:
   # prove the exact script against a loopback disk with the real
   # partition layout before any image carries it.
@@ -311,7 +327,7 @@ jobs:
           retention-days: 14
 
   image:
-    needs: [web, skia, grow-test]
+    needs: [web, skia, grow-test, pan-test]
     name: image
     runs-on: ubuntu-24.04
     timeout-minutes: 340
@@ -447,7 +463,7 @@ jobs:
           name: skia-binaries-arm64
           path: /home/runner/skia-binaries
 
-      - name: Cross-build boompid + boompi-ui against staging
+      - name: Cross-build boompid + boompi-pan + boompi-ui against staging
         run: |
           STAGING="$OUTPUT/staging"
           # Fast path: the staging sysroot restored with the base image.
@@ -472,7 +488,7 @@ jobs:
           export PKG_CONFIG_LIBDIR="$STAGING/usr/lib/pkgconfig:$STAGING/usr/share/pkgconfig"
           export RUSTFLAGS="-L $STAGING/usr/lib"
           cargo zigbuild --manifest-path rust/Cargo.toml --release \
-            --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid
+            --target "aarch64-unknown-linux-gnu.$GLIBC" -p boompid -p boompi-pan
           # Skia GPU renderer on both boards (GLES/EGL via mesa - V3D on
           # the Pi 4, VC4 on the Pi 3; Phase 0 validated Skia GL on Pi 3).
           # The Skia prebuilt is C++ built against GNU libstdc++; zig
@@ -492,6 +508,7 @@ jobs:
         run: |
           OVL="buildroot/board/boompi/rootfs-overlay-ci"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompid "$OVL/usr/bin/boompid"
+          install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-pan "$OVL/usr/bin/boompi-pan"
           install -D -m 0755 rust/target/aarch64-unknown-linux-gnu/release/boompi-ui "$OVL/usr/bin/boompi-ui"
           install -D -m 0644 /dev/null "$OVL/etc/boompi-version"
           printf '%s' "${{ steps.stamp.outputs.version }}" > "$OVL/etc/boompi-version"
@@ -509,7 +526,9 @@ jobs:
 
       - name: Build image (pass 2, picks up the overlay)
         if: steps.base.outputs.cache-hit != 'true'
-        run: make -C "$OUTPUT" -j"$(nproc)"
+        run: |
+          make -C "$OUTPUT" -j"$(nproc)"
+          test -x "$OUTPUT/target/usr/bin/boompi-pan"
 
       # Full path: stage the system layer for future app-only commits.
       # The staging sysroot rides along because the Rust cross-build
@@ -543,6 +562,7 @@ jobs:
           MNT=$(mktemp -d)
           sudo mount -o loop "$ROOTFS" "$MNT"
           sudo install -m 0755 "$BIN/boompid"   "$MNT/usr/bin/boompid"
+          sudo install -m 0755 "$BIN/boompi-pan" "$MNT/usr/bin/boompi-pan"
           sudo install -m 0755 "$BIN/boompi-ui" "$MNT/usr/bin/boompi-ui"
           printf '%s' "${{ steps.stamp.outputs.version }}" \
             | sudo tee "$MNT/etc/boompi-version" >/dev/null
@@ -565,6 +585,7 @@ jobs:
           sudo mount -o loop,ro,offset=$((P3 * 512)) "$SD" "$MNT"
           test "$(cat "$MNT/etc/boompi-version")" = "${{ steps.stamp.outputs.version }}"
           cmp "$MNT/usr/bin/boompid" "$BIN/boompid"
+          cmp "$MNT/usr/bin/boompi-pan" "$BIN/boompi-pan"
           sudo umount "$MNT"
 
       - name: Compress image
