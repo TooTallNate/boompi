@@ -1,5 +1,6 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Nathan Rajlich <n@n8.io>
-Date: Wed, 20 Aug 2026 02:30:00 -0700
+Date: Thu, 20 Aug 2026 02:30:00 -0700
 Subject: [PATCH] Bluetooth: add HCI_QUIRK_BROKEN_EXT_ADV, use for RTL8761B
 
 RTL8761B/BU firmware advertises LE Extended Advertising support but
@@ -21,12 +22,29 @@ advertising (which this firmware handles correctly, with BlueZ
 software-multiplexing instances), and set it for CHIP_ID_8761B.
 
 [boompi: experimental local patch; upstream submission candidate as
-the sibling of 5ead2063611a if field results hold.]
+the sibling of 5ead2063611a if field results hold.
+
+Rebased from rpi-6.6.y to rpi-6.18.y: quirks are now the
+hdev->quirk_flags bitmap, so set_bit/test_bit(..., &hdev->quirks)
+become hci_set_quirk()/hci_test_quirk(). Note ext_adv_capable() also
+feeds use_enhanced_conn_complete() in 6.18, so with this quirk set
+the host no longer requests the LE Enhanced Connection Complete
+event unless ll_privacy_capable() - same as on 6.6.
+
+Note mainline ca0583c24661 moved the sibling BROKEN_EXT_SCAN quirk
+from chip-wide btrtl to a per-USB-ID btusb flag (0bda:a728 only); if
+that is adopted, this quirk should follow the same pattern.]
+---
+ drivers/bluetooth/btrtl.c        |  5 ++++-
+ include/net/bluetooth/hci.h      | 11 +++++++++++
+ include/net/bluetooth/hci_core.h |  3 ++-
+ 3 files changed, 17 insertions(+), 2 deletions(-)
+
 diff --git a/drivers/bluetooth/btrtl.c b/drivers/bluetooth/btrtl.c
-index 4e702b4..fa12f64 100644
+index a754f6482..990042c54 100644
 --- a/drivers/bluetooth/btrtl.c
 +++ b/drivers/bluetooth/btrtl.c
-@@ -1305,9 +1305,12 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
+@@ -1347,9 +1347,12 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
  		/* RTL8761B/BU reports HCI version 5.1 but does not support
  		 * the LE Extended Scan commands (Opcode 0x2042), causing
  		 * repeated -EBUSY failures when BlueZ attempts extended
@@ -35,16 +53,16 @@ index 4e702b4..fa12f64 100644
 +		 * advertising is equally unreliable (spurious set-terminated
 +		 * events, sets silently dropped from the air).
  		 */
- 		set_bit(HCI_QUIRK_BROKEN_EXT_SCAN, &hdev->quirks);
-+		set_bit(HCI_QUIRK_BROKEN_EXT_ADV, &hdev->quirks);
+ 		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_EXT_SCAN);
++		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_EXT_ADV);
  		break;
  	default:
  		break;
 diff --git a/include/net/bluetooth/hci.h b/include/net/bluetooth/hci.h
-index 77a3040..ba12b63 100644
+index 87b3f99e6..91f744d9c 100644
 --- a/include/net/bluetooth/hci.h
 +++ b/include/net/bluetooth/hci.h
-@@ -272,6 +272,17 @@ enum {
+@@ -284,6 +284,17 @@ enum {
  	 */
  	HCI_QUIRK_BROKEN_EXT_SCAN,
  
@@ -63,16 +81,16 @@ index 77a3040..ba12b63 100644
  	 * When this quirk is set, the HCI_OP_GET_MWS_TRANSPORT_CONFIG command is
  	 * disabled. This is required for some Broadcom controllers which
 diff --git a/include/net/bluetooth/hci_core.h b/include/net/bluetooth/hci_core.h
-index 4fcee6b..95392f0 100644
+index 9dea729fd..0d1d97b3c 100644
 --- a/include/net/bluetooth/hci_core.h
 +++ b/include/net/bluetooth/hci_core.h
-@@ -1878,7 +1878,8 @@ void hci_conn_del_sysfs(struct hci_conn *conn);
+@@ -2016,7 +2016,8 @@ void hci_conn_del_sysfs(struct hci_conn *conn);
  #define use_ext_conn(dev) (((dev)->commands[37] & 0x80) && \
- 	!test_bit(HCI_QUIRK_BROKEN_EXT_CREATE_CONN, &(dev)->quirks))
+ 	!hci_test_quirk((dev), HCI_QUIRK_BROKEN_EXT_CREATE_CONN))
  /* Extended advertising support */
 -#define ext_adv_capable(dev) (((dev)->le_features[1] & HCI_LE_EXT_ADV))
 +#define ext_adv_capable(dev) (((dev)->le_features[1] & HCI_LE_EXT_ADV) && \
-+			      !test_bit(HCI_QUIRK_BROKEN_EXT_ADV, &(dev)->quirks))
++			      !hci_test_quirk((dev), HCI_QUIRK_BROKEN_EXT_ADV))
  
  /* Maximum advertising length */
  #define max_adv_len(dev) \

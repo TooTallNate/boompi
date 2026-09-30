@@ -125,7 +125,8 @@ contributes to "the quintessential Raspberry Pi boombox".
   load when idle is the next lever (ties into ambient mode).
   NB: the 2026-08 boot-splash work made vc4 (+ DDC i2c, ili9806e
   panel, fbcon) built-in rather than modular - any hang-frequency
-  observations from before then need a fresh baseline.
+  observations from before then need a fresh baseline. The 2026-09
+  move to rpi-6.18.y resets that baseline again.
 
 ## Tier 3 - keeper of the fleet
 

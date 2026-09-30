@@ -55,11 +55,14 @@ BR2_PACKAGE_E2FSPROGS_FSCK=y
 BR2_GLOBAL_PATCH_DIR="$(BR2_EXTERNAL_BOOMPI_PATH)/patches"
 BR2_ROOTFS_POST_BUILD_SCRIPT="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/post-build.sh"
 
-# Kernel: same Raspberry Pi kernel pin as upstream raspberrypi3_64_defconfig
-BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_6_6=y
+# Kernel: Raspberry Pi rpi-6.18.y (6.18.54, 2026-09-29), the branch
+# Raspberry Pi currently maintains; rpi-6.6.y stopped receiving updates
+# in 2025-03. Local patches: buildroot/patches/linux/.
+# (Userspace headers come from the external Bootlin toolchain; a
+# BR2_PACKAGE_HOST_LINUX_HEADERS_CUSTOM_* choice would be inert here.)
 BR2_LINUX_KERNEL=y
 BR2_LINUX_KERNEL_CUSTOM_TARBALL=y
-BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,bba53a117a4a5c29da892962332ff1605990e17a)/linux-bba53a117a4a5c29da892962332ff1605990e17a.tar.gz"
+BR2_LINUX_KERNEL_CUSTOM_TARBALL_LOCATION="$(call github,raspberrypi,linux,1e807154dbf9733995f5337e74602d3f82544c6e)/linux-1e807154dbf9733995f5337e74602d3f82544c6e.tar.gz"
 # kexec for A/B trial boots - firmware tryboot is not used on either
 # board (see board/boompi/linux-kexec.fragment).
 BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="$(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-kexec.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-bt.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-audio.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-gamepads.fragment $(BR2_EXTERNAL_BOOMPI_PATH)/board/boompi/linux-splash.fragment"
