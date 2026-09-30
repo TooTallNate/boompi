@@ -33,6 +33,9 @@ pub fn spawn(app: SharedApp) {
 async fn capture(app: &SharedApp) -> anyhow::Result<()> {
     let mut child = tokio::process::Command::new("pw-record")
         .args([
+            // PipeWire 1.4+ otherwise writes an AU header to stdout,
+            // which the analyzer would misread as samples.
+            "--raw",
             "--format",
             "s16",
             "--rate",

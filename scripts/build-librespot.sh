@@ -6,7 +6,7 @@
 #   - rustls-tls-webpki-roots: TLS without system libraries or CA bundles
 #   - with-libmdns: built-in zeroconf/mDNS discovery
 #   - audio output uses the always-available `pipe` backend; boompid pipes
-#     the raw PCM into pw-play (see boompid/src/spotify.rs)
+#     the raw PCM into `pw-cat --raw` (see boompid/src/spotify.rs)
 #
 # Output: build/librespot/aarch64-unknown-linux-gnu/release/librespot
 
