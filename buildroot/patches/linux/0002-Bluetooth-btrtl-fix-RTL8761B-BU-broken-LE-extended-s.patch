@@ -1,3 +1,4 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Alexej Sidorenko <alexej@sidorenko.cz>
 Date: Wed, 29 Apr 2026 17:13:43 +0200
 Subject: [PATCH] Bluetooth: btrtl: fix RTL8761B/BU broken LE extended scan
@@ -14,8 +15,18 @@ Tested with RTL8761BU (USB ID 0bda:a728) where the issue manifested
 as continuous 'Opcode 0x2042 failed: -16' errors in dmesg whenever
 a BLE connection was active.
 
-[boompi: backport of mainline 5ead2063611a to 6.6 - hci_set_quirk()
-does not exist yet, use set_bit() like the rest of this function.
+[boompi: backport of mainline 5ead2063611a to rpi-6.18.y. 6.18 has
+hci_set_quirk() (hdev->quirks became the quirk_flags bitmap after 6.6),
+so unlike the rpi-6.6.y backport this is the mainline patch verbatim
+apart from hunk offsets. The 6.6-era set_bit(..., &hdev->quirks)
+form applies cleanly to 6.18 but does not compile.
+
+NB mainline later narrowed this in ca0583c24661 ("Bluetooth: btusb:
+limit RTL8761B BROKEN_EXT_SCAN quirk to 0bda:a728", Cc: stable),
+reporting that on a TP-Link UB500 (2357:0604, the fleet dongle) the
+forced legacy scan path makes LE Set Scan Enable (0x200c) time out
+and btusb reset-loop the adapter on 7.1.9. Keep this chip-wide
+version only while bench results on 6.18 + UB500 stay clean.
 Field motivation: the fleet's TP-Link UB500 (RTL8761BU) shows the
 same lying-about-5.1 signature ("Opcode 0x2036 failed: -16",
 spurious advertising-set-terminated events, silent adv/EIR state
@@ -28,9 +39,10 @@ Signed-off-by: Luiz Augusto von Dentz <luiz.von.dentz@intel.com>
  1 file changed, 13 insertions(+)
 
 diff --git a/drivers/bluetooth/btrtl.c b/drivers/bluetooth/btrtl.c
+index 564ed584c..a754f6482 100644
 --- a/drivers/bluetooth/btrtl.c
 +++ b/drivers/bluetooth/btrtl.c
-@@ -1300,6 +1300,19 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev
+@@ -1342,6 +1342,19 @@ void btrtl_set_quirks(struct hci_dev *hdev, struct btrtl_device_info *btrtl_dev)
  	if (!btrtl_dev->ic_info)
  		return;
  
@@ -41,7 +53,7 @@ diff --git a/drivers/bluetooth/btrtl.c b/drivers/bluetooth/btrtl.c
 +		 * repeated -EBUSY failures when BlueZ attempts extended
 +		 * scanning while a connection is active.
 +		 */
-+		set_bit(HCI_QUIRK_BROKEN_EXT_SCAN, &hdev->quirks);
++		hci_set_quirk(hdev, HCI_QUIRK_BROKEN_EXT_SCAN);
 +		break;
 +	default:
 +		break;

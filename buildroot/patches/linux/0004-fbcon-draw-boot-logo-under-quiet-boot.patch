@@ -1,4 +1,7 @@
-fbcon: draw the boot logo even when the console is quiet
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nathan Rajlich <n@n8.io>
+Date: Fri, 21 Aug 2026 00:56:55 -0700
+Subject: [PATCH] fbcon: draw the boot logo even when the console is quiet
 
 The appliance boots with `quiet loglevel=3` (silent boot, see
 docs/PLAN.md), but fbcon refuses to draw the built-in boot logo
@@ -11,9 +14,17 @@ window between firmware handoff and boompi-ui.
 Drop the loglevel check. Kernel *text* stays suppressed by
 loglevel=3; only the logo bitmap is drawn at fbcon takeover.
 
+[boompi: refreshed for rpi-6.18.y - code unchanged, hunk moved from
+line 1006 to 1051 (the 6.6 patch still applies with offset only).]
+---
+ drivers/video/fbdev/core/fbcon.c | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/drivers/video/fbdev/core/fbcon.c b/drivers/video/fbdev/core/fbcon.c
+index 4548cf982..c383a84b7 100644
 --- a/drivers/video/fbdev/core/fbcon.c
 +++ b/drivers/video/fbdev/core/fbcon.c
-@@ -1006,9 +1006,6 @@
+@@ -1048,9 +1048,6 @@ static void fbcon_init(struct vc_data *vc, bool init)
  
  	info = fbcon_info_from_console(vc->vc_num);
  
