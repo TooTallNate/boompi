@@ -8,9 +8,17 @@
 //! collection.
 //!
 //! Licensing: only freely redistributable fonts ship with the image.
-//! The Apple entry downloads the community apple-emoji-linux build
-//! directly from its GitHub release onto the user's own device at the
-//! user's request; it is never redistributed by us.
+//! The vendor sets (Apple, Samsung, Huawei, WhatsApp, Facebook,
+//! Fluent 3D) come from community builds (apple-emoji-linux,
+//! MFFMEmoji) and JoyPixels from its own CDN; each downloads directly
+//! from the pinned upstream URL onto the user's own device at the
+//! user's request and is never redistributed by us.
+//!
+//! Format: the images' source-built Skia draws CBDT, COLRv0 and COLRv1
+//! (bench builds without ~/.boompi/skia-binaries link the stock
+//! prebuilt, which lacks COLRv1). Each family name must be unique - the
+//! reject rules match on it, and many Android builds reuse "Noto Color
+//! Emoji".
 
 #![cfg(target_os = "linux")]
 
@@ -45,13 +53,13 @@ pub const CATALOG: &[FontDef] = &[
     FontDef {
         id: "twemoji",
         label: "Twemoji",
-        family: "Twemoji Mozilla",
+        family: "Twemoji MFFM 17.0.3",
         download: Some(Download {
-            url: "https://github.com/mozilla/twemoji-colr/releases/download/v0.7.0/Twemoji.Mozilla.ttf",
-            sha256: "6d90152ee0d29e82fe2a87793af5aa4b7ad13e6538360889e141e81ed299ee8e",
-            size: 1_474_284,
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/Twemoji%2017.0.3%20COLRv1.ttf",
+            sha256: "81a7cf19770b89702e43e5a204fda02b8e91935e323652a61d2c82acdf369332",
+            size: 1_504_016,
         }),
-        license: "CC-BY 4.0 (Twitter/Mozilla)",
+        license: "CC-BY 4.0 (Twitter/jdecked) - community MFFMEmoji COLRv1 build",
     },
     FontDef {
         id: "openmoji",
@@ -97,6 +105,83 @@ pub const CATALOG: &[FontDef] = &[
         }),
         license: "Apple's artwork - community apple-emoji-linux build, downloaded onto this speaker for personal use",
     },
+    FontDef {
+        id: "samsung",
+        label: "Samsung One UI",
+        family: "SamsungMFFMColorEmoji",
+        download: Some(Download {
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/OneUI%208.5.ttf",
+            sha256: "650e1d7cfa34c6bb42283625b8da4cc4e87227dc9bc441bee66479062ad90d5c",
+            size: 20_524_944,
+        }),
+        license: "Samsung's artwork - community MFFMEmoji build, downloaded onto this speaker for personal use",
+    },
+    FontDef {
+        id: "fluent-3d",
+        label: "Microsoft Fluent 3D",
+        family: "FluentUI MFFM Emoji",
+        download: Some(Download {
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/Microsoft%20FluentUI%203D%2016.ttf",
+            sha256: "afeae2411705772be83ed17ff71bf5de7cd11b5e44e0cfde0d8268a4ca648aac",
+            size: 25_243_132,
+        }),
+        license: "MIT artwork (Microsoft) - community MFFMEmoji build",
+    },
+    FontDef {
+        id: "huawei",
+        label: "Huawei",
+        family: "Huawei MFFM Emoji",
+        download: Some(Download {
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/Huawei%2016.0.ttf",
+            sha256: "fe46f5a5622ade4588c24a5c6e8fe9b0a695a1dbbb2f30318a81f1db8ded6ac1",
+            size: 22_592_504,
+        }),
+        license: "Huawei's artwork - community MFFMEmoji build, downloaded onto this speaker for personal use",
+    },
+    FontDef {
+        id: "whatsapp",
+        label: "WhatsApp",
+        family: "WhatsApp MFFM Color Emoji",
+        download: Some(Download {
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/WhatsApp%202.26.8.72.ttf",
+            sha256: "ba63a55c3a883ffa963c43cce2b9c38bb6e43f6dd3a716f47f1371cb78cfa39d",
+            size: 35_388_128,
+        }),
+        license: "WhatsApp's artwork - community MFFMEmoji build, downloaded onto this speaker for personal use",
+    },
+    FontDef {
+        id: "facebook",
+        label: "Facebook",
+        family: "Facebook MFFM Emoji",
+        download: Some(Download {
+            url: "https://raw.githubusercontent.com/mistu01/MFFMEmoji/2be82f0bc1d79559b2ecf3676827d12dcf02bda9/Files/Facebook%2016.0.ttf",
+            sha256: "b1be92fc4ae3485337ad1cb2073010e3cbee1c8e6fe8a315728429bbd5c88db8",
+            size: 39_425_672,
+        }),
+        license: "Meta's artwork - community MFFMEmoji build, downloaded onto this speaker for personal use",
+    },
+    FontDef {
+        id: "joypixels",
+        label: "JoyPixels",
+        family: "JoyPixels",
+        download: Some(Download {
+            url: "https://cdn.joypixels.com/arch-linux/font/8.0.0/joypixels-android.ttf",
+            sha256: "7c95040bebcb69676e81963ee0a82e4138f342ee85b5b8dbbad7d05d1f657eae",
+            size: 13_578_288,
+        }),
+        license: "JoyPixels free license (personal use) - official 8.0 build from JoyPixels' CDN",
+    },
+    FontDef {
+        id: "tossface",
+        label: "Toss Face",
+        family: "Toss Face Font Web",
+        download: Some(Download {
+            url: "https://github.com/toss/tossface/releases/download/v1.6.1/TossFaceFontWeb.otf",
+            sha256: "e99b8642c24631f550aaa90644a17dc164367a79fc7c1584b1ea254b41db770b",
+            size: 6_042_748,
+        }),
+        license: "Tossface license (Viva Republica) - official v1.6.1 release",
+    },
 ];
 
 pub fn def(id: &str) -> Option<&'static FontDef> {
@@ -107,11 +192,27 @@ pub fn font_path(id: &str) -> std::path::PathBuf {
     std::path::Path::new(FONTS_DIR).join(format!("{id}.ttf"))
 }
 
+/// A download counts only if it matches the current catalog pin: a file
+/// left over from an older pin (same id, different build) would carry a
+/// family name the reject rules no longer know about.
 pub fn installed(id: &str) -> bool {
-    match def(id) {
-        Some(f) if f.download.is_none() => true,
-        Some(_) => font_path(id).exists(),
+    match def(id).map(|f| f.download.as_ref()) {
+        Some(None) => true,
+        Some(Some(dl)) => std::fs::metadata(font_path(id)).is_ok_and(|m| m.len() == dl.size),
         None => false,
+    }
+}
+
+/// Delete downloads that no longer match their catalog pin.
+fn prune_stale() {
+    for f in CATALOG.iter().filter(|f| f.download.is_some()) {
+        let path = font_path(f.id);
+        if path.exists() && !installed(f.id) {
+            match std::fs::remove_file(&path) {
+                Ok(()) => tracing::info!(id = f.id, "removed stale emoji font download"),
+                Err(err) => tracing::warn!(%err, id = f.id, "stale emoji font removal failed"),
+            }
+        }
     }
 }
 
@@ -271,9 +372,11 @@ pub async fn apply_live() {
         .await;
 }
 
-/// Boot-time reconciliation: if the persisted choice's font vanished
-/// (fresh /data, manual deletion), fall back to the built-in.
+/// Boot-time reconciliation: prune downloads from older catalog pins,
+/// and if the persisted choice's font vanished (fresh /data, manual
+/// deletion, stale pin), fall back to the built-in.
 pub fn reconcile(active: &str) -> &'static str {
+    prune_stale();
     let id = if installed(active) { active } else { "noto" };
     let id = def(id).map(|d| d.id).unwrap_or("noto");
     if let Err(err) = write_conf(id) {

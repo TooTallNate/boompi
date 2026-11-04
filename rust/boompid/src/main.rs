@@ -151,6 +151,8 @@ async fn main() -> anyhow::Result<()> {
                         tracing::warn!(%chosen, %effective, "emoji font missing; falling back");
                         app.shared.write().await.emoji_font = effective.into();
                         app.persist_config().await;
+                        // The panel may already be up on the old fragment.
+                        fonts::apply_live().await;
                     }
                 });
             }

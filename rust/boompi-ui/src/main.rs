@@ -148,11 +148,13 @@ fn start_bar_tween(ui: &AppWindow) -> slint::Timer {
 /// identically regardless of fontconfig state.
 ///
 /// Linux-only, and not by choice: macOS Skia rasterizes through
-/// CoreText, which cannot draw CBDT bitmap fonts (selection works -
-/// fontique picks our font - but every glyph rasterizes empty), and
-/// the reverse holds on the boxes, where the Skia/FreeType prebuilt
-/// draws CBDT but not COLRv1. No color emoji format renders on both
-/// stacks, so the desktop preview keeps the host's Apple Color Emoji.
+/// CoreText, which cannot draw in-memory color fonts of any format
+/// (selection works - fontique picks our font - but every glyph
+/// rasterizes empty), so the desktop preview keeps the host's Apple
+/// Color Emoji. This bundled copy is CBDT because the stock Skia
+/// prebuilt (bench builds without ~/.boompi/skia-binaries) draws CBDT
+/// but not COLRv1; the images' source-built Skia draws both, and their
+/// on-disk COLRv1 Noto wins through fontconfig anyway.
 #[cfg(target_os = "linux")]
 fn register_emoji_fallback() {
     use slint::fontique_010::fontique;
