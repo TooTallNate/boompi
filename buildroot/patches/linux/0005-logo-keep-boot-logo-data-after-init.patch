@@ -1,4 +1,8 @@
-logo: keep the boot logo data alive after init memory is freed
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Nathan Rajlich <n@n8.io>
+Date: Fri, 21 Aug 2026 02:04:17 -0700
+Subject: [PATCH] logo: keep the boot logo data alive after init memory is
+ freed
 
 The logo bitmaps are emitted __initdata/__initconst and logo.c marks
 them unusable at late_initcall_sync (logos_freed). On the Pi 3 the
@@ -14,9 +18,21 @@ Keep the generated logo in .data/.rodata permanently (~70KB - noise
 on these boxes) and drop the logos_freed latch, so a late fbcon
 takeover can still find and draw it.
 
+[boompi: rebased for rpi-6.18.y. pnmtologo now emits
+`static const unsigned char ... __initconst` for the data/clut arrays
+(was non-const __initdata in 6.6), so the 6.6 pnmtologo hunks no
+longer apply. Only the __initconst annotation is dropped; the arrays
+stay const and land in .rodata. The logo.c hunks are unchanged.]
+---
+ drivers/video/logo/logo.c      | 14 ++++----------
+ drivers/video/logo/pnmtologo.c |  6 +++---
+ 2 files changed, 7 insertions(+), 13 deletions(-)
+
+diff --git a/drivers/video/logo/logo.c b/drivers/video/logo/logo.c
+index 141f15a9a..b4670b0cc 100644
 --- a/drivers/video/logo/logo.c
 +++ b/drivers/video/logo/logo.c
-@@ -27,15 +27,9 @@
+@@ -27,15 +27,9 @@ MODULE_PARM_DESC(nologo, "Disables startup logo");
   * Use late_init to mark the logos as freed to prevent any further use.
   */
  
@@ -35,7 +51,7 @@ takeover can still find and draw it.
  
  /* logo's are marked __initdata. Use __ref to tell
   * modpost that it is intended that this function uses data
-@@ -45,7 +39,7 @@
+@@ -45,7 +39,7 @@ const struct linux_logo * __ref fb_find_logo(int depth)
  {
  	const struct linux_logo *logo = NULL;
  
@@ -44,32 +60,33 @@ takeover can still find and draw it.
  		return NULL;
  
  	if (depth >= 1) {
+diff --git a/drivers/video/logo/pnmtologo.c b/drivers/video/logo/pnmtologo.c
+index 28d9f0b90..81527ae76 100644
 --- a/drivers/video/logo/pnmtologo.c
 +++ b/drivers/video/logo/pnmtologo.c
-@@ -238,7 +238,7 @@
+@@ -238,14 +238,14 @@ static void write_header(void)
  	fprintf(out, " *  Linux logo %s\n", logoname);
  	fputs(" */\n\n", out);
  	fputs("#include <linux/linux_logo.h>\n\n", out);
--	fprintf(out, "static unsigned char %s_data[] __initdata = {\n",
-+	fprintf(out, "static unsigned char %s_data[] = {\n",
+-	fprintf(out, "static const unsigned char %s_data[] __initconst = {\n",
++	fprintf(out, "static const unsigned char %s_data[] = {\n",
  		logoname);
  }
  
-@@ -245,7 +245,7 @@
  static void write_footer(void)
  {
  	fputs("\n};\n\n", out);
 -	fprintf(out, "const struct linux_logo %s __initconst = {\n", logoname);
 +	fprintf(out, "const struct linux_logo %s = {\n", logoname);
  	fprintf(out, "\t.type\t\t= %s,\n", logo_types[logo_type]);
- 	fprintf(out, "\t.width\t\t= %d,\n", logo_width);
- 	fprintf(out, "\t.height\t\t= %d,\n", logo_height);
-@@ -375,7 +375,7 @@
+ 	fprintf(out, "\t.width\t\t= %u,\n", logo_width);
+ 	fprintf(out, "\t.height\t\t= %u,\n", logo_height);
+@@ -375,7 +375,7 @@ static void write_logo_clut224(void)
  	fputs("\n};\n\n", out);
  
  	/* write logo clut */
--	fprintf(out, "static unsigned char %s_clut[] __initdata = {\n",
-+	fprintf(out, "static unsigned char %s_clut[] = {\n",
+-	fprintf(out, "static const unsigned char %s_clut[] __initconst = {\n",
++	fprintf(out, "static const unsigned char %s_clut[] = {\n",
  		logoname);
  	write_hex_cnt = 0;
  	for (i = 0; i < logo_clutsize; i++) {

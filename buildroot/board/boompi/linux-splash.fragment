@@ -8,11 +8,14 @@ CONFIG_DRM_VC4=y
 
 # The Pi 3 HyperPixel 4 is an ILI9806E panel initialized over a GPIO-backed
 # SPI bus. Every component in that probe chain must be built in too.
+# NB since 6.8 the SPI-attached HyperPixel driver ("pimoroni,hyperpixel4")
+# is DRM_PANEL_ILITEK_ILI9806E_SPI; plain ILI9806E is now mainline's
+# unrelated MIPI-DSI driver.
 CONFIG_SPI=y
 CONFIG_SPI_GPIO=y
 CONFIG_BACKLIGHT_CLASS_DEVICE=y
 CONFIG_BACKLIGHT_GPIO=y
-CONFIG_DRM_PANEL_ILITEK_ILI9806E=y
+CONFIG_DRM_PANEL_ILITEK_ILI9806E_SPI=y
 
 # HDMI DDC i2c controllers (bcm2835 on the Pi 3, brcmstb on the Pi 4).
 # As modules they gate the whole vc4 component bind behind udev's
