@@ -13,6 +13,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -21,6 +22,7 @@ import {
 } from "@boompi/ui/components/sidebar";
 import { GithubIcon } from "@boompi/ui/components/github-icon";
 import { HomeAssistantIcon } from "@boompi/ui/components/home-assistant-icon";
+import { Progress } from "@boompi/ui/components/progress";
 import { Separator } from "@boompi/ui/components/separator";
 import {
   BatteryMedium,
@@ -33,6 +35,8 @@ import {
   Wifi,
 } from "lucide-react";
 import { capsOf } from "@boompi/ui/proto";
+import { describeUpdate, type UpdateDescription } from "@boompi/ui/lib/update-progress";
+import { cn } from "@boompi/ui/lib/utils";
 import { useBoompi } from "@boompi/ui/transport";
 
 import { AirplaySection } from "@boompi/ui/sections/airplay";
@@ -126,6 +130,11 @@ export function SettingsShell({
   const shown = pages.filter((p) => !p.requires || caps.has(p.requires));
   const page = shown.find((p) => p.id === active) ?? shown[0];
   const Content = page.content;
+  // In-flight OS update, surfaced from every page (the Software page
+  // shows the full detail).
+  const softwarePage = shown.find((p) => p.id === "software");
+  const update = softwarePage ? describeUpdate(state?.updates) : null;
+  const updating = update?.active ? update : null;
 
   return (
     <SidebarProvider>
@@ -153,23 +162,71 @@ export function SettingsShell({
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {shown.map((p) => (
-                  <SidebarMenuItem key={p.id}>
-                    <SidebarMenuButton
-                      isActive={p.id === page.id}
-                      tooltip={p.label}
-                      onClick={() => onNavigate(p.id)}
-                    >
-                      <p.icon />
-                      <span>{p.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {shown.map((p) => {
+                  const progress = p.id === "software" ? updating : null;
+                  return (
+                    <SidebarMenuItem key={p.id}>
+                      <SidebarMenuButton
+                        isActive={p.id === page.id}
+                        tooltip={
+                          progress
+                            ? `${p.label}: ${updateSummary(progress)}`
+                            : p.label
+                        }
+                        onClick={() => onNavigate(p.id)}
+                        className={cn(progress?.percent != null && "pr-12")}
+                      >
+                        <p.icon />
+                        <span>{p.label}</span>
+                      </SidebarMenuButton>
+                      {progress && (
+                        <>
+                          {progress.percent != null && (
+                            <SidebarMenuBadge>{progress.percent}%</SidebarMenuBadge>
+                          )}
+                          <div
+                            aria-hidden
+                            className="pointer-events-none absolute inset-x-2 bottom-0.5 h-0.5 overflow-hidden rounded-full bg-muted group-data-[collapsible=icon]:inset-x-1.5"
+                          >
+                            <div
+                              className={cn(
+                                "h-full bg-primary transition-[width] duration-500 ease-out",
+                                progress.stalled && "bg-muted-foreground",
+                              )}
+                              style={{ width: `${progress.percent ?? 0}%` }}
+                            />
+                          </div>
+                        </>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
         <SidebarFooter>
+          {updating && softwarePage && (
+            <button
+              type="button"
+              onClick={() => onNavigate(softwarePage.id)}
+              className="flex flex-col gap-2 rounded-md border bg-sidebar-accent/50 p-3 text-left outline-hidden ring-sidebar-ring hover:bg-sidebar-accent focus-visible:ring-2 group-data-[collapsible=icon]:hidden"
+            >
+              <div className="flex items-center gap-2 text-xs font-medium">
+                <CloudDownload className="size-3.5 flex-none" />
+                <span className="min-w-0 truncate">Updating to {updating.version}</span>
+              </div>
+              <Progress
+                value={updating.percent}
+                aria-label="Update progress"
+                className={cn("h-1", updating.percent == null && "animate-pulse")}
+                indicatorClassName={cn(updating.stalled && "bg-muted-foreground")}
+              />
+              <div className="truncate text-xs text-muted-foreground tabular-nums">
+                {updateSummary(updating)}
+              </div>
+            </button>
+          )}
           {footer}
           <a
             href="https://github.com/TooTallNate/boompi"
@@ -189,6 +246,20 @@ export function SettingsShell({
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
           <h1 className="text-sm font-medium">{page.label}</h1>
+          {updating && softwarePage && page.id !== softwarePage.id && (
+            // The sidebar is an off-canvas sheet on mobile, so give the
+            // update a foothold in the header there.
+            <button
+              type="button"
+              onClick={() => onNavigate(softwarePage.id)}
+              className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-0.5 text-xs font-medium tabular-nums hover:bg-muted md:hidden"
+            >
+              <CloudDownload className="size-3.5" />
+              {updating.restarting
+                ? "Restarting…"
+                : `Updating${updating.percent != null ? ` ${updating.percent}%` : "…"}`}
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">{headerExtra}</div>
         </header>
         <main className="flex justify-center px-4 py-6">
@@ -199,4 +270,15 @@ export function SettingsShell({
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+/** "42% · 2.3 MB/s" - the compact one-liner for the sidebar. */
+function updateSummary(u: UpdateDescription): string {
+  if (u.restarting) return "Restarting…";
+  const parts: string[] = [];
+  if (u.percent != null) parts.push(`${u.percent}%`);
+  if (u.rateLine) parts.push(u.rateLine);
+  else if (u.stalled) parts.push(u.etaLine ?? "Waiting…");
+  else parts.push(u.stageLabel);
+  return parts.join(" · ");
 }

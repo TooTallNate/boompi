@@ -103,6 +103,13 @@ export interface UpdateState {
   stage: UpdateStage | null;
   progress: number | null;
   error: string | null;
+  /** Compressed bundle bytes received so far (only while downloading). */
+  downloaded_bytes?: number | null;
+  /** Total bundle size in bytes (only while downloading). */
+  total_bytes?: number | null;
+  /** Smoothed recent throughput in bytes/sec (only while downloading;
+   *  0 while stalled/reconnecting). */
+  bytes_per_second?: number | null;
 }
 
 export type UpdateAction = "check" | "apply";

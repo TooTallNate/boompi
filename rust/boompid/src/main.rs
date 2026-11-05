@@ -49,6 +49,10 @@ mod spotify;
 mod state;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod tarstream;
+// Resumable download + throughput metering: platform-independent
+// (unit-tested everywhere), consumed by the Linux-only updater.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod transfer;
 mod update;
 #[cfg(target_os = "linux")]
 mod visualizer;

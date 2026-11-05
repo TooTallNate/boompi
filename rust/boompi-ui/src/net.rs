@@ -527,13 +527,15 @@ fn apply_update(ui: &crate::AppWindow, state: &boompi_proto::UpdateState) {
             Some(boompi_proto::UpdateStage::Restarting) => "restarting",
             None => "preparing",
         };
-        (
-            "applying",
-            format!(
-                "Installing {v}: {stage}… {:.0}%",
-                state.progress.unwrap_or(0.0) * 100.0
-            ),
-        )
+        let mut detail = format!(
+            "Installing {v}: {stage}… {:.0}%",
+            state.progress.unwrap_or(0.0) * 100.0
+        );
+        if let Some(rate) = state.bytes_per_second {
+            detail.push_str(" · ");
+            detail.push_str(&format_rate(rate));
+        }
+        ("applying", detail)
     } else if let Some(err) = &state.error {
         ("error", err.clone())
     } else if state.checking {
@@ -546,6 +548,15 @@ fn apply_update(ui: &crate::AppWindow, state: &boompi_proto::UpdateState) {
     ui.set_update_version(state.version.clone().into());
     ui.set_update_status(status.into());
     ui.set_update_detail(detail.into());
+}
+
+/// Download speed for the update card: "850 KB/s", "2.3 MB/s".
+fn format_rate(bytes_per_second: u64) -> String {
+    if bytes_per_second >= 1_000_000 {
+        format!("{:.1} MB/s", bytes_per_second as f64 / 1_000_000.0)
+    } else {
+        format!("{} KB/s", bytes_per_second / 1000)
+    }
 }
 
 /// Project EmojiFontsState into the settings screen's row model.

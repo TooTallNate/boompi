@@ -49,6 +49,10 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+[dev-dependencies]
+# tokio::time::pause() for the download retry/stall tests (transfer.rs).
+tokio = { workspace = true, features = ["test-util"] }
+
 # Linux-only hardware integrations, cfg-gated so the workspace stays
 # cross-platform for laptop development (verify with `make cross-boompid`).
 [target.'cfg(target_os = "linux")'.dependencies]

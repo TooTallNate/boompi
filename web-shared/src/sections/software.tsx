@@ -4,15 +4,10 @@ import { Field, FieldDescription, FieldLabel } from "@boompi/ui/components/field
 import { Separator } from "@boompi/ui/components/separator";
 import { Switch } from "@boompi/ui/components/switch";
 import { StatusText } from "@boompi/ui/components/status-text";
+import { Progress } from "@boompi/ui/components/progress";
+import { describeUpdate } from "@boompi/ui/lib/update-progress";
+import { cn } from "@boompi/ui/lib/utils";
 import { useBoompi, useSave } from "@boompi/ui/transport";
-
-const STAGE_LABEL: Record<string, string> = {
-  downloading_system: "downloading system",
-  verifying_system: "verifying system",
-  downloading_boot: "downloading boot files",
-  verifying_boot: "verifying boot files",
-  restarting: "restarting",
-};
 
 export function SoftwareSection() {
   const { state, send } = useBoompi();
@@ -21,8 +16,9 @@ export function SoftwareSection() {
   const settings = state?.settings;
   if (!updates || !settings) return null;
 
-  const detail = updates.applying
-    ? `Installing ${updates.applying}: ${STAGE_LABEL[updates.stage ?? ""] ?? "preparing"}… ${Math.round((updates.progress ?? 0) * 100)}%`
+  const progress = describeUpdate(updates);
+  const detail = progress.active
+    ? `Installing ${progress.version}`
     : updates.checking
       ? "Checking…"
       : updates.available
@@ -60,6 +56,7 @@ export function SoftwareSection() {
             )}
           </div>
         </div>
+        {progress.active && <UpdateProgress desc={progress} />}
         <Separator />
         <Field orientation="horizontal">
           <div className="flex flex-col gap-1">
@@ -78,5 +75,28 @@ export function SoftwareSection() {
         <StatusText status={status} />
       </CardContent>
     </Card>
+  );
+}
+
+function UpdateProgress({ desc }: { desc: ReturnType<typeof describeUpdate> }) {
+  const details = [desc.bytesLine, desc.rateLine, desc.etaLine].filter(Boolean);
+  return (
+    <div className="flex flex-col gap-2" aria-live="polite">
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="min-w-0 truncate">{desc.stageLabel}</span>
+        {desc.percent != null && (
+          <span className="flex-none font-medium tabular-nums">{desc.percent}%</span>
+        )}
+      </div>
+      <Progress
+        value={desc.percent}
+        aria-label={desc.stageLabel}
+        className={cn(desc.percent == null && "animate-pulse")}
+        indicatorClassName={cn(desc.stalled && "bg-muted-foreground")}
+      />
+      {details.length > 0 && (
+        <div className="text-xs text-muted-foreground tabular-nums">{details.join(" · ")}</div>
+      )}
+    </div>
   );
 }
