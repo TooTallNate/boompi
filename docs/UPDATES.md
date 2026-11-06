@@ -122,7 +122,10 @@ cannot replace hardware testing or prove roaming/rekey stability.
   hashing, the other slot's boot image is skipped, the partitions are
   re-read against the manifest, the box profile is re-materialized
   onto the fresh boot partition, and the trial is armed via
-  `boompi-trial-boot`.
+  `boompi-trial-boot`. A dropped or stalled connection (no data for
+  30 s) doesn't restart the download: it resumes where it left off
+  with an HTTP range request (`boompid transfer.rs`), and progress
+  reports bytes received and download speed alongside the percentage.
 - **Workstation** (`scripts/update-appliance.sh`): same flow driven
   over SSH from CI artifacts; `TRIAL=0` skips the trial for
   commit-without-trial.

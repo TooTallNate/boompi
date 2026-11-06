@@ -37,6 +37,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::state::SharedApp;
+use crate::transfer::{BoxReader, OpenError, OpenFuture, RateMeter, ResumableReader, RetryPolicy};
 
 const REPO: &str = "TooTallNate/boompi";
 const MARKER: &str = "/data/boompi-trial";
@@ -66,6 +67,86 @@ fn client() -> Result<reqwest::Client> {
         .user_agent(concat!("boompid/", env!("CARGO_PKG_VERSION")))
         .connect_timeout(std::time::Duration::from_secs(15))
         .build()?)
+}
+
+/// Opener for [`ResumableReader`]: GET the bundle, from `offset` via a
+/// Range request when resuming. GitHub answers browser_download_url
+/// with a redirect to a short-lived signed object URL; reqwest follows
+/// it with the Range header intact, and every reopen starts from the
+/// stable URL so an expired signature is never reused.
+///
+/// Resuming is only safe against the same object: the resumed
+/// response must cover exactly `offset..` of a `size`-byte object
+/// with the first response's ETag (when the server sends one).
+fn bundle_opener(
+    client: reqwest::Client,
+    url: String,
+    size: u64,
+) -> impl FnMut(u64) -> OpenFuture + Send + Unpin {
+    let etag: Arc<std::sync::Mutex<Option<String>>> = Arc::default();
+    move |offset| {
+        let (client, url, etag) = (client.clone(), url.clone(), etag.clone());
+        Box::pin(async move {
+            let fatal = |msg: String| OpenError::Fatal(std::io::Error::other(msg));
+            let changed =
+                || fatal("the update changed on the server while downloading; check again".into());
+            let mut req = client.get(&url);
+            if offset > 0 {
+                req = req.header(reqwest::header::RANGE, format!("bytes={offset}-"));
+            }
+            let resp = req
+                .send()
+                .await
+                .map_err(|e| OpenError::Retry(std::io::Error::other(e)))?;
+            let status = resp.status();
+            if status.is_server_error()
+                || status == reqwest::StatusCode::REQUEST_TIMEOUT
+                || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+            {
+                return Err(OpenError::Retry(std::io::Error::other(format!(
+                    "HTTP {status} downloading the update"
+                ))));
+            }
+            let header = |name: reqwest::header::HeaderName| {
+                resp.headers()
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_string)
+            };
+            let range = header(reqwest::header::CONTENT_RANGE)
+                .map(|v| crate::transfer::parse_content_range(&v));
+            let resp_etag = header(reqwest::header::ETAG);
+            match status {
+                reqwest::StatusCode::OK if offset == 0 => {
+                    if resp.content_length().is_some_and(|n| n != size) {
+                        return Err(changed());
+                    }
+                }
+                reqwest::StatusCode::PARTIAL_CONTENT => match range {
+                    Some(Some((_, _, Some(total)))) if total != size => return Err(changed()),
+                    Some(Some((start, end, Some(_)))) if start == offset && end + 1 == size => {}
+                    // Wrong window, or "bytes a-b/*" (object size unknown).
+                    _ => return Err(fatal("server did not resume the download".into())),
+                },
+                s if offset > 0 && s == reqwest::StatusCode::OK => {
+                    return Err(fatal("server did not resume the download".into()));
+                }
+                s => {
+                    return Err(fatal(format!("HTTP {s} downloading the update")));
+                }
+            }
+            {
+                let mut known = etag.lock().unwrap();
+                match (known.as_deref(), resp_etag) {
+                    (Some(a), Some(b)) if a != b => return Err(changed()),
+                    (None, Some(b)) if offset == 0 => *known = Some(b),
+                    _ => {}
+                }
+            }
+            let body = resp.bytes_stream().map_err(std::io::Error::other);
+            Ok(Box::new(tokio_util::io::StreamReader::new(body)) as BoxReader)
+        })
+    }
 }
 
 /// The hosted remote (boompi.n8.io) proxies + caches the release
@@ -231,7 +312,16 @@ pub async fn state(app: &SharedApp) -> UpdateState {
         stage: s.update_stage,
         progress: s.update_progress,
         error: s.update_error.clone(),
+        downloaded_bytes: s.update_downloaded,
+        total_bytes: s.update_total,
+        bytes_per_second: s.update_rate,
     }
+}
+
+fn clear_download(s: &mut crate::state::Shared) {
+    s.update_downloaded = None;
+    s.update_total = None;
+    s.update_rate = None;
 }
 
 async fn broadcast_state(app: &SharedApp) {
@@ -284,6 +374,7 @@ pub async fn perform(app: &SharedApp, action: UpdateAction) -> Result<()> {
                 let mut s = app.shared.write().await;
                 s.update_applying = None;
                 s.update_progress = None;
+                clear_download(&mut s);
                 drop(s);
                 broadcast_state(app).await;
                 bail!("a previous update trial is still pending; reboot first");
@@ -302,6 +393,7 @@ pub async fn perform(app: &SharedApp, action: UpdateAction) -> Result<()> {
                         s.update_applying = None;
                         s.update_stage = None;
                         s.update_progress = None;
+                        clear_download(&mut s);
                         s.update_error = Some(format!("{err:#}"));
                         drop(s);
                         broadcast_state(&app).await;
@@ -389,21 +481,19 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
 
     // One pass over the tar stream: manifest + stamp first (the
     // archive is written in that order), then payloads routed to their
-    // partitions or skipped.
-    let resp = client()?
-        .get(&bundle.browser_download_url)
-        .send()
-        .await?
-        .error_for_status()?;
-    let fetched = Arc::new(AtomicU64::new(0));
-    let counter = fetched.clone();
-    let stream = resp
-        .bytes_stream()
-        .inspect_ok(move |chunk| {
-            counter.fetch_add(chunk.len() as u64, Ordering::Relaxed);
-        })
-        .map_err(std::io::Error::other);
-    let mut tar = crate::tarstream::TarReader::new(tokio_util::io::StreamReader::new(stream));
+    // partitions or skipped. Connection drops and stalls are resumed
+    // underneath with HTTP Range requests, invisible to the tar/zstd/
+    // sha pipeline. The per-payload sha256 stays the end-to-end check:
+    // a mis-spliced or swapped object fails it.
+    let delivered = Arc::new(AtomicU64::new(0));
+    let body = ResumableReader::new(
+        bundle.size,
+        bundle_opener(client()?, bundle.browser_download_url.clone(), bundle.size),
+        RetryPolicy::default(),
+        delivered.clone(),
+    );
+    let mut tar = crate::tarstream::TarReader::new(body);
+    let ticker = DownloadTicker::spawn(app, delivered, bundle.size);
 
     let boot_entry = format!("{}.zst", slot.boot_file);
     let mut sums: Option<String> = None;
@@ -438,40 +528,31 @@ async fn apply(app: &SharedApp, version: &str) -> Result<()> {
             }
             "rootfs.ext4.zst" => {
                 let sha = sum_for(&sums, "rootfs.ext4")?;
-                let n = write_tar_entry_to_device(
-                    app,
-                    &mut tar,
-                    entry.size,
-                    slot.target_root,
-                    &sha,
-                    &fetched,
-                    bundle.size,
-                )
-                .await?;
+                let n =
+                    write_tar_entry_to_device(&mut tar, entry.size, slot.target_root, &sha).await?;
                 rootfs = Some((n, sha));
                 set_stage(app, UpdateStage::DownloadingBoot).await;
             }
             name if name == boot_entry => {
                 let plain = name.trim_end_matches(".zst");
                 let sha = sum_for(&sums, plain)?;
-                let n = write_tar_entry_to_device(
-                    app,
-                    &mut tar,
-                    entry.size,
-                    slot.target_boot,
-                    &sha,
-                    &fetched,
-                    bundle.size,
-                )
-                .await?;
+                let n =
+                    write_tar_entry_to_device(&mut tar, entry.size, slot.target_boot, &sha).await?;
                 boot = Some((n, sha));
             }
             _ => tar.skip_entry(entry.size).await?, // the other slot's boot image
         }
     }
+    drop(tar);
+    drop(ticker);
     let (rootfs_len, rootfs_sum) = rootfs.context("bundle carried no rootfs.ext4.zst")?;
     let (boot_len, boot_sum) = boot.with_context(|| format!("bundle carried no {boot_entry}"))?;
 
+    {
+        let mut s = app.shared.write().await;
+        clear_download(&mut s);
+        s.update_progress = Some(P_STREAM.1);
+    }
     set_stage(app, UpdateStage::VerifyingSystem).await;
     verify_device(
         app,
@@ -543,21 +624,75 @@ async fn set_progress(app: &SharedApp, p: f32) {
     }
 }
 
+/// Download-phase progress: once a second, publish the compressed
+/// bytes received off the wire (the slow part, and the denominator we
+/// know: the whole bundle's size) mapped across [`P_STREAM`], plus
+/// the byte counts and smoothed speed. Ticking on a clock instead of
+/// per write keeps progress (and the speed readout dropping to 0)
+/// live through stalls, reconnects and skipped entries.
+///
+/// Dropping the ticker stops it, so every early `?` exit from
+/// `apply` cleans it up; `perform` then clears the fields.
+struct DownloadTicker {
+    handle: tokio::task::JoinHandle<()>,
+    stopped: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl DownloadTicker {
+    fn spawn(app: &SharedApp, delivered: Arc<AtomicU64>, total: u64) -> Self {
+        let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let app = app.clone();
+        let flag = stopped.clone();
+        let handle = tokio::spawn(async move {
+            let mut meter = RateMeter::default();
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(1));
+            tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            // The first tick has a single sample, so no rate yet: report
+            // none rather than a 0 that UIs would read as a stall.
+            let mut first = true;
+            loop {
+                tick.tick().await;
+                let now = std::time::Instant::now();
+                let got = delivered.load(Ordering::Relaxed).min(total);
+                meter.sample(now, got);
+                let rate = (!first).then(|| meter.rate(now));
+                first = false;
+                {
+                    let mut s = app.shared.write().await;
+                    // Checked under the lock: once the ticker is dropped, a
+                    // tick that was already in flight must not
+                    // resurrect the fields the caller just cleared.
+                    if flag.load(Ordering::SeqCst) {
+                        return;
+                    }
+                    let frac = got as f32 / total.max(1) as f32;
+                    s.update_progress = Some(P_STREAM.0 + (P_STREAM.1 - P_STREAM.0) * frac);
+                    s.update_downloaded = Some(got);
+                    s.update_total = Some(total);
+                    s.update_rate = rate;
+                }
+                broadcast_state(&app).await;
+            }
+        });
+        Self { handle, stopped }
+    }
+}
+
+impl Drop for DownloadTicker {
+    fn drop(&mut self) {
+        self.stopped.store(true, Ordering::SeqCst);
+        self.handle.abort();
+    }
+}
+
 /// Decompress one zstd tar entry and write it straight to `dev`,
 /// hashing the decompressed bytes on the way through. Returns the
 /// number of decompressed bytes written.
-///
-/// Progress tracks COMPRESSED bytes off the wire (that's the slow
-/// part and the denominator we know: the whole bundle's size), mapped
-/// across [`P_STREAM`].
 async fn write_tar_entry_to_device<R>(
-    app: &SharedApp,
     tar: &mut crate::tarstream::TarReader<R>,
     entry_size: u64,
     dev: &str,
     expected_sha: &str,
-    fetched: &Arc<AtomicU64>,
-    bundle_size: u64,
 ) -> Result<u64>
 where
     R: tokio::io::AsyncRead + Unpin,
@@ -600,8 +735,6 @@ where
             .await
             .with_context(|| format!("writing {dev}"))?;
         written += n as u64;
-        let frac = fetched.load(Ordering::Relaxed) as f32 / bundle_size.max(1) as f32;
-        set_progress(app, P_STREAM.0 + (P_STREAM.1 - P_STREAM.0) * frac.min(1.0)).await;
     }
     file.sync_all().await?;
 

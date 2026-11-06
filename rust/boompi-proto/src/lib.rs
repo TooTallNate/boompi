@@ -637,6 +637,15 @@ pub struct UpdateState {
     /// when it reaches the end.
     pub progress: Option<f32>,
     pub error: Option<String>,
+    /// Compressed bundle bytes received so far. Present only while downloading (stages downloading_system / downloading_boot).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub downloaded_bytes: Option<u64>,
+    /// Total bundle size in bytes. Present only while downloading.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_bytes: Option<u64>,
+    /// Recent download throughput (bytes/second, smoothed over the last few seconds). Present only while downloading; 0 during a stall or reconnect.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bytes_per_second: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1074,6 +1083,47 @@ mod tests {
         assert!(json.get("artwork_id").is_none());
         let back: ServerMessage = serde_json::from_value(json).unwrap();
         assert_eq!(back, msg);
+    }
+
+    #[test]
+    fn update_state_download_fields_optional() {
+        let idle = UpdateState {
+            version: "v2.0.0".into(),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&idle).unwrap();
+        assert!(json.get("downloaded_bytes").is_none());
+        assert!(json.get("total_bytes").is_none());
+        assert!(json.get("bytes_per_second").is_none());
+
+        let downloading = UpdateState {
+            version: "v2.0.0".into(),
+            applying: Some("v2.0.1".into()),
+            stage: Some(UpdateStage::DownloadingSystem),
+            progress: Some(0.25),
+            downloaded_bytes: Some(160_000_000),
+            total_bytes: Some(640_000_000),
+            bytes_per_second: Some(2_300_000),
+            ..Default::default()
+        };
+        let json = serde_json::to_value(&downloading).unwrap();
+        assert_eq!(json["downloaded_bytes"], 160_000_000u64);
+        assert_eq!(json["total_bytes"], 640_000_000u64);
+        assert_eq!(json["bytes_per_second"], 2_300_000u64);
+        let back: UpdateState = serde_json::from_value(json).unwrap();
+        assert_eq!(back, downloading);
+
+        // An older box omits the fields entirely.
+        let old: UpdateState = serde_json::from_str(
+            r#"{"version":"v1.9.0","available":null,"checking":false,
+                "applying":"v2.0.0","stage":"downloading_system",
+                "progress":0.5,"error":null}"#,
+        )
+        .unwrap();
+        assert_eq!(old.downloaded_bytes, None);
+        assert_eq!(old.total_bytes, None);
+        assert_eq!(old.bytes_per_second, None);
+        assert_eq!(old.progress, Some(0.5));
     }
 
     #[test]

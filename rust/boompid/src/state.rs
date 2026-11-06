@@ -204,6 +204,11 @@ pub struct Shared {
     pub update_applying: Option<String>,
     pub update_stage: Option<boompi_proto::UpdateStage>,
     pub update_progress: Option<f32>,
+    /// Download phase only: compressed bundle bytes received, bundle
+    /// size, and smoothed throughput (bytes/s).
+    pub update_downloaded: Option<u64>,
+    pub update_total: Option<u64>,
+    pub update_rate: Option<u64>,
     pub update_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
@@ -546,6 +551,9 @@ impl App {
                 stage: s.update_stage,
                 progress: s.update_progress,
                 error: s.update_error.clone(),
+                downloaded_bytes: s.update_downloaded,
+                total_bytes: s.update_total,
+                bytes_per_second: s.update_rate,
             },
         }
     }
