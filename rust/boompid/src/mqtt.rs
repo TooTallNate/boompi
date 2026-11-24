@@ -4,8 +4,8 @@
 //! the speaker), carrying: an `update` entity wired into the OTA flow
 //! (install button + live progress), playback/battery/diagnostic
 //! sensors, transport buttons, a volume number, a pairing switch,
-//! screensaver (style + font) + update-channel selects, and the album art as an
-//! image entity.
+//! screensaver + update-channel selects, a UI font text entity, and
+//! the album art as an image entity.
 //!
 //! Architecture: the publisher is just another subscriber on the same
 //! broadcast channel the WebSocket clients use (pre-serialized
@@ -380,14 +380,15 @@ async fn publish_discovery(
             }),
         ),
         (
-            "select",
-            "screensaver_font",
+            // Free text: any built-in, uploaded, or Google Fonts family.
+            "text",
+            "font",
             json!({
-                "name": "Screensaver font",
+                "name": "Font",
                 "state_topic": format!("{base}/settings"),
-                "value_template": "{{ value_json.screensaver_font }}",
-                "command_topic": format!("{base}/set/screensaver_font"),
-                "options": boompi_proto::ScreensaverFont::ALL.map(|f| f.as_str()),
+                "value_template": "{{ value_json.font }}",
+                "command_topic": format!("{base}/set/font"),
+                "max": boompi_proto::FONT_NAME_MAX,
                 "entity_category": "config",
                 "icon": "mdi:format-font",
             }),
@@ -594,7 +595,7 @@ async fn publish_server_message(
                 format!("{base}/settings"),
                 json!({
                     "screensaver": kind_str(s.screensaver),
-                    "screensaver_font": s.screensaver_font.as_str(),
+                    "font": s.font,
                     "update_channel": match s.update_channel {
                         UpdateChannel::Stable => "stable",
                         UpdateChannel::Edge => "edge",
@@ -740,12 +741,10 @@ async fn handle_command(app: &SharedApp, topic: &str, base: &str, payload: &str)
                 ..Default::default()
             }))
         }
-        ("screensaver_font", v) => boompi_proto::ScreensaverFont::from_str_opt(v).map(|font| {
-            ClientMessage::SetSettings(boompi_proto::SettingsPatch {
-                screensaver_font: Some(font),
-                ..Default::default()
-            })
-        }),
+        ("font", v) => Some(ClientMessage::SetSettings(boompi_proto::SettingsPatch {
+            font: Some(v.to_string()),
+            ..Default::default()
+        })),
         ("channel", v) => Some(ClientMessage::SetSettings(boompi_proto::SettingsPatch {
             update_channel: Some(if v == "edge" {
                 UpdateChannel::Edge

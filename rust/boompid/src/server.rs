@@ -23,7 +23,12 @@ use tokio::io::AsyncWriteExt;
 struct WebAssets;
 
 pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
-    let router = Router::new()
+    let router = router(app.clone());
+    serve_router(app, addr, router).await
+}
+
+fn router(app: SharedApp) -> Router {
+    Router::new()
         .route("/ws", get(ws_upgrade))
         .route("/healthz", get(|| async { "ok" }))
         .route("/art/{id}", get(artwork))
@@ -45,6 +50,15 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
             "/api/emoji-fonts",
             get(api_emoji_fonts).post(api_emoji_font_action),
         )
+        // System UI font: uploads (IP links only) + the font files the
+        // panel and the web app load (uifonts.rs).
+        .route(
+            "/api/fonts/upload",
+            post(api_fonts_upload).layer(axum::extract::DefaultBodyLimit::max(
+                crate::uifonts::UPLOAD_CAP + (64 << 10), // multipart overhead
+            )),
+        )
+        .route("/fonts/ui/{file}", get(ui_font_file))
         // Captive-portal detection probes (iOS/Android/Windows). In AP
         // mode the portal dnsmasq resolves every name to us; answering
         // these with a redirect pops the OS "sign in to network" sheet
@@ -55,8 +69,10 @@ pub async fn serve(app: SharedApp, addr: SocketAddr) -> anyhow::Result<()> {
         .route("/connecttest.txt", get(captive_redirect))
         .route("/ncsi.txt", get(captive_redirect))
         .fallback(get(static_asset))
-        .with_state(app.clone());
+        .with_state(app)
+}
 
+async fn serve_router(app: SharedApp, addr: SocketAddr, router: Router) -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on http://{addr} (WebSocket at /ws)");
 
@@ -182,7 +198,7 @@ async fn capabilities(app: &SharedApp) -> Vec<String> {
         caps::EMOJI_FONTS,
         caps::UPDATES,
         caps::SCREENSAVER,
-        caps::SCREENSAVER_FONT,
+        caps::FONT,
         caps::HOME_ASSISTANT,
         caps::AIRPLAY,
     ]
@@ -577,6 +593,94 @@ async fn api_games_upload(
     Json(app.snapshot().await.games).into_response()
 }
 
+/// Upload UI font files (multipart, one or more .ttf/.otf parts, each
+/// up to uifonts::UPLOAD_CAP). Every part must parse as a font; the
+/// family name comes from the file. Answers the new FontState.
+async fn api_fonts_upload(
+    State(app): State<SharedApp>,
+    mut multipart: axum::extract::Multipart,
+) -> axum::response::Response {
+    let err = |code: StatusCode, msg: String| {
+        (code, Json(serde_json::json!({ "error": msg }))).into_response()
+    };
+    let mut stored = 0usize;
+    loop {
+        let mut field = match multipart.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => break,
+            Err(e) => return err(StatusCode::BAD_REQUEST, e.to_string()),
+        };
+        let name = field.file_name().unwrap_or("font").to_string();
+        let mut data = Vec::new();
+        loop {
+            match field.chunk().await {
+                Ok(Some(chunk)) => {
+                    if data.len() + chunk.len() > crate::uifonts::UPLOAD_CAP {
+                        return err(
+                            StatusCode::PAYLOAD_TOO_LARGE,
+                            format!(
+                                "{name} exceeds the {}MB cap",
+                                crate::uifonts::UPLOAD_CAP >> 20
+                            ),
+                        );
+                    }
+                    data.extend_from_slice(&chunk);
+                }
+                Ok(None) => break,
+                Err(e) => return err(StatusCode::BAD_REQUEST, e.to_string()),
+            }
+        }
+        match crate::uifonts::store_upload(&app.fonts_dir, &data) {
+            Ok(font) => {
+                tracing::info!(
+                    file = name,
+                    family = font.family,
+                    weight = font.weight,
+                    "ui font uploaded"
+                );
+                stored += 1;
+            }
+            Err(e) => return err(StatusCode::UNPROCESSABLE_ENTITY, format!("{name}: {e:#}")),
+        }
+    }
+    if stored == 0 {
+        return err(StatusCode::BAD_REQUEST, "no font file in the upload".into());
+    }
+    crate::uifonts::broadcast_state(&app).await;
+    Json(crate::uifonts::state(&app).await).into_response()
+}
+
+/// Serve an installed UI font file (uploads + Google downloads).
+async fn ui_font_file(
+    State(app): State<SharedApp>,
+    Path(file): Path<String>,
+) -> axum::response::Response {
+    if !crate::uifonts::valid_file_name(&file) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    match tokio::fs::read(app.fonts_dir.join(&file)).await {
+        Ok(bytes) => (
+            [
+                (
+                    "content-type",
+                    if file.ends_with(".otf") {
+                        "font/otf"
+                    } else {
+                        "font/ttf"
+                    },
+                ),
+                // Re-uploads replace a file under the same name.
+                ("cache-control", "no-cache"),
+                // The hosted remote / dev servers may load from here.
+                ("access-control-allow-origin", "*"),
+            ],
+            bytes,
+        )
+            .into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct GamesDeleteBody {
     system: String,
@@ -755,4 +859,97 @@ async fn send_json(socket: &mut WebSocket, msg: &ServerMessage) -> anyhow::Resul
     let json = serde_json::to_string(msg)?;
     socket.send(Message::Text(json.into())).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod font_upload_tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
+
+    const PIXEL_GRID: &[u8] = include_bytes!("../../boompi-ui/ui/fonts/GeistPixel-Grid.ttf");
+    const MATRIX: &[u8] = include_bytes!("../../boompi-ui/ui/fonts/Matrix-Code.ttf");
+
+    fn multipart(name: &str, data: &[u8]) -> (String, Vec<u8>) {
+        let boundary = "XboompiX";
+        let mut body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+        )
+        .into_bytes();
+        body.extend_from_slice(data);
+        body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+        (format!("multipart/form-data; boundary={boundary}"), body)
+    }
+
+    async fn post(router: Router, name: &str, data: &[u8]) -> (StatusCode, serde_json::Value) {
+        let (ctype, body) = multipart(name, data);
+        let resp = router
+            .oneshot(
+                Request::post("/api/fonts/upload")
+                    .header("content-type", ctype)
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = resp.status();
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap_or_default())
+    }
+
+    #[tokio::test]
+    async fn upload_then_serve() {
+        let dir = std::env::temp_dir().join(format!("boompid-fontup-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let app = crate::state::App::new(
+            crate::config::Config::default(),
+            Some(dir.join("boompi.toml")),
+        );
+        assert_eq!(app.fonts_dir, dir.join("ui-fonts"));
+
+        // A built-in family is refused (it ships already).
+        let (status, body) = post(router(app.clone()), "GeistPixel-Grid.ttf", PIXEL_GRID).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+
+        let (status, body) = post(router(app.clone()), "Matrix-Code.ttf", MATRIX).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let fam = &body["installed"][0];
+        assert_eq!(
+            fam["family"],
+            crate::uifonts::parse_font(MATRIX).unwrap().family
+        );
+        assert_eq!(fam["source"], "upload");
+        let url = fam["files"][0]["url"].as_str().unwrap().to_string();
+
+        // Served back byte-for-byte.
+        let resp = router(app.clone())
+            .oneshot(Request::get(&url).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.headers()["content-type"], "font/ttf");
+        let bytes = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        assert_eq!(&bytes[..], MATRIX);
+
+        // Not a font -> rejected, nothing stored; traversal -> 404.
+        let (status, body) = post(router(app.clone()), "evil.ttf", b"<html>").await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        let resp = router(app.clone())
+            .oneshot(
+                Request::get("/fonts/ui/..%2Fboompi.toml")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+        assert_eq!(app.snapshot().await.font.installed.len(), 1);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

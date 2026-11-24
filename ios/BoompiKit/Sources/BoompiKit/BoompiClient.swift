@@ -80,6 +80,8 @@ public final class BoompiClient: NSObject, ObservableObject {
     @Published public private(set) var wifiNetworks: [WifiNetwork] = []
     @Published public private(set) var pairing: Pairing?
     @Published public private(set) var btDevices: [BtDevice] = []
+    /// Latest Google Fonts search answer (any client's - match `query`).
+    @Published public private(set) var fontResults: FontResults?
 
     /// Most recently connected box - auto-connected when seen again
     /// (the common case: a person has exactly one boompi).
@@ -437,6 +439,8 @@ public final class BoompiClient: NSObject, ObservableObject {
         case .btDevices(let d): btDevices = d
         case .emojiFonts(let e): state?.emojiFonts = e
         case .diag(let d): state?.diag = d
+        case .font(let f): state?.font = f
+        case .fontResults(let r): fontResults = r
         case .other: break
         }
     }

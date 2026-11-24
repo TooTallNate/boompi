@@ -254,10 +254,23 @@ monochrome Noto Emoji) remains as a fallback variant.
 (vendored at `rust/boompi-ui/ui/fonts/`, OFL license alongside), embedded
 into the binary via Slint's font import + `default-font-family` - so text
 renders identically on the laptop, dev Pi, and appliance with no OS font
-packages. The screensaver can instead use one of the five **Geist Pixel**
-styles (`Settings.screensaver_font`; same folder and license). They share
-one typographic family, so `boompi-ui` registers each under its own family
-name at startup instead of importing them in Slint. For emoji in arbitrary user content (speaker name
+packages. `Settings.font` swaps the family system-wide (panel incl. the
+screensaver, and the web settings; the Matrix rain keeps its glyphs):
+Geist, one of the five vendored **Geist Pixel** styles (same folder and
+license; they share one typographic family, so `boompi-ui` registers each
+under its own family name at startup instead of importing them in
+Slint), any Google Fonts family, or a user upload. boompid's `uifonts.rs`
+owns the non-built-ins: Google families download (no-UA css2 requests
+return plain TTFs; weights 300/400/600/700 or the nearest the family has)
+into `/data/ui-fonts` - deliberately outside fontconfig's `/data/fonts`
+scan - in the background after the setting commits, and again at boot if
+missing; uploads (`POST /api/fonts/upload`, ttf-parser-validated, family
+read from the file) land in the same folder. Everything is served at
+`/fonts/ui/<file>`; the panel fetches + registers the files with
+fontique and switches `default-font-family`, the box's web app loads
+them as `FontFace`s (the hosted remote uses Google's CSS API). The Google
+catalog (search) is fetched server-side from fonts.google.com's metadata
+(no CORS) and cached, so search also works over BLE. For emoji in arbitrary user content (speaker name
 `George's 🔊`, track/device names) the image additionally ships:
 1. Noto **Color** Emoji (CBDT)
 2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Color Emoji`

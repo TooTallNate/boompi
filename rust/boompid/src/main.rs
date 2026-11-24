@@ -53,6 +53,7 @@ mod tarstream;
 // (unit-tested everywhere), consumed by the Linux-only updater.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod transfer;
+mod uifonts;
 mod update;
 #[cfg(target_os = "linux")]
 mod visualizer;
@@ -118,6 +119,13 @@ async fn main() -> anyhow::Result<()> {
     let app = state::App::new(cfg, cli.config.clone());
 
     games::spawn_recovery(app.clone());
+
+    // System UI font: re-download a Google family whose files vanished
+    // (fresh /data, manual cleanup) and publish its state.
+    {
+        let app = app.clone();
+        tokio::spawn(async move { uifonts::activate(&app).await });
+    }
 
     if cli.sim {
         tracing::info!("simulation mode: fake sources, battery, and visualizer");

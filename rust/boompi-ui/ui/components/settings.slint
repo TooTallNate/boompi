@@ -91,9 +91,12 @@ export component SettingsPanel inherits Rectangle {
     // Idle screensaver kind ("off"/"clock"/"matrix"/"art").
     in property <string> saver-kind;
     callback saver-kind-tapped(string);
-    // Screensaver typeface (Settings.screensaver_font wire value).
-    in property <string> saver-font;
-    callback saver-font-tapped(string);
+    // System UI font (Settings.font): the selection, installed
+    // uploaded/Google families, download status line.
+    in property <string> font;
+    in property <[string]> custom-fonts;
+    in property <string> font-note;
+    callback font-tapped(string);
     callback saver-preview-tapped();
     in-out property <bool> clock-24h;
     callback clock-24h-toggled(bool);
@@ -304,6 +307,94 @@ export component SettingsPanel inherits Rectangle {
                     }
                 }
 
+                // ---- font -------------------------------------------------
+                // Each tile is drawn in its own font, so the picker is the
+                // preview. Built-ins first; uploads and the downloaded
+                // Google family on a second row.
+                Rectangle {
+                    background: Theme.panel;
+                    border-radius: 0.44rem;
+                    height: font-col.preferred-height;
+                    font-col := VerticalLayout {
+                        padding: 0.78rem;
+                        spacing: 0.5rem;
+                        VerticalLayout {
+                            spacing: 0.11rem;
+                            Text {
+                                text: "Font";
+                                color: Theme.fg;
+                                font-size: 0.94rem;
+                            }
+                            Text {
+                                text: root.font-note != "" ? root.font-note
+                                    : "The whole panel - any Google Font or your own upload in the web settings";
+                                color: Theme.dimmer;
+                                font-size: 0.72rem;
+                                wrap: word-wrap;
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 0.44rem;
+                            for f[i] in [
+                                { label: "Geist", family: "Geist" },
+                                { label: "Square", family: "Geist Pixel Square" },
+                                { label: "Grid", family: "Geist Pixel Grid" },
+                                { label: "Circle", family: "Geist Pixel Circle" },
+                                { label: "Triangle", family: "Geist Pixel Triangle" },
+                                { label: "Line", family: "Geist Pixel Line" },
+                            ]: Rectangle {
+                                border-radius: 0.33rem;
+                                border-width: 0.09rem;
+                                border-color: root.font == f.family ? Theme.accent : Theme.faint;
+                                background: root.font == f.family ? Theme.bar : transparent;
+                                height: font-tile.preferred-height;
+                                font-tile := VerticalLayout {
+                                    padding: 0.44rem;
+                                    Text {
+                                        text: f.label;
+                                        font-family: f.family;
+                                        color: root.font == f.family ? Theme.fg : Theme.dim;
+                                        font-size: 0.72rem;
+                                        horizontal-alignment: center;
+                                    }
+                                }
+                                TouchArea {
+                                    clicked => {
+                                        root.font-tapped(f.family);
+                                    }
+                                }
+                            }
+                        }
+                        if root.custom-fonts.length > 0: HorizontalLayout {
+                            spacing: 0.44rem;
+                            alignment: start;
+                            for family[i] in root.custom-fonts: Rectangle {
+                                border-radius: 0.33rem;
+                                border-width: 0.09rem;
+                                border-color: root.font == family ? Theme.accent : Theme.faint;
+                                background: root.font == family ? Theme.bar : transparent;
+                                height: custom-tile.preferred-height;
+                                custom-tile := VerticalLayout {
+                                    padding: 0.44rem;
+                                    Text {
+                                        text: family;
+                                        font-family: family;
+                                        color: root.font == family ? Theme.fg : Theme.dim;
+                                        font-size: 0.72rem;
+                                        horizontal-alignment: center;
+                                        overflow: elide;
+                                    }
+                                }
+                                TouchArea {
+                                    clicked => {
+                                        root.font-tapped(family);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // ---- screensaver ------------------------------------------
                 Rectangle {
                     background: Theme.panel;
@@ -365,40 +456,6 @@ export component SettingsPanel inherits Rectangle {
                                 TouchArea {
                                     clicked => {
                                         root.saver-kind-tapped(m.value);
-                                    }
-                                }
-                            }
-                        }
-                        // Typeface for the saver's text; each tile is drawn
-                        // in its own font so the picker is the preview.
-                        if root.saver-kind != "off": HorizontalLayout {
-                            spacing: 0.44rem;
-                            for f[i] in [
-                                { label: "Geist", value: "geist", family: "Geist" },
-                                { label: "Square", value: "pixel_square", family: "Geist Pixel Square" },
-                                { label: "Grid", value: "pixel_grid", family: "Geist Pixel Grid" },
-                                { label: "Circle", value: "pixel_circle", family: "Geist Pixel Circle" },
-                                { label: "Triangle", value: "pixel_triangle", family: "Geist Pixel Triangle" },
-                                { label: "Line", value: "pixel_line", family: "Geist Pixel Line" },
-                            ]: Rectangle {
-                                border-radius: 0.33rem;
-                                border-width: 0.09rem;
-                                border-color: root.saver-font == f.value ? Theme.accent : Theme.faint;
-                                background: root.saver-font == f.value ? Theme.bar : transparent;
-                                height: font-tile.preferred-height;
-                                font-tile := VerticalLayout {
-                                    padding: 0.44rem;
-                                    Text {
-                                        text: f.label;
-                                        font-family: f.family;
-                                        color: root.saver-font == f.value ? Theme.fg : Theme.dim;
-                                        font-size: 0.72rem;
-                                        horizontal-alignment: center;
-                                    }
-                                }
-                                TouchArea {
-                                    clicked => {
-                                        root.saver-font-tapped(f.value);
                                     }
                                 }
                             }

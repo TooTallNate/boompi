@@ -7,14 +7,49 @@ export type UpdateChannel = "stable" | "edge";
 
 export type ScreensaverKind = "off" | "clock" | "matrix" | "art";
 
-/** Screensaver typeface: Geist Sans or a Geist Pixel style. */
-export type ScreensaverFont =
-  | "geist"
-  | "pixel_square"
-  | "pixel_grid"
-  | "pixel_circle"
-  | "pixel_triangle"
-  | "pixel_line";
+/** Font families every box ships (boompi_proto::BUILTIN_FONTS). */
+export const BUILTIN_FONTS = [
+  "Geist",
+  "Geist Pixel Square",
+  "Geist Pixel Grid",
+  "Geist Pixel Circle",
+  "Geist Pixel Triangle",
+  "Geist Pixel Line",
+] as const;
+export const DEFAULT_FONT = "Geist";
+
+export interface FontFile {
+  weight: number;
+  /** Server-relative ("/fonts/ui/<file>"). */
+  url: string;
+}
+
+export interface FontFamily {
+  family: string;
+  source: "google" | "upload";
+  files: FontFile[];
+}
+
+/** System UI font availability (`font` broadcast / State.font). */
+export interface FontState {
+  family: string;
+  status: "ready" | "downloading" | "error";
+  error?: string;
+  installed: FontFamily[];
+}
+
+export interface GoogleFont {
+  family: string;
+  category: string;
+  weights: number[];
+}
+
+/** Latest `font_results` broadcast (client-side only). */
+export interface FontResults {
+  query: string;
+  fonts: GoogleFont[];
+  error?: string;
+}
 
 export interface Settings {
   ui_scale: number;
@@ -33,8 +68,9 @@ export interface Settings {
   mqtt_password: string;
   screensaver: ScreensaverKind;
   screensaver_min: number;
-  /** Absent on boxes without the "screensaver_font" capability. */
-  screensaver_font?: ScreensaverFont;
+  /** System UI font family; absent on boxes without the "font"
+   *  capability. */
+  font?: string;
 }
 
 export interface SettingsPatch {
@@ -52,7 +88,7 @@ export interface SettingsPatch {
   mqtt_password?: string;
   screensaver?: ScreensaverKind;
   screensaver_min?: number;
-  screensaver_font?: ScreensaverFont;
+  font?: string;
 }
 
 export type PairingState =
@@ -224,6 +260,10 @@ export interface AppState {
   wifi_networks?: WifiNetwork[];
   emoji_fonts: EmojiFontsState;
   updates: UpdateState;
+  /** Absent on boxes without the "font" capability. */
+  font?: FontState;
+  /** Client-side only: latest `font_results` broadcast. */
+  font_results?: FontResults;
   // Present but unused by the settings UI so far:
   source: unknown;
   track: unknown;
@@ -289,6 +329,10 @@ export type ClientMessage =
   | { type: "emoji_font"; action: EmojiFontAction; id: string }
   | { type: "update"; action: UpdateAction }
   | { type: "preview_screensaver" }
+  /** Google Fonts search (answered by a `font_results` broadcast). */
+  | { type: "font_search"; query: string }
+  /** Delete an uploaded (or downloaded) font family. */
+  | { type: "font_remove"; family: string }
   | { type: "reboot" }
   | { type: "game"; action: "launch"; system: string; file: string }
   | { type: "game"; action: "stop" }

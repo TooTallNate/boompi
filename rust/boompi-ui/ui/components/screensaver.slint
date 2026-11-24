@@ -89,10 +89,6 @@ component MatrixColumn inherits Rectangle {
 
 export component Screensaver inherits Rectangle {
     in property <string> kind; // "clock" | "matrix" | "art"
-    // Family for the saver's text (clock, date, title, battery): Geist
-    // or one of the Geist Pixel styles (Settings.screensaver_font). The
-    // Matrix rain keeps its film glyphs.
-    in property <string> font-family: "Geist";
     in property <float> tick; // seconds, ~8 fps while visible
     in property <string> clock-h;
     in property <string> clock-m;
@@ -135,14 +131,12 @@ export component Screensaver inherits Rectangle {
             alignment: center;
             spacing: 0.4rem;
             Text {
-                font-family: root.font-family;
                 text: root.clock-h + ":" + root.clock-m;
                 color: #9999aa;
                 font-size: root.height * 0.24;
                 font-weight: 300;
             }
             if root.clock-ampm != "": Text {
-                font-family: root.font-family;
                 text: root.clock-ampm;
                 color: #555566;
                 font-size: root.height * 0.07;
@@ -150,7 +144,6 @@ export component Screensaver inherits Rectangle {
             }
         }
         Text {
-            font-family: root.font-family;
             text: root.clock-day;
             color: #444455;
             font-size: root.height * 0.06;
@@ -172,7 +165,6 @@ export component Screensaver inherits Rectangle {
             opacity: 0.75;
         }
         Text {
-            font-family: root.font-family;
             text: root.track-title;
             color: #555566;
             font-size: root.height * 0.045;
@@ -181,7 +173,6 @@ export component Screensaver inherits Rectangle {
         }
     }
     if root.kind == "art" && !root.has-artwork: Text {
-        font-family: root.font-family;
         x: (root.width - self.width) * (0.5 + 0.38 * root.drift-x);
         y: (root.height - self.height) * (0.5 + 0.38 * root.drift-y);
         text: root.clock-ampm == "" ? root.clock-h + ":" + root.clock-m
@@ -212,7 +203,6 @@ export component Screensaver inherits Rectangle {
             faint: #333340;
         }
         Text {
-            font-family: root.font-family;
             text: Math.round(root.battery-percentage * 100) + "%";
             color: #555566;
             font-size: 0.7778rem;

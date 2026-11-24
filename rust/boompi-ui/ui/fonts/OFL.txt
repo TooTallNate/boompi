@@ -1,6 +1,9 @@
 Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)
 Copyright 2026 The Geist Pixel Project Authors (https://github.com/vercel/geistpixel-font.git)
 (GeistPixel-*.ttf: vercel/geist-font fonts/GeistPixel/ttf at a4195ae)
+(Geist.ttf + GeistPixel-*.ttf are also bundled by the web settings apps,
+web-shared/src/lib/ui-font.ts. Google Fonts families and user uploads are
+downloaded onto the speaker at the user's request, never shipped.)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

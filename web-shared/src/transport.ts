@@ -51,6 +51,8 @@ export interface RestApis {
   patchClock(p: { timezone?: string; ntp?: boolean }): Promise<ClockStatus>;
   uploadGames(system: string, files: FileList): Promise<void>;
   deleteGame(system: string, file: string): Promise<void>;
+  /** Upload .ttf/.otf files as UI fonts (family read from each file). */
+  uploadFonts(files: FileList): Promise<void>;
   /** Hostname for user-facing hints (smb:// share). */
   host: string;
 }
@@ -135,6 +137,10 @@ export function applyServerMessage(
       return { ...s, diag: body as never };
     case "emoji_fonts":
       return { ...s, emoji_fonts: body as never };
+    case "font":
+      return { ...s, font: body as never };
+    case "font_results":
+      return { ...s, font_results: body as never };
     case "update":
       return { ...s, updates: body as never };
     case "setup":

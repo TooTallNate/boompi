@@ -9,6 +9,7 @@
 //!   boombox (`--backend ws://boombox.local:3001/ws`) or at a local
 //!   `boompid --sim`.
 
+mod fonts;
 mod net;
 mod palette;
 mod util;
@@ -185,50 +186,6 @@ fn register_emoji_fallback() {
     }
 }
 
-/// Geist Pixel (vendored, OFL - see ui/fonts/OFL.txt) for the
-/// screensaver font picker (Settings.screensaver_font). Registered here
-/// rather than imported in app.slint: all five styles share the
-/// typographic family "Geist Pixel" at the same weight, so imported
-/// copies collapse into one family and only one style is reachable.
-/// Overriding the family name gives each style its own family
-/// (matching `ScreensaverFont::family`).
-fn register_saver_fonts() {
-    use slint::fontique_010::fontique;
-    static FONTS: [(&str, &[u8]); 5] = [
-        (
-            "Geist Pixel Square",
-            include_bytes!("../ui/fonts/GeistPixel-Square.ttf"),
-        ),
-        (
-            "Geist Pixel Grid",
-            include_bytes!("../ui/fonts/GeistPixel-Grid.ttf"),
-        ),
-        (
-            "Geist Pixel Circle",
-            include_bytes!("../ui/fonts/GeistPixel-Circle.ttf"),
-        ),
-        (
-            "Geist Pixel Triangle",
-            include_bytes!("../ui/fonts/GeistPixel-Triangle.ttf"),
-        ),
-        (
-            "Geist Pixel Line",
-            include_bytes!("../ui/fonts/GeistPixel-Line.ttf"),
-        ),
-    ];
-    let mut collection = slint::fontique_010::shared_collection();
-    for (family, data) in FONTS {
-        let blob = fontique::Blob::new(std::sync::Arc::new(data));
-        let info = fontique::FontInfoOverride {
-            family_name: Some(family),
-            ..Default::default()
-        };
-        if collection.register_fonts(blob, Some(info)).is_empty() {
-            eprintln!("screensaver font {family:?} failed to register");
-        }
-    }
-}
-
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     // Derive the render rotation from the kernel's DRM
@@ -250,7 +207,7 @@ fn main() -> anyhow::Result<()> {
     // After AppWindow::new: the font collection needs the platform up.
     #[cfg(target_os = "linux")]
     register_emoji_fallback();
-    register_saver_fonts();
+    fonts::register_builtin_fonts();
     let _bar_tween = start_bar_tween(&ui);
     ui.set_screen(cli.screen.clone().into());
     if let Some(size) = &cli.size {
@@ -443,12 +400,9 @@ fn main() -> anyhow::Result<()> {
     }
     {
         let tx = tx.clone();
-        ui.on_saver_font_tapped(move |font| {
-            let Some(font) = boompi_proto::ScreensaverFont::from_str_opt(font.as_str()) else {
-                return;
-            };
+        ui.on_font_tapped(move |family| {
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
-                screensaver_font: Some(font),
+                font: Some(family.to_string()),
                 ..SettingsPatch::default()
             }));
         });
@@ -748,6 +702,8 @@ fn main() -> anyhow::Result<()> {
         weak: ui.as_weak(),
         track,
         fast_poll,
+        http_base: fonts::http_base(&cli.backend),
+        fonts: Default::default(),
     };
     let backend = cli.backend.clone();
     std::thread::spawn(move || {

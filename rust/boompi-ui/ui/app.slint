@@ -38,7 +38,14 @@ export component AppWindow inherits Window {
     preferred-width: 800px;
     preferred-height: 480px;
     background: Theme.bg;
-    default-font-family: "Geist";
+    // System UI font (Settings.font): the family actually rendered
+    // (switched by fonts.rs once it's registered), the selection, the
+    // installed uploaded/Google families, and a download status line.
+    in property <string> font-family: "Geist";
+    in property <string> font: "Geist";
+    in property <[string]> custom-fonts;
+    in property <string> font-note;
+    default-font-family: root.font-family;
     // 18px design base; all lengths are rem, so this scales everything.
     default-font-size: 18px * Theme.scale;
 
@@ -60,10 +67,6 @@ export component AppWindow inherits Window {
     in-out property <bool> saver-active: false;
     in property <string> saver-kind: "clock";
     in property <int> saver-timeout-min: 10;
-    // Settings.screensaver_font: wire value (picker selection) and the
-    // family it renders with (fonts registered in main.rs).
-    in property <string> saver-font: "geist";
-    in property <string> saver-font-family: "Geist";
     in property <float> saver-tick: 0;
     callback saver-dismissed();
     // Transient toast message overlay.
@@ -166,7 +169,7 @@ export component AppWindow inherits Window {
     callback emoji-font-tapped(string, string);
     callback airplay-model-tapped(string);
     callback saver-kind-tapped(string);
-    callback saver-font-tapped(string);
+    callback font-tapped(string);
     callback saver-preview-tapped();
     callback clock-24h-toggled(bool);
     callback update-check();
@@ -331,9 +334,11 @@ export component AppWindow inherits Window {
         saver-kind-tapped(value) => {
             root.saver-kind-tapped(value);
         }
-        saver-font: root.saver-font;
-        saver-font-tapped(value) => {
-            root.saver-font-tapped(value);
+        font: root.font;
+        custom-fonts: root.custom-fonts;
+        font-note: root.font-note;
+        font-tapped(value) => {
+            root.font-tapped(value);
         }
         saver-preview-tapped => {
             root.saver-preview-tapped();
@@ -592,7 +597,6 @@ export component AppWindow inherits Window {
         width: root.width;
         height: root.height;
         kind: root.saver-kind;
-        font-family: root.saver-font-family;
         tick: root.saver-tick;
         clock-h: root.clock-h;
         clock-m: root.clock-m;

@@ -146,6 +146,10 @@ pub struct App {
     /// Small LRU cache of album artwork, keyed by `artwork_id`
     /// (served via `GET /art/{id}` and pushed as binary frames).
     art: RwLock<ArtCache>,
+    /// UI font files (uploads + Google downloads; uifonts.rs).
+    pub fonts_dir: std::path::PathBuf,
+    /// Google Fonts catalog, loaded on first search/download.
+    pub font_catalog: tokio::sync::Mutex<Option<Arc<Vec<crate::uifonts::CatalogEntry>>>>,
 }
 
 // Only populated by the Linux-only artwork worker; harmless elsewhere.
@@ -212,6 +216,11 @@ pub struct Shared {
     pub update_error: Option<String>,
     /// Number of clients currently requesting fast battery polling.
     pub fast_poll_clients: usize,
+    /// Whether `settings.font` can render yet (uifonts.rs); the
+    /// generation lets a newer selection supersede a running download.
+    pub font_status: boompi_proto::FontStatus,
+    pub font_error: Option<String>,
+    pub font_generation: u64,
 }
 
 impl App {
@@ -232,7 +241,7 @@ impl App {
             mqtt_password: cfg.settings.mqtt_password.clone(),
             screensaver: cfg.settings.screensaver,
             screensaver_min: cfg.settings.screensaver_min,
-            screensaver_font: cfg.settings.screensaver_font,
+            font: cfg.settings.font.clone(),
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -246,6 +255,7 @@ impl App {
         let cfg2_timezone = cfg.timezone.clone();
         let cfg2_ntp = cfg.ntp;
         let cfg2_emoji_font = cfg.settings.emoji_font.clone();
+        let fonts_dir = crate::uifonts::fonts_dir(config_path.as_deref());
         Arc::new(Self {
             cfg,
             config_path,
@@ -270,6 +280,8 @@ impl App {
             bt_ctl: std::sync::Mutex::new(None),
             settings_port: std::sync::atomic::AtomicU16::new(0),
             art: RwLock::new(ArtCache::default()),
+            fonts_dir,
+            font_catalog: tokio::sync::Mutex::new(None),
         })
     }
 
@@ -407,7 +419,7 @@ impl App {
             cfg.settings.mqtt_password = s.settings.mqtt_password.clone();
             cfg.settings.screensaver = s.settings.screensaver;
             cfg.settings.screensaver_min = s.settings.screensaver_min;
-            cfg.settings.screensaver_font = s.settings.screensaver_font;
+            cfg.settings.font = s.settings.font.clone();
             cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.volume = s.volume;
@@ -557,6 +569,12 @@ impl App {
                 total_bytes: s.update_total,
                 bytes_per_second: s.update_rate,
             },
+            font: boompi_proto::FontState {
+                family: s.settings.font.clone(),
+                status: s.font_status,
+                error: s.font_error.clone(),
+                installed: crate::uifonts::installed(&self.fonts_dir),
+            },
         }
     }
 
@@ -699,6 +717,13 @@ impl App {
                     let _ = (action, id);
                 }
             }
+            ClientMessage::FontSearch { query } => {
+                // Catalog fetch can take seconds; don't stall this client.
+                tokio::spawn(crate::uifonts::handle_search(self.clone(), query));
+            }
+            ClientMessage::FontRemove { family } => {
+                crate::uifonts::handle_remove(self, &family).await;
+            }
             ClientMessage::Update { action } => {
                 #[cfg(target_os = "linux")]
                 if let Err(err) = crate::update::perform(self, action).await {
@@ -715,6 +740,7 @@ impl App {
             ClientMessage::SetSettings(patch) => {
                 let mut airplay_model_changed = false;
                 let mut mqtt_changed = false;
+                let mut font_changed = false;
                 #[allow(unused_mut, unused_variables)]
                 let mut channel_changed = false;
                 let settings = {
@@ -772,8 +798,13 @@ impl App {
                     if let Some(min) = patch.screensaver_min {
                         s.settings.screensaver_min = min.clamp(1, 240);
                     }
-                    if let Some(font) = patch.screensaver_font {
-                        s.settings.screensaver_font = font;
+                    if let Some(font) = patch
+                        .font
+                        .as_deref()
+                        .and_then(crate::uifonts::sanitize_family)
+                    {
+                        font_changed = font != s.settings.font;
+                        s.settings.font = font;
                     }
                     if let Some(channel) = patch.update_channel {
                         if channel != s.settings.update_channel {
@@ -793,6 +824,11 @@ impl App {
                     None => false,
                 };
                 self.persist_config().await;
+                if font_changed {
+                    // Settings commit first; a Google family downloads
+                    // in the background (FontState tracks it).
+                    crate::uifonts::activate(self).await;
+                }
                 if renamed || airplay_model_changed || mqtt_changed {
                     // Sources re-announce under the new name/model (BT
                     // alias is updated in place; AirPlay/Spotify restart

@@ -821,6 +821,7 @@ dependencies = [
  "futures-util",
  "image",
  "qrcode",
+ "reqwest",
  "serde_json",
  "slint",
  "slint-build",
@@ -857,8 +858,10 @@ dependencies = [
  "tokio",
  "tokio-util",
  "toml 0.8.23",
+ "tower",
  "tracing",
  "tracing-subscriber",
+ "ttf-parser",
  "zbus",
 ]
 

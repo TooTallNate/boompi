@@ -132,6 +132,16 @@ async function deleteGame(system: string, file: string): Promise<void> {
   });
 }
 
+async function uploadFonts(files: FileList): Promise<void> {
+  const form = new FormData();
+  for (const f of Array.from(files)) form.append("file", f);
+  const r = await fetch("/api/fonts/upload", { method: "POST", body: form });
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body.error ?? `HTTP ${r.status}`);
+  }
+}
+
 /** The full REST surface, for the shared sections (IP path available). */
 export const restApis: RestApis = {
   fetchWifi,
@@ -140,5 +150,6 @@ export const restApis: RestApis = {
   patchClock,
   uploadGames,
   deleteGame,
+  uploadFonts,
   host: window.location.hostname,
 };
