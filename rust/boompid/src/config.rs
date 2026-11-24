@@ -176,6 +176,9 @@ pub struct SettingsConfig {
     /// Idle minutes before the screensaver starts.
     #[serde(default = "default_screensaver_min")]
     pub screensaver_min: u32,
+    /// Screensaver typeface ("geist" / "pixel_square" / ...).
+    #[serde(default)]
+    pub screensaver_font: boompi_proto::ScreensaverFont,
 }
 
 fn default_screensaver_min() -> u32 {
@@ -215,6 +218,7 @@ impl Default for SettingsConfig {
             visualizer_opacity: default_visualizer_opacity(),
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
+            screensaver_font: boompi_proto::ScreensaverFont::default(),
         }
     }
 }

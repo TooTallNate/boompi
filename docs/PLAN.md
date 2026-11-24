@@ -254,7 +254,10 @@ monochrome Noto Emoji) remains as a fallback variant.
 (vendored at `rust/boompi-ui/ui/fonts/`, OFL license alongside), embedded
 into the binary via Slint's font import + `default-font-family` - so text
 renders identically on the laptop, dev Pi, and appliance with no OS font
-packages. For emoji in arbitrary user content (speaker name
+packages. The screensaver can instead use one of the five **Geist Pixel**
+styles (`Settings.screensaver_font`; same folder and license). They share
+one typographic family, so `boompi-ui` registers each under its own family
+name at startup instead of importing them in Slint. For emoji in arbitrary user content (speaker name
 `George's 🔊`, track/device names) the image additionally ships:
 1. Noto **Color** Emoji (CBDT)
 2. `/etc/fonts/local.conf` aliasing the `emoji` generic → `Noto Color Emoji`

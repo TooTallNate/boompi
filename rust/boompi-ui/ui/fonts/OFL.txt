@@ -1,4 +1,6 @@
 Copyright 2024 The Geist Project Authors (https://github.com/vercel/geist-font.git)
+Copyright 2026 The Geist Pixel Project Authors (https://github.com/vercel/geistpixel-font.git)
+(GeistPixel-*.ttf: vercel/geist-font fonts/GeistPixel/ttf at a4195ae)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

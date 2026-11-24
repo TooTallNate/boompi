@@ -225,6 +225,67 @@ fn default_screensaver_min() -> u32 {
     10
 }
 
+/// Typeface for the screensaver's text (clock, date, track title,
+/// battery percentage). The Matrix rain keeps its own film glyphs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScreensaverFont {
+    /// Geist Sans, the UI font.
+    #[default]
+    Geist,
+    /// Geist Pixel, square dots.
+    PixelSquare,
+    /// Geist Pixel, grid dots.
+    PixelGrid,
+    /// Geist Pixel, round dots.
+    PixelCircle,
+    /// Geist Pixel, triangle dots.
+    PixelTriangle,
+    /// Geist Pixel, line strokes.
+    PixelLine,
+}
+
+impl ScreensaverFont {
+    /// Every variant, in display order.
+    pub const ALL: [Self; 6] = [
+        Self::Geist,
+        Self::PixelSquare,
+        Self::PixelGrid,
+        Self::PixelCircle,
+        Self::PixelTriangle,
+        Self::PixelLine,
+    ];
+
+    /// The wire / config value (matches the serde representation).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Geist => "geist",
+            Self::PixelSquare => "pixel_square",
+            Self::PixelGrid => "pixel_grid",
+            Self::PixelCircle => "pixel_circle",
+            Self::PixelTriangle => "pixel_triangle",
+            Self::PixelLine => "pixel_line",
+        }
+    }
+
+    /// Parse a wire value; unknown values are `None`.
+    pub fn from_str_opt(s: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|f| f.as_str() == s)
+    }
+
+    /// The font family the panel renders it with.
+    pub fn family(self) -> &'static str {
+        match self {
+            Self::Geist => "Geist",
+            Self::PixelSquare => "Geist Pixel Square",
+            Self::PixelGrid => "Geist Pixel Grid",
+            Self::PixelCircle => "Geist Pixel Circle",
+            Self::PixelTriangle => "Geist Pixel Triangle",
+            Self::PixelLine => "Geist Pixel Line",
+        }
+    }
+}
+
 /// Which releases the software updater follows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -294,6 +355,9 @@ pub struct Settings {
     /// Idle minutes before the screensaver starts.
     #[serde(default = "default_screensaver_min")]
     pub screensaver_min: u32,
+    /// Typeface for the screensaver's text.
+    #[serde(default)]
+    pub screensaver_font: ScreensaverFont,
 }
 
 impl Default for Settings {
@@ -313,6 +377,7 @@ impl Default for Settings {
             mqtt_password: String::new(),
             screensaver: ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
+            screensaver_font: ScreensaverFont::default(),
         }
     }
 }
@@ -347,6 +412,8 @@ pub struct SettingsPatch {
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver_min: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screensaver_font: Option<ScreensaverFont>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub visualizer_opacity: Option<f32>,
 }
@@ -549,6 +616,9 @@ pub mod caps {
     pub const EMOJI_FONTS: &str = "emoji_fonts";
     pub const UPDATES: &str = "updates";
     pub const SCREENSAVER: &str = "screensaver";
+    /// [`crate::Settings::screensaver_font`] is honored (absent on
+    /// boxes that predate the font picker; not part of [`LEGACY`]).
+    pub const SCREENSAVER_FONT: &str = "screensaver_font";
     pub const HOME_ASSISTANT: &str = "home_assistant";
     pub const AIRPLAY: &str = "airplay";
 
@@ -1124,6 +1194,23 @@ mod tests {
         assert_eq!(old.total_bytes, None);
         assert_eq!(old.bytes_per_second, None);
         assert_eq!(old.progress, Some(0.5));
+    }
+
+    #[test]
+    fn screensaver_font_wire_values() {
+        for font in ScreensaverFont::ALL {
+            let json = serde_json::to_value(font).unwrap();
+            assert_eq!(json, font.as_str());
+            assert_eq!(ScreensaverFont::from_str_opt(font.as_str()), Some(font));
+        }
+        assert_eq!(ScreensaverFont::from_str_opt("comic_sans"), None);
+
+        // Settings from a box that predates the field keep Geist.
+        let old: Settings = serde_json::from_str(r#"{"name":"X","screensaver":"clock"}"#).unwrap();
+        assert_eq!(old.screensaver_font, ScreensaverFont::Geist);
+        let patch: SettingsPatch =
+            serde_json::from_str(r#"{"screensaver_font":"pixel_grid"}"#).unwrap();
+        assert_eq!(patch.screensaver_font, Some(ScreensaverFont::PixelGrid));
     }
 
     #[test]

@@ -232,6 +232,7 @@ impl App {
             mqtt_password: cfg.settings.mqtt_password.clone(),
             screensaver: cfg.settings.screensaver,
             screensaver_min: cfg.settings.screensaver_min,
+            screensaver_font: cfg.settings.screensaver_font,
         };
         let setup = SetupState {
             required: !cfg.setup_complete,
@@ -406,6 +407,7 @@ impl App {
             cfg.settings.mqtt_password = s.settings.mqtt_password.clone();
             cfg.settings.screensaver = s.settings.screensaver;
             cfg.settings.screensaver_min = s.settings.screensaver_min;
+            cfg.settings.screensaver_font = s.settings.screensaver_font;
             cfg.settings.emoji_font = s.emoji_font.clone();
             cfg.setup_complete = !s.setup.required;
             cfg.volume = s.volume;
@@ -769,6 +771,9 @@ impl App {
                     }
                     if let Some(min) = patch.screensaver_min {
                         s.settings.screensaver_min = min.clamp(1, 240);
+                    }
+                    if let Some(font) = patch.screensaver_font {
+                        s.settings.screensaver_font = font;
                     }
                     if let Some(channel) = patch.update_channel {
                         if channel != s.settings.update_channel {

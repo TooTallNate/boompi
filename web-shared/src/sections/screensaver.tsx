@@ -5,7 +5,7 @@ import { ToggleGroup, ToggleGroupItem } from "@boompi/ui/components/toggle-group
 import { StatusText } from "@boompi/ui/components/status-text";
 import { capsOf } from "@boompi/ui/proto";
 import { useBoompi, useSave } from "@boompi/ui/transport";
-import type { ScreensaverKind } from "@boompi/ui/proto";
+import type { ScreensaverFont, ScreensaverKind } from "@boompi/ui/proto";
 
 const KINDS: { label: string; value: ScreensaverKind }[] = [
   { label: "Off", value: "off" },
@@ -14,11 +14,21 @@ const KINDS: { label: string; value: ScreensaverKind }[] = [
   { label: "Album art", value: "art" },
 ];
 
+const FONTS: { label: string; value: ScreensaverFont }[] = [
+  { label: "Geist", value: "geist" },
+  { label: "Geist Pixel Square", value: "pixel_square" },
+  { label: "Geist Pixel Grid", value: "pixel_grid" },
+  { label: "Geist Pixel Circle", value: "pixel_circle" },
+  { label: "Geist Pixel Triangle", value: "pixel_triangle" },
+  { label: "Geist Pixel Line", value: "pixel_line" },
+];
+
 export function ScreensaverSection() {
   const { state, send, hello } = useBoompi();
   const { status, save } = useSave();
   const settings = state?.settings;
   if (!settings || !capsOf(hello).has("screensaver")) return null;
+  const hasFont = capsOf(hello).has("screensaver_font");
 
   return (
     <Card>
@@ -60,6 +70,28 @@ export function ScreensaverSection() {
                   {[2, 5, 10, 20, 30, 60].map((m) => (
                     <SelectItem key={m} value={String(m)}>
                       {m} min
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {settings.screensaver !== "off" && hasFont && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm">Font</span>
+            <Select
+              value={settings.screensaver_font ?? "geist"}
+              onValueChange={(f) => save({ screensaver_font: f as ScreensaverFont })}
+            >
+              <SelectTrigger className="ml-auto w-52">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {FONTS.map((f) => (
+                    <SelectItem key={f.value} value={f.value}>
+                      {f.label}
                     </SelectItem>
                   ))}
                 </SelectGroup>

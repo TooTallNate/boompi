@@ -157,7 +157,14 @@ do {
     let state = try JSONDecoder().decode(BoxState.self, from: Data(json.utf8))
     expect(state.settings.uiScale == 1.5, "settings ui_scale decodes")
     expect(state.settings.gameVolume == 0.8, "settings game_volume decodes")
+    expect(state.settings.screensaverFont == nil, "settings without screensaver_font decode as nil")
 } catch { expect(false, "full settings decode: \(error)") }
+
+do {
+    let json = #"{"settings":{"name":"X","theme":"dark","clock_24h":false,"screensaver":"clock","screensaver_min":10,"screensaver_font":"pixel_grid","update_channel":"edge","ui_scale":1.5,"visualizer_opacity":0.6,"airplay_model":"","airplay_classic":false,"game_volume":0.8,"mqtt_broker":"","mqtt_username":"","mqtt_password":""},"volume":0.4}"#
+    let state = try JSONDecoder().decode(BoxState.self, from: Data(json.utf8))
+    expect(state.settings.screensaverFont == "pixel_grid", "settings screensaver_font decodes")
+} catch { expect(false, "screensaver_font settings decode: \(error)") }
 
 // MARK: Advert box id (manufacturer data)
 

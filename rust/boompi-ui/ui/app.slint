@@ -60,6 +60,10 @@ export component AppWindow inherits Window {
     in-out property <bool> saver-active: false;
     in property <string> saver-kind: "clock";
     in property <int> saver-timeout-min: 10;
+    // Settings.screensaver_font: wire value (picker selection) and the
+    // family it renders with (fonts registered in main.rs).
+    in property <string> saver-font: "geist";
+    in property <string> saver-font-family: "Geist";
     in property <float> saver-tick: 0;
     callback saver-dismissed();
     // Transient toast message overlay.
@@ -162,6 +166,7 @@ export component AppWindow inherits Window {
     callback emoji-font-tapped(string, string);
     callback airplay-model-tapped(string);
     callback saver-kind-tapped(string);
+    callback saver-font-tapped(string);
     callback saver-preview-tapped();
     callback clock-24h-toggled(bool);
     callback update-check();
@@ -325,6 +330,10 @@ export component AppWindow inherits Window {
         saver-kind: root.saver-kind;
         saver-kind-tapped(value) => {
             root.saver-kind-tapped(value);
+        }
+        saver-font: root.saver-font;
+        saver-font-tapped(value) => {
+            root.saver-font-tapped(value);
         }
         saver-preview-tapped => {
             root.saver-preview-tapped();
@@ -583,6 +592,7 @@ export component AppWindow inherits Window {
         width: root.width;
         height: root.height;
         kind: root.saver-kind;
+        font-family: root.saver-font-family;
         tick: root.saver-tick;
         clock-h: root.clock-h;
         clock-m: root.clock-m;

@@ -7,6 +7,15 @@ export type UpdateChannel = "stable" | "edge";
 
 export type ScreensaverKind = "off" | "clock" | "matrix" | "art";
 
+/** Screensaver typeface: Geist Sans or a Geist Pixel style. */
+export type ScreensaverFont =
+  | "geist"
+  | "pixel_square"
+  | "pixel_grid"
+  | "pixel_circle"
+  | "pixel_triangle"
+  | "pixel_line";
+
 export interface Settings {
   ui_scale: number;
   /** Advertised AirPlay model - senders pick their picker icon from it.
@@ -24,6 +33,8 @@ export interface Settings {
   mqtt_password: string;
   screensaver: ScreensaverKind;
   screensaver_min: number;
+  /** Absent on boxes without the "screensaver_font" capability. */
+  screensaver_font?: ScreensaverFont;
 }
 
 export interface SettingsPatch {
@@ -41,6 +52,7 @@ export interface SettingsPatch {
   mqtt_password?: string;
   screensaver?: ScreensaverKind;
   screensaver_min?: number;
+  screensaver_font?: ScreensaverFont;
 }
 
 export type PairingState =

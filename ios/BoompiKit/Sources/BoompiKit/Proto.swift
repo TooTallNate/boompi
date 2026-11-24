@@ -21,6 +21,8 @@ public enum Caps {
     public static let emojiFonts = "emoji_fonts"
     public static let updates = "updates"
     public static let screensaver = "screensaver"
+    /// `Settings.screensaverFont` is honored (newer boxes only; not legacy).
+    public static let screensaverFont = "screensaver_font"
     public static let homeAssistant = "home_assistant"
     public static let airplay = "airplay"
 
@@ -67,6 +69,9 @@ public struct Settings: Decodable, Equatable {
     public var clock24h: Bool
     public var screensaver: String
     public var screensaverMin: Int
+    /// "geist" / "pixel_square" / ...; nil on boxes without the
+    /// screensaver_font capability.
+    public var screensaverFont: String?
     public var updateChannel: String
     public var uiScale: Double
     public var visualizerOpacity: Double
@@ -81,6 +86,7 @@ public struct Settings: Decodable, Equatable {
         case name, theme, screensaver
         case clock24h = "clock_24h"
         case screensaverMin = "screensaver_min"
+        case screensaverFont = "screensaver_font"
         case updateChannel = "update_channel"
         case uiScale = "ui_scale"
         case visualizerOpacity = "visualizer_opacity"

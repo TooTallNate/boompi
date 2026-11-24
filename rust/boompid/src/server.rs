@@ -182,6 +182,7 @@ async fn capabilities(app: &SharedApp) -> Vec<String> {
         caps::EMOJI_FONTS,
         caps::UPDATES,
         caps::SCREENSAVER,
+        caps::SCREENSAVER_FONT,
         caps::HOME_ASSISTANT,
         caps::AIRPLAY,
     ]

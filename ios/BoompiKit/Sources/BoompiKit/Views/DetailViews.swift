@@ -339,6 +339,19 @@ struct DisplayDetailView: View {
                                     Text("\(m) min").tag(m)
                                 }
                             }
+                            if client.caps.contains(Caps.screensaverFont) {
+                                Picker("Font", selection: Binding(
+                                    get: { settings.screensaverFont ?? "geist" },
+                                    set: { client.send(.setSettings(["screensaver_font": $0])) }
+                                )) {
+                                    Text("Geist").tag("geist")
+                                    Text("Geist Pixel Square").tag("pixel_square")
+                                    Text("Geist Pixel Grid").tag("pixel_grid")
+                                    Text("Geist Pixel Circle").tag("pixel_circle")
+                                    Text("Geist Pixel Triangle").tag("pixel_triangle")
+                                    Text("Geist Pixel Line").tag("pixel_line")
+                                }
+                            }
                             Button("Preview on speaker") {
                                 client.send(.previewScreensaver)
                             }
