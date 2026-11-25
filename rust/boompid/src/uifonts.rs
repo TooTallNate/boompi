@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// Upload size cap per file.
-pub const UPLOAD_CAP: usize = 20 << 20;
+pub const UPLOAD_CAP: usize = 30 << 20;
 /// Weights the panel draws with (light clock, body, semibold, bold).
 const PANEL_WEIGHTS: [u16; 4] = [300, 400, 600, 700];
 const CATALOG_URL: &str = "https://fonts.google.com/metadata/fonts";

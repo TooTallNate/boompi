@@ -216,7 +216,7 @@ export function FontSection() {
                   />
                 </label>
               </Button>
-              <span className="text-xs text-muted-foreground">.ttf or .otf, up to 20 MB each</span>
+              <span className="text-xs text-muted-foreground">.ttf or .otf, up to 30 MB each</span>
             </div>
             {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
           </div>
