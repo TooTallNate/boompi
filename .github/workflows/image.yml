@@ -70,6 +70,9 @@ jobs:
           6 : start=466944, size=131072, type=83
           EOF
           LOOP=$(sudo losetup -P --show -f disk.img)
+          # losetup -P returns before udev creates the pN nodes.
+          sudo udevadm settle
+          for _ in $(seq 50); do [ -b "${LOOP}p6" ] && break; sleep 0.1; done
           sudo mkfs.ext4 -q -L data "${LOOP}p6"
           mkdir -p mnt && sudo mount "${LOOP}p6" mnt
           echo "survives the grow" | sudo tee mnt/canary >/dev/null
@@ -142,6 +145,9 @@ jobs:
           } | sed 's/^ *//' | sfdisk disk.img
           LOOP=$(sudo losetup -P --show -f disk.img)
           B=$(basename "$LOOP")
+          # losetup -P returns before udev creates the pN nodes.
+          sudo udevadm settle
+          for _ in $(seq 50); do [ -b "${LOOP}p6" ] && break; sleep 0.1; done
           # Root-a gets a 512M fs (to prove the online-style grow),
           # data gets a canary deep enough to matter.
           sudo mkfs.ext4 -q "${LOOP}p3"
@@ -272,7 +278,7 @@ jobs:
           # binaries key the crate computes, and prove the prebuilt is
           # missing COLRv1 so this job stays honest.
           cargo build --manifest-path rust/Cargo.toml --release             -p boompi-ui --no-default-features --features kms-skia
-          OUT=$(ls -d rust/target/release/build/skia-bindings-*/out/skia | head -1)
+          OUT=$(find rust/target/release/build -type d -path '*skia-bindings*/out/skia' | head -1)
           KEY=$(cat "$OUT/key.txt"); TAG=$(cat "$OUT/tag.txt")
           echo "key=$KEY tag=$TAG"
           if nm "$OUT/libskia.a" 2>/dev/null | grep -q FT_Get_Color_Glyph_Paint; then
@@ -281,7 +287,7 @@ jobs:
           # Pass 2: force the source build (rerun-if-env-changed on
           # FORCE_SKIA_BUILD makes cargo redo skia-bindings).
           FORCE_SKIA_BUILD=1 cargo build --manifest-path rust/Cargo.toml --release             -p boompi-ui --no-default-features --features kms-skia
-          OUT=$(ls -d rust/target/release/build/skia-bindings-*/out/skia | head -1)
+          OUT=$(find rust/target/release/build -type d -path '*skia-bindings*/out/skia' | head -1)
           # The assertion this job exists for:
           nm "$OUT/libskia.a" | grep -q FT_Get_Color_Glyph_Paint             || { echo "::error::source-built Skia still lacks COLRv1"; exit 1; }
           # Package in the skia-binaries layout (top-level dir, files
