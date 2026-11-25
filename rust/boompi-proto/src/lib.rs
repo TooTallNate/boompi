@@ -225,6 +225,33 @@ fn default_screensaver_min() -> u32 {
     10
 }
 
+/// The default UI font family (Geist Sans, vendored in the panel).
+pub const DEFAULT_FONT: &str = "Geist";
+
+/// Font families every box ships (vendored in the panel and the web
+/// apps), in display order. Anything else in [`Settings::font`] is a
+/// user upload or a Google Fonts family boompid downloads.
+pub const BUILTIN_FONTS: [&str; 6] = [
+    DEFAULT_FONT,
+    "Geist Pixel Square",
+    "Geist Pixel Grid",
+    "Geist Pixel Circle",
+    "Geist Pixel Triangle",
+    "Geist Pixel Line",
+];
+
+/// Longest accepted [`Settings::font`] value (bytes).
+pub const FONT_NAME_MAX: usize = 64;
+
+/// Whether `family` ships with every box (see [`BUILTIN_FONTS`]).
+pub fn is_builtin_font(family: &str) -> bool {
+    BUILTIN_FONTS.contains(&family)
+}
+
+fn default_font() -> String {
+    DEFAULT_FONT.into()
+}
+
 /// Which releases the software updater follows.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -294,6 +321,12 @@ pub struct Settings {
     /// Idle minutes before the screensaver starts.
     #[serde(default = "default_screensaver_min")]
     pub screensaver_min: u32,
+    /// System-wide UI font family: the whole panel (screensaver
+    /// included; the Matrix rain keeps its glyphs) and the web settings.
+    /// A [`BUILTIN_FONTS`] entry, an uploaded family, or any Google
+    /// Fonts family (boompid downloads it; progress in [`FontState`]).
+    #[serde(default = "default_font")]
+    pub font: String,
 }
 
 impl Default for Settings {
@@ -313,6 +346,7 @@ impl Default for Settings {
             mqtt_password: String::new(),
             screensaver: ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
+            font: default_font(),
         }
     }
 }
@@ -347,6 +381,8 @@ pub struct SettingsPatch {
     pub screensaver: Option<ScreensaverKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub screensaver_min: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub visualizer_opacity: Option<f32>,
 }
@@ -549,6 +585,11 @@ pub mod caps {
     pub const EMOJI_FONTS: &str = "emoji_fonts";
     pub const UPDATES: &str = "updates";
     pub const SCREENSAVER: &str = "screensaver";
+    /// [`crate::Settings::font`] is honored: [`crate::FontState`]
+    /// broadcasts, Google Fonts search ([`crate::ClientMessage::FontSearch`]),
+    /// uploads (`POST /api/fonts/upload`, IP links only) and removal.
+    /// Absent on boxes that predate the font picker; not in [`LEGACY`].
+    pub const FONT: &str = "font";
     pub const HOME_ASSISTANT: &str = "home_assistant";
     pub const AIRPLAY: &str = "airplay";
 
@@ -599,6 +640,72 @@ pub enum EmojiFontAction {
     Download,
     Select,
     Remove,
+}
+
+/// Where an installed (non-built-in) font family came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FontSource {
+    /// Downloaded from Google Fonts for [`Settings::font`].
+    Google,
+    /// Uploaded by the user (web settings).
+    Upload,
+}
+
+/// One font file boompid serves over HTTP.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FontFile {
+    /// CSS-style weight (100-900).
+    pub weight: u16,
+    /// Server-relative URL (`/fonts/ui/<file>`), on the protocol port
+    /// and the settings UI port alike.
+    pub url: String,
+}
+
+/// An installed font family with its files.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FontFamily {
+    pub family: String,
+    pub source: FontSource,
+    pub files: Vec<FontFile>,
+}
+
+/// Whether [`FontState::family`] can be rendered yet.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FontStatus {
+    /// Built-in, uploaded, or downloaded: render it.
+    #[default]
+    Ready,
+    /// A Google Fonts download is in flight.
+    Downloading,
+    /// The download failed (`error`); clients fall back to Geist.
+    Error,
+}
+
+/// The system font's availability + every installed family, mirrored
+/// to all clients. Built-ins ([`BUILTIN_FONTS`]) are implicit.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct FontState {
+    /// Mirrors [`Settings::font`].
+    pub family: String,
+    pub status: FontStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// The downloaded Google family (if the setting names one) plus
+    /// the user's uploads.
+    #[serde(default)]
+    pub installed: Vec<FontFamily>,
+}
+
+/// A Google Fonts family (search result).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GoogleFont {
+    pub family: String,
+    /// "Sans Serif", "Serif", "Display", "Handwriting", "Monospace".
+    pub category: String,
+    /// Upright weights the family offers.
+    pub weights: Vec<u16>,
 }
 
 /// What the updater is doing right now while `applying` is set.
@@ -700,6 +807,8 @@ pub struct State {
     pub emoji_fonts: EmojiFontsState,
     #[serde(default)]
     pub updates: UpdateState,
+    #[serde(default)]
+    pub font: FontState,
 }
 
 fn default_visualizer_opacity() -> f32 {
@@ -776,6 +885,16 @@ pub enum ServerMessage {
     /// Box health diagnostics (CPU temperature / throttle state).
     Diag(DiagState),
     EmojiFonts(EmojiFontsState),
+    /// System font availability (downloads, uploads, removals).
+    Font(FontState),
+    /// Google Fonts search results, answering a
+    /// [`ClientMessage::FontSearch`] (broadcast; clients match `query`).
+    FontResults {
+        query: String,
+        fonts: Vec<GoogleFont>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
     Update(UpdateState),
     /// Relay: a client asked to preview the screensaver; the panel
     /// activates it immediately.
@@ -798,6 +917,16 @@ pub enum ClientMessage {
     EmojiFont {
         action: EmojiFontAction,
         id: String,
+    },
+    /// Search the Google Fonts catalog (boompid fetches and caches it;
+    /// works over BLE). Empty query = most popular families.
+    FontSearch {
+        query: String,
+    },
+    /// Delete an uploaded font family (reverts the system font to
+    /// Geist if it was selected).
+    FontRemove {
+        family: String,
     },
     /// OS software update (check the channel / apply the available
     /// update).
@@ -1124,6 +1253,41 @@ mod tests {
         assert_eq!(old.total_bytes, None);
         assert_eq!(old.bytes_per_second, None);
         assert_eq!(old.progress, Some(0.5));
+    }
+
+    #[test]
+    fn font_setting_wire() {
+        // Settings from a box that predates the field keep Geist.
+        let old: Settings = serde_json::from_str(r#"{"name":"X","screensaver":"clock"}"#).unwrap();
+        assert_eq!(old.font, DEFAULT_FONT);
+        assert!(is_builtin_font(&old.font));
+        assert!(!is_builtin_font("Inter"));
+        let patch: SettingsPatch = serde_json::from_str(r#"{"font":"Press Start 2P"}"#).unwrap();
+        assert_eq!(patch.font.as_deref(), Some("Press Start 2P"));
+
+        let msg: ClientMessage =
+            serde_json::from_str(r#"{"type":"font_search","query":"mono"}"#).unwrap();
+        assert_eq!(
+            msg,
+            ClientMessage::FontSearch {
+                query: "mono".into()
+            }
+        );
+        let state = ServerMessage::Font(FontState {
+            family: "Inter".into(),
+            status: FontStatus::Downloading,
+            ..Default::default()
+        });
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["type"], "font");
+        assert_eq!(json["status"], "downloading");
+        // An old State snapshot without the field decodes.
+        let st: State = serde_json::from_value(serde_json::json!({
+            "source": {"active": null}, "track": null, "volume": 0.5, "battery": null,
+            "pairing": {"state": "idle"}, "settings": {}, "setup": {"required": false}
+        }))
+        .unwrap();
+        assert_eq!(st.font.status, FontStatus::Ready);
     }
 
     #[test]

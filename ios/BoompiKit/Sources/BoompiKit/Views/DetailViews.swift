@@ -312,6 +312,33 @@ struct DisplayDetailView: View {
                     }
                 }
 
+                if client.caps.contains(Caps.font) {
+                    Section {
+                        Picker("Font", selection: Binding(
+                            get: { settings.font ?? Fonts.defaultFamily },
+                            set: { client.send(.setSettings(["font": $0])) }
+                        )) {
+                            ForEach(fontChoices(current: settings.font), id: \.self) { f in
+                                Text(f).tag(f)
+                            }
+                        }
+                        NavigationLink("Search Google Fonts") {
+                            FontSearchView(client: client)
+                        }
+                    } header: {
+                        Text("Font")
+                    } footer: {
+                        if let font = client.state?.font, font.family == settings.font {
+                            if font.status == "downloading" {
+                                Text("Downloading \(font.family) to the speaker…")
+                            } else if font.status == "error" {
+                                Text("Couldn't get \(font.family): \(font.error ?? "download failed"). Showing Geist.")
+                            }
+                        } else {
+                            Text("The whole speaker screen and its web settings. Upload your own in the web settings.")
+                        }
+                    }
+                }
                 if client.caps.contains(Caps.emojiFonts), client.state?.emojiFonts != nil {
                     Section {
                         NavigationLink("Emoji Style") {
@@ -348,6 +375,65 @@ struct DisplayDetailView: View {
             }
         }
         .navigationTitle("Display")
+    }
+}
+
+// MARK: - Font
+
+extension DisplayDetailView {
+    /// Built-ins, then installed families, then the current one if it's
+    /// none of those (e.g. still downloading).
+    func fontChoices(current: String?) -> [String] {
+        var out = Fonts.builtin
+        for f in client.state?.font?.installed ?? [] where !out.contains(f.family) {
+            out.append(f.family)
+        }
+        if let current, !out.contains(current) { out.append(current) }
+        return out
+    }
+}
+
+/// Google Fonts search over the protocol (works on BLE): the box
+/// fetches the catalog and answers `font_search` with `font_results`.
+struct FontSearchView: View {
+    @ObservedObject var client: BoompiClient
+    @State private var query = ""
+    @Environment(\.dismiss) private var dismiss
+
+    private var trimmed: String { query.trimmingCharacters(in: .whitespaces) }
+
+    var body: some View {
+        List {
+            if let results = client.fontResults, results.query == trimmed {
+                if let error = results.error {
+                    Text(error).foregroundStyle(.red)
+                } else if results.fonts.isEmpty {
+                    Text("No matching families").foregroundStyle(.secondary)
+                }
+                ForEach(results.fonts) { f in
+                    Button {
+                        client.send(.setSettings(["font": f.family]))
+                        dismiss()
+                    } label: {
+                        HStack {
+                            Text(f.family)
+                            Spacer()
+                            Text(f.category).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                }
+            } else {
+                ProgressView()
+            }
+        }
+        .searchable(text: $query, prompt: "Inter, Press Start 2P…")
+        .task(id: trimmed) {
+            // Debounce typing; an empty query lists popular families.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            if !Task.isCancelled { client.send(.fontSearch(query: trimmed)) }
+        }
+        .navigationTitle("Google Fonts")
     }
 }
 

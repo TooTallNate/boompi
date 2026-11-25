@@ -15,6 +15,9 @@ clap = { workspace = true }
 futures-util = "0.3"
 # Album art decode (AVRCP thumbnails are JPEG; PNG for future sources).
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# Fetches UI font files (uploads / Google Fonts) from boompid over
+# plain HTTP - no TLS needed.
+reqwest = { version = "0.12", default-features = false }
 # Settings-URL QR code on the panel.
 qrcode = { version = "0.14", default-features = false }
 serde_json = { workspace = true }

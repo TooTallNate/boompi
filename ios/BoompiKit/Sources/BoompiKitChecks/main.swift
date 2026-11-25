@@ -157,7 +157,25 @@ do {
     let state = try JSONDecoder().decode(BoxState.self, from: Data(json.utf8))
     expect(state.settings.uiScale == 1.5, "settings ui_scale decodes")
     expect(state.settings.gameVolume == 0.8, "settings game_volume decodes")
+    expect(state.settings.font == nil, "settings without font decode as nil")
 } catch { expect(false, "full settings decode: \(error)") }
+
+do {
+    let json = #"{"settings":{"name":"X","theme":"dark","clock_24h":false,"screensaver":"clock","screensaver_min":10,"font":"Press Start 2P","update_channel":"edge","ui_scale":1.5,"visualizer_opacity":0.6,"airplay_model":"","airplay_classic":false,"game_volume":0.8,"mqtt_broker":"","mqtt_username":"","mqtt_password":""},"volume":0.4,"font":{"family":"Press Start 2P","status":"downloading","installed":[{"family":"Lobster","source":"upload","files":[{"weight":400,"url":"/fonts/ui/u-lobster-1-400.ttf"}]}]}}"#
+    let state = try JSONDecoder().decode(BoxState.self, from: Data(json.utf8))
+    expect(state.settings.font == "Press Start 2P", "settings font decodes")
+    expect(state.font?.status == "downloading", "font state decodes")
+    expect(state.font?.installed.first?.family == "Lobster", "installed fonts decode")
+} catch { expect(false, "font settings decode: \(error)") }
+
+do {
+    let json = #"{"type":"font_results","query":"inter","fonts":[{"family":"Inter","category":"Sans Serif","weights":[100,400,900]}]}"#
+    if case .fontResults(let r) = try ServerMessage.decode(Data(json.utf8)) {
+        expect(r.query == "inter" && r.fonts.first?.weights == [100, 400, 900], "font_results decodes")
+    } else { expect(false, "font_results tag") }
+    let out = try JSONSerialization.jsonObject(with: ClientMessage.fontSearch(query: "mono").encode()) as? [String: String]
+    expect(out == ["type": "font_search", "query": "mono"], "font_search encodes")
+} catch { expect(false, "font messages: \(error)") }
 
 // MARK: Advert box id (manufacturer data)
 

@@ -176,6 +176,15 @@ pub struct SettingsConfig {
     /// Idle minutes before the screensaver starts.
     #[serde(default = "default_screensaver_min")]
     pub screensaver_min: u32,
+    /// System UI font family (panel + web settings): a built-in
+    /// ("Geist", "Geist Pixel Square", ...), an uploaded family, or a
+    /// Google Fonts family (files in ui-fonts/ next to this config).
+    #[serde(default = "default_font")]
+    pub font: String,
+}
+
+fn default_font() -> String {
+    boompi_proto::DEFAULT_FONT.into()
 }
 
 fn default_screensaver_min() -> u32 {
@@ -215,6 +224,7 @@ impl Default for SettingsConfig {
             visualizer_opacity: default_visualizer_opacity(),
             screensaver: boompi_proto::ScreensaverKind::default(),
             screensaver_min: default_screensaver_min(),
+            font: default_font(),
         }
     }
 }

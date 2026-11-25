@@ -28,6 +28,12 @@ rumqttc = { version = "0.25", default-features = false }
 # contains both ring (librespot, reqwest) and aws-lc-rs (hyper-proxy2's
 # hyper-rustls), and rustls panics at first TLS use when it can't
 # auto-pick. main() installs ring explicitly.
+# Cover art downloads (Spotify CDN; later the online-art fallback),
+# GitHub release queries + OTA downloads ("stream" for bytes_stream -
+# update.rs pipes the body through the zstd decoder), and Google Fonts
+# for the system UI font (uifonts.rs - all platforms, so --sim on a
+# laptop downloads too).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "stream"] }
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 clap = { workspace = true }
 serde = { workspace = true }
@@ -46,12 +52,16 @@ tokio = { workspace = true, features = [
     "time",
 ] }
 toml = "0.8"
+# Validates uploaded UI fonts and reads their family names (uifonts.rs).
+ttf-parser = "0.25"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 # tokio::time::pause() for the download retry/stall tests (transfer.rs).
 tokio = { workspace = true, features = ["test-util"] }
+# Router-level handler tests (oneshot requests).
+tower = { version = "0.5", features = ["util"] }
 
 # Linux-only hardware integrations, cfg-gated so the workspace stays
 # cross-platform for laptop development (verify with `make cross-boompid`).
@@ -74,9 +84,5 @@ librespot = { version = "0.8", default-features = false, features = [
     "with-libmdns",
 ] }
 linux-embedded-hal = "0.4"
-# Cover art downloads (Spotify CDN; later the online-art fallback),
-# GitHub release queries + OTA downloads ("stream" for bytes_stream -
-# update.rs pipes the body through the zstd decoder).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-webpki-roots", "stream"] }
 sha2 = "0.10"
 zbus = { version = "5", default-features = false, features = ["tokio"] }

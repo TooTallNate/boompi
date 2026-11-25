@@ -21,6 +21,9 @@ public enum Caps {
     public static let emojiFonts = "emoji_fonts"
     public static let updates = "updates"
     public static let screensaver = "screensaver"
+    /// `Settings.font` (system UI font), font state broadcasts and
+    /// Google Fonts search (newer boxes only; not legacy).
+    public static let font = "font"
     public static let homeAssistant = "home_assistant"
     public static let airplay = "airplay"
 
@@ -67,6 +70,9 @@ public struct Settings: Decodable, Equatable {
     public var clock24h: Bool
     public var screensaver: String
     public var screensaverMin: Int
+    /// System UI font family (panel + web settings); nil on boxes
+    /// without the font capability.
+    public var font: String?
     public var updateChannel: String
     public var uiScale: Double
     public var visualizerOpacity: Double
@@ -81,6 +87,7 @@ public struct Settings: Decodable, Equatable {
         case name, theme, screensaver
         case clock24h = "clock_24h"
         case screensaverMin = "screensaver_min"
+        case font
         case updateChannel = "update_channel"
         case uiScale = "ui_scale"
         case visualizerOpacity = "visualizer_opacity"
@@ -107,6 +114,46 @@ public struct EmojiFontsState: Decodable, Equatable {
     public var fonts: [EmojiFontInfo]
     public var downloading: String?
     public var progress: Double?
+    public var error: String?
+}
+
+/// Font families every box ships (`boompi_proto::BUILTIN_FONTS`).
+public enum Fonts {
+    public static let defaultFamily = "Geist"
+    public static let builtin = [
+        "Geist", "Geist Pixel Square", "Geist Pixel Grid",
+        "Geist Pixel Circle", "Geist Pixel Triangle", "Geist Pixel Line",
+    ]
+}
+
+/// An installed (uploaded / downloaded) font family.
+public struct FontFamilyInfo: Decodable, Equatable, Identifiable {
+    public var family: String
+    /// "google" | "upload"
+    public var source: String
+    public var id: String { family }
+}
+
+/// System font availability (`font` broadcast / State.font).
+public struct FontState: Decodable, Equatable {
+    public var family: String
+    /// "ready" | "downloading" | "error"
+    public var status: String
+    public var error: String?
+    public var installed: [FontFamilyInfo]
+}
+
+public struct GoogleFont: Decodable, Equatable, Identifiable {
+    public var family: String
+    public var category: String
+    public var weights: [Int]
+    public var id: String { family }
+}
+
+/// Answer to a `font_search` (broadcast; match on `query`).
+public struct FontResults: Decodable, Equatable {
+    public var query: String
+    public var fonts: [GoogleFont]
     public var error: String?
 }
 
@@ -234,9 +281,10 @@ public struct BoxState: Decodable, Equatable {
     public var btDevices: [BtDevice]?
     public var emojiFonts: EmojiFontsState?
     public var diag: DiagState?
+    public var font: FontState?
 
     enum CodingKeys: String, CodingKey {
-        case settings, volume, battery, wifi, updates, track, games, pairing, diag
+        case settings, volume, battery, wifi, updates, track, games, pairing, diag, font
         case btDevices = "bt_devices"
         case emojiFonts = "emoji_fonts"
     }
@@ -260,6 +308,8 @@ public enum ServerMessage {
     case btDevices([BtDevice])
     case emojiFonts(EmojiFontsState)
     case diag(DiagState)
+    case font(FontState)
+    case fontResults(FontResults)
     case other(String)
 
     public static func decode(_ data: Data) throws -> ServerMessage {
@@ -288,6 +338,10 @@ public enum ServerMessage {
             return .emojiFonts(try dec.decode(EmojiFontsState.self, from: data))
         case "diag":
             return .diag(try dec.decode(DiagState.self, from: data))
+        case "font":
+            return .font(try dec.decode(FontState.self, from: data))
+        case "font_results":
+            return .fontResults(try dec.decode(FontResults.self, from: data))
         default: return .other(tag.type)
         }
     }
@@ -318,6 +372,8 @@ public enum ClientMessage {
     case gameLaunch(system: String, file: String)
     case emojiFont(action: String, id: String) // download | select | remove
     case previewScreensaver
+    case fontSearch(query: String)
+    case fontRemove(family: String)
     case wifiRadio(enabled: Bool)
     case reboot
 
@@ -350,6 +406,8 @@ public enum ClientMessage {
         case .emojiFont(let action, let id):
             dict = ["type": "emoji_font", "action": action, "id": id]
         case .previewScreensaver: dict = ["type": "preview_screensaver"]
+        case .fontSearch(let query): dict = ["type": "font_search", "query": query]
+        case .fontRemove(let family): dict = ["type": "font_remove", "family": family]
         case .wifiRadio(let enabled): dict = ["type": "wifi", "action": "radio", "enabled": enabled]
         case .reboot: dict = ["type": "reboot"]
         }

@@ -9,6 +9,7 @@
 //!   boombox (`--backend ws://boombox.local:3001/ws`) or at a local
 //!   `boompid --sim`.
 
+mod fonts;
 mod net;
 mod palette;
 mod util;
@@ -206,6 +207,7 @@ fn main() -> anyhow::Result<()> {
     // After AppWindow::new: the font collection needs the platform up.
     #[cfg(target_os = "linux")]
     register_emoji_fallback();
+    fonts::register_builtin_fonts();
     let _bar_tween = start_bar_tween(&ui);
     ui.set_screen(cli.screen.clone().into());
     if let Some(size) = &cli.size {
@@ -392,6 +394,15 @@ fn main() -> anyhow::Result<()> {
             };
             let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
                 screensaver: Some(kind),
+                ..SettingsPatch::default()
+            }));
+        });
+    }
+    {
+        let tx = tx.clone();
+        ui.on_font_tapped(move |family| {
+            let _ = tx.send(ClientMessage::SetSettings(SettingsPatch {
+                font: Some(family.to_string()),
                 ..SettingsPatch::default()
             }));
         });
@@ -691,6 +702,8 @@ fn main() -> anyhow::Result<()> {
         weak: ui.as_weak(),
         track,
         fast_poll,
+        http_base: fonts::http_base(&cli.backend),
+        fonts: Default::default(),
     };
     let backend = cli.backend.clone();
     std::thread::spawn(move || {

@@ -45,6 +45,8 @@ import { BatterySection } from "@boompi/ui/sections/battery";
 import { BluetoothSection } from "@boompi/ui/sections/bluetooth";
 import { ClockSection } from "@boompi/ui/sections/clock";
 import { EmojiFontsSection } from "@boompi/ui/sections/emoji-fonts";
+import { FontSection } from "@boompi/ui/sections/font";
+import { useUiFont } from "@boompi/ui/lib/ui-font";
 import { GamesSection } from "@boompi/ui/sections/games";
 import { HomeAssistantSection } from "@boompi/ui/sections/home-assistant";
 import { ScreensaverSection } from "@boompi/ui/sections/screensaver";
@@ -87,6 +89,7 @@ function DisplayPage() {
   return (
     <>
       <AppearanceSection />
+      <FontSection />
       <ScreensaverSection />
       <EmojiFontsSection />
     </>
@@ -122,7 +125,9 @@ export function SettingsShell({
   /** Extra header content (e.g. connection status / disconnect). */
   headerExtra?: ReactNode;
 }) {
-  const { hello, state, error } = useBoompi();
+  const { hello, state, error, rest } = useBoompi();
+  // The speaker's UI font applies here too.
+  useUiFont(state?.settings.font, state?.font, rest != null);
   // Capability gating: the hosted remote and phone apps outlive any
   // box's software, so the box declares what it can do and the UI
   // hides the rest (old boxes get the legacy set).
